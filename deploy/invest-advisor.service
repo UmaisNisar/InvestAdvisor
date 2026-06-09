@@ -3,7 +3,9 @@ Description=InvestAdvisor (Blazor Server)
 After=network.target
 
 [Service]
-Type=notify
+# 'simple' rather than 'notify' — the app doesn't call sd_notify(READY=1) (no UseSystemd()),
+# so notify would leave the unit stuck 'activating' and get killed at the start timeout.
+Type=simple
 User=invest
 Group=invest
 WorkingDirectory=/opt/invest-advisor
@@ -17,7 +19,7 @@ Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://127.0.0.1:5174
 Environment=DOTNET_NOLOGO=1
 Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
-Environment=ConnectionStrings__Default=Data Source=/var/lib/invest-advisor/app.db
+Environment="ConnectionStrings__Default=Data Source=/var/lib/invest-advisor/app.db"
 EnvironmentFile=-/etc/invest-advisor.env
 
 # Hardening — the app only needs to read /opt and read+write /var/lib/invest-advisor.
