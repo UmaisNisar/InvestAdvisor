@@ -16,7 +16,7 @@ public class ContextAssemblerTests
     private static readonly RunTrigger DummyTrigger = new(RunTriggerKind.Scheduled, "test");
 
     private static (ContextAssembler assembler, SqliteFixture db, FakeSystemClock clock)
-        BuildSut(int minFreshnessSec = 3600)
+        BuildSut(int minFreshnessSec = 3600, decimal cadToUsd = 1m)
     {
         var db = new SqliteFixture();
         var clock = new FakeSystemClock(Now);
@@ -28,7 +28,8 @@ public class ContextAssemblerTests
                  MinPriceFreshnessSeconds = minFreshnessSec,
              }));
         var fx = Substitute.For<IFxRateProvider>();
-        fx.GetRateToUsdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(1m));
+        fx.GetRateToUsdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+          .Returns(ci => Task.FromResult(ci.Arg<string>().Equals("CAD", StringComparison.OrdinalIgnoreCase) ? cadToUsd : 1m));
         var assembler = new ContextAssembler(db.Factory, store, clock, fx);
         return (assembler, db, clock);
     }
@@ -88,6 +89,38 @@ public class ContextAssemblerTests
         ctx.Totals.UnrealizedPnlUsd.Should().Be(500m);
         ctx.Totals.TodaysChangeUsd.Should().Be(100m);          // 10*(200-190)
         ctx.Totals.TodaysChangePct.Should().BeApproximately(5.263m, 0.01m); // 100 / 1900 * 100
+    }
+
+    [Fact]
+    public async Task Cad_holding_is_converted_to_usd_using_fx_rate()
+    {
+        var (sut, db, _) = BuildSut(cadToUsd: 0.5m); // 1 CAD = 0.50 USD
+        await using var _db = db;
+
+        using (var c = db.CreateContext())
+        {
+            c.Holdings.Add(new Holding
+            {
+                Ticker = "RY.TO", Name = "Royal Bank", AssetClass = AssetClass.Equity,
+                AccountType = AccountType.Taxable, Quantity = 10m, AvgCost = 100m, Currency = "CAD",
+            });
+            c.PriceSnapshots.Add(new PriceSnapshot
+            {
+                Ticker = "RY.TO", AssetClass = AssetClass.Equity,
+                Price = 120m, PreviousClose = 120m, PercentChange = 0m, FetchedAtUtc = Now.AddMinutes(-1),
+            });
+            c.SaveChanges();
+        }
+
+        var ctx = await sut.BuildAsync(DummyTrigger);
+
+        var h = ctx.Holdings.Single();
+        h.Price.Should().Be(120m);            // native CAD price is left as-is
+        h.Currency.Should().Be("CAD");
+        h.MarketValueUsd.Should().Be(600m);   // 10 * 120 * 0.50
+        h.UnrealizedPnlUsd.Should().Be(100m); // (10*120 - 10*100) * 0.50
+        ctx.Totals.MarketValueUsd.Should().Be(600m);
+        ctx.Totals.CostBasisUsd.Should().Be(500m); // 10*100*0.50
     }
 
     [Fact]

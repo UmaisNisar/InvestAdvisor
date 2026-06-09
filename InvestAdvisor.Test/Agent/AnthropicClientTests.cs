@@ -177,6 +177,49 @@ public class AnthropicClientTests
         result.Should().Be(expected);
     }
 
+    [Fact]
+    public async Task Positions_parse_ticker_stance_and_conviction()
+    {
+        var responseBody = """
+        {
+          "type": "message",
+          "model": "claude-sonnet-4-6",
+          "stop_reason": "tool_use",
+          "content": [
+            { "type": "tool_use", "id": "t1", "name": "emit_analysis",
+              "input": {
+                "summary": "s", "flags": [], "driftAlerts": [], "considerations": [],
+                "positions": [
+                  { "ticker": "aapl", "stance": "trim", "conviction": "high",   "reason": "overweight" },
+                  { "ticker": "BND",  "stance": "hold", "conviction": "low",    "reason": "fine" },
+                  { "ticker": "NVDA", "stance": "add",  "conviction": "medium", "reason": "momentum" }
+                ]
+              }
+            }
+          ],
+          "usage": { "input_tokens": 1, "output_tokens": 2 }
+        }
+        """;
+        var (sut, _) = BuildSut(responseBody);
+
+        var result = await sut.AnalyzeAsync("system prompt", """{"holdings":[]}""");
+
+        result.Analysis.Positions.Should().HaveCount(3);
+        var aapl = result.Analysis.Positions.Single(p => p.Ticker == "AAPL"); // ticker upper-cased
+        aapl.Stance.Should().Be(PositionStance.Trim);
+        aapl.Conviction.Should().Be(PositionConviction.High);
+        result.Analysis.Positions.Single(p => p.Ticker == "BND").Stance.Should().Be(PositionStance.Hold);
+        result.Analysis.Positions.Single(p => p.Ticker == "NVDA").Conviction.Should().Be(PositionConviction.Medium);
+    }
+
+    [Fact]
+    public async Task Missing_positions_array_yields_empty_list_not_null()
+    {
+        var (sut, _) = BuildSut(MinimalToolUseResponse());
+        var result = await sut.AnalyzeAsync("p", "{}");
+        result.Analysis.Positions.Should().NotBeNull().And.BeEmpty();
+    }
+
     private static string MinimalToolUseResponse() => """
         {
           "type": "message",
