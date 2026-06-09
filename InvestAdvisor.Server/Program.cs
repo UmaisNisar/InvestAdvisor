@@ -1,3 +1,4 @@
+using System.Globalization;
 using InvestAdvisor.Data;
 using InvestAdvisor.Data.Composition;
 using InvestAdvisor.Data.HostedServices;
@@ -5,6 +6,14 @@ using InvestAdvisor.Server.Components;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
+
+// Pin the app to en-US so currency/number formatting is consistent regardless of the host's
+// locale. On a minimal Linux box LANG defaults to C.UTF-8 (the invariant culture), which makes
+// ToString("C") render the generic "¤" currency sign instead of "$". All displayed dollar
+// figures are USD, so en-US is the right fixed culture.
+var appCulture = CultureInfo.GetCultureInfo("en-US");
+CultureInfo.DefaultThreadCurrentCulture = appCulture;
+CultureInfo.DefaultThreadCurrentUICulture = appCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 

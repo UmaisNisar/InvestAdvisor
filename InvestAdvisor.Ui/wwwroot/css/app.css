@@ -133,6 +133,45 @@ body {
     .mud-dialog { margin: 12px; }
 }
 
+/* ---------- Reconnect overlay (Blazor Server) ---------- */
+/* The framework toggles these classes; default markup is unstyled (white-on-white). */
+#components-reconnect-modal { display: none; }
+#components-reconnect-modal.components-reconnect-show,
+#components-reconnect-modal.components-reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 6, 23, .55);
+    backdrop-filter: blur(2px);
+}
+#components-reconnect-modal .reconnect-box {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #1e293b;
+    color: #f1f5f9;
+    padding: 18px 24px;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, .25);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+    font-family: 'Inter', system-ui, sans-serif;
+}
+#components-reconnect-modal .reconnect-title { font-weight: 600; font-size: 15px; }
+#components-reconnect-modal .reconnect-sub { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+#components-reconnect-modal .reconnect-sub a { color: #818cf8; }
+#components-reconnect-modal .reconnect-spinner {
+    width: 22px; height: 22px; flex: none;
+    border: 3px solid rgba(148, 163, 184, .3);
+    border-top-color: #818cf8;
+    border-radius: 50%;
+    animation: ia-spin .8s linear infinite;
+}
+@keyframes ia-spin { to { transform: rotate(360deg); } }
+
 #blazor-error-ui {
     background: lightyellow;
     bottom: 0;
