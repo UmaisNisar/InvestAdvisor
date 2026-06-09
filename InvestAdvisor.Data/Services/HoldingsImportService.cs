@@ -100,8 +100,9 @@ public sealed class HoldingsImportService(
                 var ticker = ApplyExchangeSuffix(symbol, Get(row, exchangeIdx), Get(row, micIdx), assetClass);
 
                 // Holding currency = the currency our price feed reports for it. Crypto → USD (CoinGecko),
-                // otherwise the CSV's market-price currency.
-                var priceCur = Norm(assetClass == AssetClass.Crypto ? "USD" : Get(row, priceCurIdx));
+                // otherwise the CSV's market-price currency. Stored UPPER-case to match the rest of the app
+                // (the edit dialog's USD/CAD dropdown, the FX lookup, etc.).
+                var priceCur = (assetClass == AssetClass.Crypto ? "USD" : Get(row, priceCurIdx)).Trim().ToUpperInvariant();
                 if (priceCur.Length != 3) priceCur = "USD";
 
                 // Average cost, expressed in the holding's currency.
