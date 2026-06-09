@@ -31,10 +31,10 @@ public sealed class AgentService(
         WriteIndented = true,
     };
 
-    public Task<long> RunNowAsync(string? note, CancellationToken ct = default)
-        => RunAsync(new RunTrigger(RunTriggerKind.Manual, note ?? "Manual run"), ct);
+    public Task<long> RunNowAsync(int tenantId, string? note, CancellationToken ct = default)
+        => RunAsync(tenantId, new RunTrigger(RunTriggerKind.Manual, note ?? "Manual run"), ct);
 
-    public async Task<long> RunAsync(RunTrigger trigger, CancellationToken ct = default)
+    public async Task<long> RunAsync(int tenantId, RunTrigger trigger, CancellationToken ct = default)
     {
         var startedAt = clock.UtcNow;
         var sw = Stopwatch.StartNew();
@@ -42,7 +42,7 @@ public sealed class AgentService(
         (Profile profile, string[] knownTickers) preload;
         try
         {
-            preload = await PreloadProfileAndTickersAsync(ct);
+            preload = await PreloadProfileAndTickersAsync(tenantId, ct);
         }
         catch (Exception ex)
         {
@@ -62,7 +62,7 @@ public sealed class AgentService(
         {
             try
             {
-                var specs = await LoadTickerSpecsAsync(ct);
+                var specs = await LoadTickerSpecsAsync(tenantId, ct);
                 if (specs.Length > 0)
                 {
                     await priceRefresh.RefreshAsync(specs, ct);
@@ -79,14 +79,14 @@ public sealed class AgentService(
         string inputJson;
         try
         {
-            ctx = await assembler.BuildAsync(trigger, ct);
+            ctx = await assembler.BuildAsync(tenantId, trigger, ct);
             inputJson = JsonSerializer.Serialize(ctx, _camelIndented);
         }
         catch (Exception ex)
         {
             logger?.LogError(ex, "ContextAssembler failed.");
             return await PersistFailureAsync(
-                startedAt, trigger, systemPrompt,
+                tenantId, startedAt, trigger, systemPrompt,
                 structuredInputJson: "{}",
                 rawBody: $"ContextAssembler threw: {ex}",
                 model: string.Empty,
@@ -102,6 +102,7 @@ public sealed class AgentService(
             var validated = TickerHallucinationValidator.Validate(result.Analysis, preload.knownTickers);
 
             return await PersistSuccessAsync(
+                tenantId: tenantId,
                 startedAt: startedAt,
                 trigger: trigger,
                 systemPromptUsed: systemPrompt,
@@ -124,6 +125,7 @@ public sealed class AgentService(
                 ? ape.ResponseBody
                 : ex.ToString();
             return await PersistFailureAsync(
+                tenantId: tenantId,
                 startedAt: startedAt,
                 trigger: trigger,
                 systemPromptUsed: systemPrompt,
@@ -142,10 +144,11 @@ public sealed class AgentService(
             .SingleOrDefaultAsync(a => a.Id == sourceAdviceLogId, ct)
             ?? throw new InvalidOperationException(
                 $"AdviceLog {sourceAdviceLogId} not found; cannot replay.");
+        var tenantId = source.TenantId;
 
         var startedAt = clock.UtcNow;
         var sw = Stopwatch.StartNew();
-        var (_, knownTickers) = await PreloadProfileAndTickersAsync(ct);
+        var (_, knownTickers) = await PreloadProfileAndTickersAsync(tenantId, ct);
 
         var trigger = new RunTrigger(RunTriggerKind.Manual,
             $"Replay of AdviceLog #{sourceAdviceLogId} with edited prompt");
@@ -157,6 +160,7 @@ public sealed class AgentService(
             var validated = TickerHallucinationValidator.Validate(result.Analysis, knownTickers);
 
             return await PersistSuccessAsync(
+                tenantId: tenantId,
                 startedAt: startedAt,
                 trigger: trigger,
                 systemPromptUsed: systemPrompt,
@@ -177,6 +181,7 @@ public sealed class AgentService(
             logger?.LogError(ex, "Replay failed for AdviceLog {Id}.", sourceAdviceLogId);
             var raw = ex is AgentParseException ape ? ape.ResponseBody : ex.ToString();
             return await PersistFailureAsync(
+                tenantId: tenantId,
                 startedAt: startedAt,
                 trigger: trigger,
                 systemPromptUsed: systemPrompt,
@@ -189,25 +194,25 @@ public sealed class AgentService(
         }
     }
 
-    private async Task<(Profile profile, string[] knownTickers)> PreloadProfileAndTickersAsync(CancellationToken ct)
+    private async Task<(Profile profile, string[] knownTickers)> PreloadProfileAndTickersAsync(int tenantId, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var profile = await db.Profiles.AsNoTracking()
-            .SingleAsync(p => p.Id == Profile.SingletonId, ct);
-        var holdingTickers = await db.Holdings.AsNoTracking().Select(h => h.Ticker).ToListAsync(ct);
-        var watchlistTickers = await db.WatchlistItems.AsNoTracking().Select(w => w.Ticker).ToListAsync(ct);
+            .SingleAsync(p => p.TenantId == tenantId, ct);
+        var holdingTickers = await db.Holdings.AsNoTracking().Where(h => h.TenantId == tenantId).Select(h => h.Ticker).ToListAsync(ct);
+        var watchlistTickers = await db.WatchlistItems.AsNoTracking().Where(w => w.TenantId == tenantId).Select(w => w.Ticker).ToListAsync(ct);
         var known = holdingTickers.Concat(watchlistTickers)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         return (profile, known);
     }
 
-    private async Task<TickerSpec[]> LoadTickerSpecsAsync(CancellationToken ct)
+    private async Task<TickerSpec[]> LoadTickerSpecsAsync(int tenantId, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var holdings = await db.Holdings.AsNoTracking()
+        var holdings = await db.Holdings.AsNoTracking().Where(h => h.TenantId == tenantId)
             .Select(h => new TickerSpec(h.Ticker, h.AssetClass)).ToListAsync(ct);
-        var watch = await db.WatchlistItems.AsNoTracking()
+        var watch = await db.WatchlistItems.AsNoTracking().Where(w => w.TenantId == tenantId)
             .Select(w => new TickerSpec(w.Ticker, w.AssetClass)).ToListAsync(ct);
         return holdings.Concat(watch)
             .DistinctBy(t => t.Ticker, StringComparer.OrdinalIgnoreCase)
@@ -215,6 +220,7 @@ public sealed class AgentService(
     }
 
     private async Task<long> PersistSuccessAsync(
+        int tenantId,
         DateTime startedAt,
         RunTrigger trigger,
         string systemPromptUsed,
@@ -231,6 +237,7 @@ public sealed class AgentService(
     {
         var row = new AdviceLog
         {
+            TenantId = tenantId,
             TimestampUtc = startedAt,
             Trigger = trigger.Kind,
             TriggerDetail = trigger.Detail,
@@ -260,6 +267,7 @@ public sealed class AgentService(
     }
 
     private async Task<long> PersistFailureAsync(
+        int tenantId,
         DateTime startedAt,
         RunTrigger trigger,
         string systemPromptUsed,
@@ -272,6 +280,7 @@ public sealed class AgentService(
     {
         var row = new AdviceLog
         {
+            TenantId = tenantId,
             TimestampUtc = startedAt,
             Trigger = trigger.Kind,
             TriggerDetail = trigger.Detail,

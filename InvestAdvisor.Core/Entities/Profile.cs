@@ -4,9 +4,9 @@ namespace InvestAdvisor.Core.Entities;
 
 public class Profile
 {
-    public const int SingletonId = 1;
-
-    public int Id { get; set; } = SingletonId;
+    public int Id { get; set; }
+    /// <summary>Owning tenant. One profile per tenant.</summary>
+    public int TenantId { get; set; }
     public string GoalsText { get; set; } = string.Empty;
     public RiskTolerance RiskTolerance { get; set; } = RiskTolerance.Moderate;
     public TimeHorizon TimeHorizon { get; set; } = TimeHorizon.LongTerm;

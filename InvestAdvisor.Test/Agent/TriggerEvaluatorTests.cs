@@ -21,14 +21,15 @@ public class TriggerEvaluatorTests
         IReadOnlyDictionary<string, PriceSnapshot>? snaps = null,
         Profile? profile = null,
         RuntimeSettings? settings = null,
-        DateTime? nowUtc = null) =>
+        DateTime? nowUtc = null,
+        IReadOnlySet<string>? suppressedKeys = null) =>
         new(
             NowUtc: nowUtc ?? MarketOpenUtc,
             LastRunUtc: lastRun,
             RunsToday: runsToday,
             Profile: profile ?? new Profile
             {
-                Id = Profile.SingletonId,
+                TenantId = 1,
                 DriftPctThreshold = 5m,
                 SingleDayMovePctThreshold = 7m,
                 RebalanceCadenceHours = 24,
@@ -45,7 +46,8 @@ public class TriggerEvaluatorTests
             Holdings: holdings ?? Array.Empty<Holding>(),
             Watchlist: watchlist ?? Array.Empty<WatchlistItem>(),
             LatestSnapshotsByTicker: snaps ?? new Dictionary<string, PriceSnapshot>(),
-            ManualOverride: manual);
+            ManualOverride: manual,
+            SuppressedKeys: suppressedKeys);
 
     private static PriceSnapshot Snap(string ticker, decimal price, decimal pct, DateTime when,
         AssetClass ac = AssetClass.Equity, decimal? prev = null) =>
@@ -58,7 +60,7 @@ public class TriggerEvaluatorTests
         var sut = new TriggerEvaluator();
         var input = Build(manual: true, lastRun: MarketOpenUtc.AddSeconds(-1)); // would normally be blocked
 
-        var trigger = sut.Evaluate(input);
+        var trigger = sut.Evaluate(input).Trigger;
 
         trigger.Should().NotBeNull();
         trigger!.Kind.Should().Be(RunTriggerKind.Manual);
@@ -70,7 +72,7 @@ public class TriggerEvaluatorTests
         var sut = new TriggerEvaluator();
         var input = Build(lastRun: MarketOpenUtc.AddSeconds(-100));
 
-        sut.Evaluate(input).Should().BeNull();
+        sut.Evaluate(input).Trigger.Should().BeNull();
     }
 
     [Fact]
@@ -79,7 +81,7 @@ public class TriggerEvaluatorTests
         var sut = new TriggerEvaluator();
         var input = Build(runsToday: 24);
 
-        sut.Evaluate(input).Should().BeNull();
+        sut.Evaluate(input).Trigger.Should().BeNull();
     }
 
     [Fact]
@@ -90,7 +92,7 @@ public class TriggerEvaluatorTests
             watchlist: new[] { new WatchlistItem { Ticker = "AAPL", AssetClass = AssetClass.Equity, PriceTargetHigh = 200m } },
             snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 205m, 0.5m, MarketOpenUtc) });
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t!.Kind.Should().Be(RunTriggerKind.PriceTarget);
         t.Detail.Should().Contain("AAPL");
@@ -105,7 +107,7 @@ public class TriggerEvaluatorTests
             watchlist: new[] { new WatchlistItem { Ticker = "AAPL", AssetClass = AssetClass.Equity, PriceTargetLow = 180m } },
             snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 175m, -2m, MarketOpenUtc) });
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t!.Kind.Should().Be(RunTriggerKind.PriceTarget);
         t.Detail.Should().Contain("below");
@@ -119,7 +121,7 @@ public class TriggerEvaluatorTests
             holdings: new[] { new Holding { Ticker = "AAPL", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 100m } },
             snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 100m, -8m, MarketOpenUtc) });
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t!.Kind.Should().Be(RunTriggerKind.BigMove);
         t.Detail.Should().Contain("AAPL");
@@ -136,7 +138,7 @@ public class TriggerEvaluatorTests
             holdings: new[] { new Holding { Ticker = "AAPL", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 100m } },
             snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 100m, -8m, staleTime) });
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t.Should().BeNull();
     }
@@ -157,7 +159,7 @@ public class TriggerEvaluatorTests
                 ["BND"] = Snap("BND", 100m, 0.1m, MarketOpenUtc, AssetClass.Etf),  // mv=1000
             });
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         // VTI alloc = 8000/9000 = 88.89%, target 50, drift +38.89 → exceeds 5% threshold
         t!.Kind.Should().Be(RunTriggerKind.DriftThreshold);
@@ -170,7 +172,7 @@ public class TriggerEvaluatorTests
         var sut = new TriggerEvaluator();
         var input = Build(lastRun: MarketOpenUtc.AddHours(-25));
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t!.Kind.Should().Be(RunTriggerKind.Scheduled);
     }
@@ -181,7 +183,7 @@ public class TriggerEvaluatorTests
         var sut = new TriggerEvaluator();
         var input = Build(lastRun: MarketOpenUtc.AddHours(-2));
 
-        sut.Evaluate(input).Should().BeNull();
+        sut.Evaluate(input).Trigger.Should().BeNull();
     }
 
     [Fact]
@@ -194,7 +196,7 @@ public class TriggerEvaluatorTests
             holdings: new[] { new Holding { Ticker = "BTC", AssetClass = AssetClass.Crypto, Quantity = 1m, AvgCost = 50000m } },
             snaps: new Dictionary<string, PriceSnapshot> { ["BTC"] = Snap("BTC", 60000m, 10m, saturday, AssetClass.Crypto) });
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t!.Kind.Should().Be(RunTriggerKind.BigMove);
     }
@@ -211,7 +213,7 @@ public class TriggerEvaluatorTests
             lastRun: saturday.AddMinutes(-30)); // inside cadence, so no Scheduled fallback
 
         // No equity-side trigger should fire. Scheduled may fire if cadence elapsed, but min-gap suppresses it.
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t.Should().BeNull();
     }
@@ -225,8 +227,81 @@ public class TriggerEvaluatorTests
             watchlist: new[] { new WatchlistItem { Ticker = "AAPL", AssetClass = AssetClass.Equity, PriceTargetHigh = 99m } },
             snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 100m, -8m, MarketOpenUtc) });
 
-        var t = sut.Evaluate(input);
+        var t = sut.Evaluate(input).Trigger;
 
         t!.Kind.Should().Be(RunTriggerKind.PriceTarget);
+    }
+
+    [Fact]
+    public void Breached_condition_fires_once_and_reports_its_dedup_key()
+    {
+        var sut = new TriggerEvaluator();
+        var input = Build(
+            holdings: new[] { new Holding { Ticker = "AAPL", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 100m } },
+            snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 100m, -8m, MarketOpenUtc) });
+
+        var d = sut.Evaluate(input);
+
+        d.Trigger!.Kind.Should().Be(RunTriggerKind.BigMove);
+        d.ActiveKeys.Should().Contain("BigMove:AAPL"); // becomes suppressed for the next tick
+    }
+
+    [Fact]
+    public void Already_alerted_condition_does_not_re_fire_while_still_breached()
+    {
+        var sut = new TriggerEvaluator();
+        // Same -8% move, but we already alerted on it last tick.
+        var input = Build(
+            lastRun: MarketOpenUtc.AddHours(-1), // past the min-gap so only the dedup can suppress
+            holdings: new[] { new Holding { Ticker = "AAPL", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 100m } },
+            snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 100m, -8m, MarketOpenUtc) },
+            suppressedKeys: new HashSet<string> { "BigMove:AAPL" });
+
+        var d = sut.Evaluate(input);
+
+        d.Trigger.Should().BeNull();                    // suppressed — no second Claude call
+        d.ActiveKeys.Should().Contain("BigMove:AAPL");  // stays suppressed while still breached
+    }
+
+    [Fact]
+    public void Alerted_condition_re_arms_when_it_clears()
+    {
+        var sut = new TriggerEvaluator();
+        // AAPL recovered to a -2% move (below the 7% threshold) but is still in the suppressed set.
+        var input = Build(
+            lastRun: MarketOpenUtc.AddHours(-1),
+            holdings: new[] { new Holding { Ticker = "AAPL", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 100m } },
+            snaps: new Dictionary<string, PriceSnapshot> { ["AAPL"] = Snap("AAPL", 100m, -2m, MarketOpenUtc) },
+            suppressedKeys: new HashSet<string> { "BigMove:AAPL" });
+
+        var d = sut.Evaluate(input);
+
+        d.ActiveKeys.Should().NotContain("BigMove:AAPL"); // condition cleared → re-armed, fires again next breach
+    }
+
+    [Fact]
+    public void Suppressing_one_ticker_still_lets_a_different_ticker_fire()
+    {
+        var sut = new TriggerEvaluator();
+        var input = Build(
+            lastRun: MarketOpenUtc.AddHours(-1),
+            holdings: new[]
+            {
+                new Holding { Ticker = "AAPL", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 100m },
+                new Holding { Ticker = "MSFT", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 100m },
+            },
+            snaps: new Dictionary<string, PriceSnapshot>
+            {
+                ["AAPL"] = Snap("AAPL", 100m, -8m, MarketOpenUtc),
+                ["MSFT"] = Snap("MSFT", 100m, -9m, MarketOpenUtc),
+            },
+            suppressedKeys: new HashSet<string> { "BigMove:AAPL" });
+
+        var d = sut.Evaluate(input);
+
+        d.Trigger!.Kind.Should().Be(RunTriggerKind.BigMove);
+        d.Trigger.Detail.Should().Contain("MSFT");        // AAPL suppressed, MSFT is a fresh edge
+        d.ActiveKeys.Should().Contain("BigMove:AAPL");    // both remain active/suppressed
+        d.ActiveKeys.Should().Contain("BigMove:MSFT");
     }
 }

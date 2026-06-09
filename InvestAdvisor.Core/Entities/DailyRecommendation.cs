@@ -8,6 +8,7 @@ namespace InvestAdvisor.Core.Entities;
 public class DailyRecommendation
 {
     public long Id { get; set; }
+    public int TenantId { get; set; }
     public DateTime GeneratedAtUtc { get; set; }
     public string Summary { get; set; } = string.Empty;
     public string Caution { get; set; } = string.Empty;

@@ -4,12 +4,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
 
-public sealed class ProfileService(IDbContextFactory<InvestAdvisorDbContext> dbFactory) : IProfileService
+public sealed class ProfileService(
+    IDbContextFactory<InvestAdvisorDbContext> dbFactory,
+    ITenantContext tenant) : IProfileService
 {
     public async Task<Profile> GetAsync(CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.Profiles.AsNoTracking().SingleAsync(p => p.Id == Profile.SingletonId, ct);
+        return await db.Profiles.AsNoTracking().SingleAsync(p => p.TenantId == tid, ct);
     }
 
     public async Task<Profile> UpdateAsync(Profile updated, CancellationToken ct = default)
@@ -21,8 +24,9 @@ public sealed class ProfileService(IDbContextFactory<InvestAdvisorDbContext> dbF
         if (updated.RebalanceCadenceHours < 1)
             throw new ArgumentException("RebalanceCadenceHours must be ≥ 1.");
 
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var row = await db.Profiles.SingleAsync(p => p.Id == Profile.SingletonId, ct);
+        var row = await db.Profiles.SingleAsync(p => p.TenantId == tid, ct);
         row.GoalsText = updated.GoalsText ?? string.Empty;
         row.RiskTolerance = updated.RiskTolerance;
         row.TimeHorizon = updated.TimeHorizon;

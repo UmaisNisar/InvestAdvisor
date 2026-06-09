@@ -4,20 +4,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
 
-public sealed class HoldingsService(IDbContextFactory<InvestAdvisorDbContext> dbFactory) : IHoldingsService
+public sealed class HoldingsService(
+    IDbContextFactory<InvestAdvisorDbContext> dbFactory,
+    ITenantContext tenant) : IHoldingsService
 {
     public async Task<IReadOnlyList<Holding>> ListAsync(CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.Holdings.AsNoTracking().OrderBy(h => h.Ticker).ToListAsync(ct);
+        return await db.Holdings.AsNoTracking().Where(h => h.TenantId == tid).OrderBy(h => h.Ticker).ToListAsync(ct);
     }
 
     public async Task<Holding> CreateAsync(Holding input, CancellationToken ct = default)
     {
         Validate(input);
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var entity = new Holding
         {
+            TenantId = tid,
             Ticker = input.Ticker.Trim().ToUpperInvariant(),
             Name = input.Name.Trim(),
             AssetClass = input.AssetClass,
@@ -38,8 +43,9 @@ public sealed class HoldingsService(IDbContextFactory<InvestAdvisorDbContext> db
     public async Task<Holding> UpdateAsync(int id, Holding input, CancellationToken ct = default)
     {
         Validate(input);
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.Holdings.SingleOrDefaultAsync(h => h.Id == id, ct)
+        var entity = await db.Holdings.SingleOrDefaultAsync(h => h.Id == id && h.TenantId == tid, ct)
             ?? throw new InvalidOperationException($"Holding {id} not found.");
         entity.Ticker = input.Ticker.Trim().ToUpperInvariant();
         entity.Name = input.Name.Trim();
@@ -57,8 +63,9 @@ public sealed class HoldingsService(IDbContextFactory<InvestAdvisorDbContext> db
 
     public async Task DeleteAsync(int id, CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.Holdings.SingleOrDefaultAsync(h => h.Id == id, ct);
+        var entity = await db.Holdings.SingleOrDefaultAsync(h => h.Id == id && h.TenantId == tid, ct);
         if (entity is null) return;
         db.Holdings.Remove(entity);
         await db.SaveChangesAsync(ct);
