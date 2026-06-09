@@ -1,0 +1,60 @@
+name: Deploy
+
+# Deploys to the Oracle box on every merge to main (and on demand).
+# Requires repo secrets:
+#   DEPLOY_SSH_KEY  – private key authorized on the box (ubuntu user)
+#   DEPLOY_HOST     – the box's public IP / hostname
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once; let an in-flight deploy finish.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish (linux-x64, framework-dependent)
+        run: >
+          dotnet publish InvestAdvisor.Server/InvestAdvisor.Server.csproj
+          -c Release -r linux-x64 --no-self-contained -p:PublishSingleFile=false
+          -o publish
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Ship + restart
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@"$HOST" 'sudo systemctl stop invest-advisor'
+          tar -C publish -czf - . | ssh -i ~/.ssh/deploy_key ubuntu@"$HOST" \
+            'sudo rm -rf /opt/invest-advisor/* \
+             && sudo tar -xzf - -C /opt/invest-advisor \
+             && sudo chown -R invest:invest /opt/invest-advisor \
+             && sudo systemctl start invest-advisor'
+
+      - name: Health check
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          sleep 6
+          ssh -i ~/.ssh/deploy_key ubuntu@"$HOST" \
+            'systemctl is-active --quiet invest-advisor \
+             && curl -fsS -m 8 -o /dev/null http://127.0.0.1:5174/ \
+             && echo "deployed and healthy"'
