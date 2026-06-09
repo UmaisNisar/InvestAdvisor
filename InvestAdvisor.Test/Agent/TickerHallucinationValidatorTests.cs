@@ -10,7 +10,7 @@ public class TickerHallucinationValidatorTests
 {
     private static AgentAnalysis MakeAnalysis(params Flag[] flags) =>
         new("summary", flags, Array.Empty<DriftAlert>(), Array.Empty<Consideration>(),
-            new AgentRunMetrics("m", 0, 0, 0, false));
+            new AgentRunMetrics("m", 0, 0, 0, false), Array.Empty<PositionCall>());
 
     [Fact]
     public void Known_ticker_is_marked_KnownTicker_true()

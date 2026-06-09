@@ -27,7 +27,9 @@ public class ContextAssemblerTests
                  Id = RuntimeSettings.SingletonId,
                  MinPriceFreshnessSeconds = minFreshnessSec,
              }));
-        var assembler = new ContextAssembler(db.Factory, store, clock);
+        var fx = Substitute.For<IFxRateProvider>();
+        fx.GetRateToUsdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(1m));
+        var assembler = new ContextAssembler(db.Factory, store, clock, fx);
         return (assembler, db, clock);
     }
 
