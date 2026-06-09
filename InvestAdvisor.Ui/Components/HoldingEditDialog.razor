@@ -1,0 +1,127 @@
+@inject IHoldingsService HoldingsService
+@inject ITickerSearchService TickerSearch
+@inject ISnackbar Snackbar
+
+@* Reusable add/edit holding dialog with a searchable ticker picker. Used by the dashboard and Settings. *@
+<MudDialog @bind-Visible="_visible" Options="@(new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true })">
+    <TitleContent>@(_editing.Id == 0 ? "Add holding" : $"Edit {_editing.Ticker}")</TitleContent>
+    <DialogContent>
+        @if (_editing.Id == 0)
+        {
+            <MudAutocomplete T="TickerSearchResult" Label="Search a stock, ETF or crypto"
+                             SearchFunc="Search" ToStringFunc="@(r => r is null ? string.Empty : $"{r.Symbol} · {r.Name}")"
+                             ValueChanged="OnPicked" @bind-Text="_searchText"
+                             MinCharacters="1" Immediate="true" Clearable="true" ResetValueOnEmptyText="true"
+                             CoerceText="false" Placeholder="e.g. AAPL, Vanguard, BTC…"
+                             AdornmentIcon="@Icons.Material.Filled.Search" Adornment="Adornment.Start"
+                             HelperText="Pick a match to auto-fill name + type, or just type a ticker and fill the rest in.">
+                <ItemTemplate Context="r">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.body2" Style="font-weight:600;min-width:64px"><code>@r.Symbol</code></MudText>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">@r.AssetClass</MudChip>
+                        <MudText Typo="Typo.caption" Color="Color.Surface">@r.Name</MudText>
+                    </MudStack>
+                </ItemTemplate>
+                <NoItemsTemplate>
+                    <MudText Typo="Typo.caption" Class="pa-2" Color="Color.Surface">No match — you can still type the ticker below.</MudText>
+                </NoItemsTemplate>
+            </MudAutocomplete>
+        }
+
+        <MudTextField @bind-Value="_editing.Ticker" Label="Ticker" Required="true" Immediate="true" OnKeyDown="OnKey" />
+        <MudTextField @bind-Value="_editing.Name" Label="Name" Immediate="true" OnKeyDown="OnKey" />
+        <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
+            @foreach (var ac in Enum.GetValues<AssetClass>()) { <MudSelectItem Value="ac">@ac</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="AccountType" @bind-Value="_editing.AccountType" Label="Account type">
+            @foreach (var at in Enum.GetValues<AccountType>()) { <MudSelectItem Value="at">@at</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="string" @bind-Value="_editing.Currency" Label="Currency"
+                   HelperText="Currency the price & cost are in. Portfolio totals are converted to USD.">
+            <MudSelectItem Value="@("USD")">USD — US dollar</MudSelectItem>
+            <MudSelectItem Value="@("CAD")">CAD — Canadian dollar</MudSelectItem>
+            <MudSelectItem Value="@("AUD")">AUD — Australian dollar</MudSelectItem>
+        </MudSelect>
+        <MudNumericField @bind-Value="_editing.Quantity" Label="Quantity" Min="0m" Immediate="true" OnKeyDown="OnKey"
+                         HelperText="Number of shares / units / coins you hold." />
+        <MudNumericField @bind-Value="_editing.AvgCost" Label="Average cost (per share/unit, USD)" Min="0m" Immediate="true" OnKeyDown="OnKey"
+                         HelperText="Your average purchase price — used for unrealized P/L." />
+        <MudNumericField T="decimal?" @bind-Value="_editing.TargetAllocationPct" Label="Target allocation %" Immediate="true" OnKeyDown="OnKey"
+                         HelperText="Optional: your goal weight for this position; drift is measured against it." />
+        <MudTextField @bind-Value="_editing.Notes" Label="Notes" Lines="2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _visible = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private bool _visible;
+    private Holding _editing = new();
+    private string _searchText = string.Empty;
+
+    /// <summary>Open the dialog to add a new holding (null) or edit an existing one (a copy is edited).</summary>
+    public void Open(Holding? existing)
+    {
+        _editing = existing is null
+            ? new Holding { AssetClass = AssetClass.Equity, AccountType = AccountType.Taxable }
+            : new Holding
+            {
+                Id = existing.Id, Ticker = existing.Ticker, Name = existing.Name, AssetClass = existing.AssetClass,
+                AccountType = existing.AccountType, Quantity = existing.Quantity, AvgCost = existing.AvgCost,
+                Currency = existing.Currency, TargetAllocationPct = existing.TargetAllocationPct, Notes = existing.Notes,
+            };
+        _searchText = string.Empty;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private async Task<IEnumerable<TickerSearchResult>> Search(string value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return Array.Empty<TickerSearchResult>();
+        try { return await TickerSearch.SearchAsync(value, ct); }
+        catch { return Array.Empty<TickerSearchResult>(); }
+    }
+
+    private void OnPicked(TickerSearchResult? r)
+    {
+        if (r is null) return;
+        _editing.Ticker = r.Symbol;
+        _editing.Name = r.Name;
+        _editing.AssetClass = r.AssetClass;
+        // Foreign-listed tickers trade in their local currency; default it for convenience.
+        if (r.Symbol.EndsWith(".TO", StringComparison.OrdinalIgnoreCase) || r.Symbol.EndsWith(".V", StringComparison.OrdinalIgnoreCase))
+            _editing.Currency = "CAD";
+        else if (r.Symbol.EndsWith(".AX", StringComparison.OrdinalIgnoreCase))
+            _editing.Currency = "AUD";
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await Save();
+    }
+
+    private async Task Save()
+    {
+        // If they typed in the search box but didn't pick a match, use that text as the ticker.
+        if (string.IsNullOrWhiteSpace(_editing.Ticker) && !string.IsNullOrWhiteSpace(_searchText))
+            _editing.Ticker = _searchText;
+        if (string.IsNullOrWhiteSpace(_editing.Ticker)) { Snackbar.Add("Enter a ticker.", Severity.Warning); return; }
+
+        _editing.Ticker = _editing.Ticker.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(_editing.Name)) _editing.Name = _editing.Ticker;
+
+        try
+        {
+            if (_editing.Id == 0) await HoldingsService.CreateAsync(_editing);
+            else await HoldingsService.UpdateAsync(_editing.Id, _editing);
+            _visible = false;
+            Snackbar.Add("Holding saved.", Severity.Success);
+            await OnSaved.InvokeAsync();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+}

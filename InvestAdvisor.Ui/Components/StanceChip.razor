@@ -1,0 +1,24 @@
+@using InvestAdvisor.Core.Enums
+
+<MudChip T="string" Size="Size.Small" Color="@Col" Variant="Variant.Filled" Class="@Class">@Label</MudChip>
+
+@code {
+    [Parameter] public PositionStance Stance { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private Color Col => Stance switch
+    {
+        PositionStance.Add => Color.Success,
+        PositionStance.Trim => Color.Warning,
+        PositionStance.Sell => Color.Error,
+        _ => Color.Default,
+    };
+
+    private string Label => Stance switch
+    {
+        PositionStance.Add => "Add",
+        PositionStance.Trim => "Trim",
+        PositionStance.Sell => "Sell",
+        _ => "Hold",
+    };
+}

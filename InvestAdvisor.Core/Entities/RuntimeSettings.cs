@@ -1,0 +1,44 @@
+namespace InvestAdvisor.Core.Entities;
+
+public class RuntimeSettings
+{
+    public const int SingletonId = 1;
+
+    public int Id { get; set; } = SingletonId;
+
+    public int TickIntervalSeconds { get; set; } = 300;
+    public bool MarketHoursOnly { get; set; } = true;
+    public string TimeZoneId { get; set; } = "America/New_York";
+    public int MaxRunsPerDay { get; set; } = 24;
+    public int MinSecondsBetweenRuns { get; set; } = 900;
+    public int MaxSnapshotAgeForTriggerSeconds { get; set; } = 600;
+    public int MinPriceFreshnessSeconds { get; set; } = 60;
+
+    /// <summary>UI preference: dark (night) mode. Persisted so the choice survives reloads.</summary>
+    public bool DarkMode { get; set; }
+
+    // Screener composite-score factor weights (relative; the scorer normalizes by their sum,
+    // so they need not add to 100). Editable in Settings.
+    public int WeightValuation { get; set; } = 20;
+    public int WeightGrowth { get; set; } = 25;
+    public int WeightQuality { get; set; } = 10;
+    public int WeightAnalyst { get; set; } = 20;
+    public int WeightInsider { get; set; } = 10;
+    public int WeightMomentum { get; set; } = 15;
+
+    // Optional sources for auto-importing holdings (e.g. a Wealthsimple export). When set, the
+    // import worker pulls them on its daily cycle; manual import via the Settings buttons works
+    // regardless. Path = a CSV file on the server; Url = a CSV URL (e.g. a published Google Sheet
+    // that Wealthica syncs your holdings into).
+    public string? HoldingsCsvPath { get; set; }
+    public string? HoldingsCsvUrl { get; set; }
+
+    public bool EmailEnabled { get; set; }
+    public string? SmtpHost { get; set; }
+    public int SmtpPort { get; set; } = 587;
+    public string? SmtpFrom { get; set; }
+    public string? SmtpTo { get; set; }
+    public bool SmtpEnableSsl { get; set; } = true;
+
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}

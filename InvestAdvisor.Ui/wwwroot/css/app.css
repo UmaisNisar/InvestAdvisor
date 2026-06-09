@@ -1,0 +1,146 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--mud-palette-background);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* Let the body grow with content (not pinned to the viewport) so the bottom padding
+   sits after the content, giving breathing room at the end of long pages. */
+body {
+    height: auto;
+    min-height: 100%;
+    padding-bottom: 3rem;
+}
+
+/* Modern card surfaces: hairline border + soft shadow instead of heavy MD2 elevation. */
+.mud-paper.mud-elevation-1 {
+    border: 1px solid var(--mud-palette-lines-default);
+    box-shadow: 0 1px 2px rgba(2, 6, 23, .04), 0 1px 3px rgba(2, 6, 23, .05);
+}
+
+/* App bar + drawer: hairline dividers, no drop shadow. */
+.mud-appbar {
+    box-shadow: none !important;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.mud-drawer {
+    border-right: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Calmer nav: rounded, inset links with a soft active state. */
+.mud-nav-link {
+    border-radius: 8px;
+    margin: 2px 8px;
+}
+
+.mud-nav-link.active {
+    background-color: rgba(99, 102, 241, .12);
+}
+
+/* Tables: lighter header, no heavy rules. */
+.mud-table-root .mud-table-head th {
+    font-weight: 600;
+    color: var(--mud-palette-text-secondary);
+}
+
+/* ---------- Modern motion ---------- */
+
+@keyframes ia-fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ia-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* Content cards rise into place on first render / navigation (runs once per element,
+   so data refreshes don't re-trigger it). A light stagger gives a sequential feel. */
+.mud-main-content .mud-paper.mud-elevation-1 {
+    animation: ia-fade-up .38s cubic-bezier(.22, .61, .36, 1) both;
+    transition: box-shadow .2s ease, transform .2s ease;
+}
+.mud-main-content .mud-grid > .mud-grid-item:nth-child(2) .mud-paper { animation-delay: .05s; }
+.mud-main-content .mud-grid > .mud-grid-item:nth-child(3) .mud-paper { animation-delay: .10s; }
+.mud-main-content .mud-grid > .mud-grid-item:nth-child(4) .mud-paper { animation-delay: .15s; }
+.mud-main-content .mud-grid > .mud-grid-item:nth-child(5) .mud-paper { animation-delay: .20s; }
+.mud-main-content .mud-grid > .mud-grid-item:nth-child(n+6) .mud-paper { animation-delay: .25s; }
+
+/* Subtle hover lift for surfaces. */
+.mud-main-content .mud-paper.mud-elevation-1:hover {
+    box-shadow: 0 4px 12px rgba(2, 6, 23, .08), 0 2px 4px rgba(2, 6, 23, .05);
+    transform: translateY(-2px);
+}
+
+/* Screener expansion rows: same lift + soft entrance. */
+.mud-expand-panel {
+    animation: ia-fade-in .3s ease both;
+    transition: box-shadow .2s ease;
+}
+.mud-expand-panel:hover { box-shadow: 0 2px 8px rgba(2, 6, 23, .06); }
+
+/* Smooth interactive transitions. */
+.mud-nav-link { transition: background-color .18s ease, color .18s ease, padding-left .18s ease; }
+.mud-nav-link:hover { padding-left: 18px; }
+.mud-button-root { transition: transform .12s ease, box-shadow .2s ease, background-color .2s ease; }
+.mud-button-root:active { transform: scale(.97); }
+.mud-table-hover tbody tr { transition: background-color .15s ease; }
+.mud-chip { transition: transform .12s ease, box-shadow .2s ease; }
+
+/* Factor / allocation bars fill smoothly when values change or first render. */
+.mud-progress-linear .mud-progress-linear-bar {
+    transition: transform .6s cubic-bezier(.22, .61, .36, 1);
+}
+
+/* Snackbars slide + fade (MudBlazor handles most; ensure a gentle entrance). */
+.mud-snackbar { animation: ia-fade-up .25s ease both; }
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+    }
+    .mud-main-content .mud-paper.mud-elevation-1:hover,
+    .mud-nav-link:hover { transform: none; padding-left: 8px; }
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 600px) {
+    /* Reclaim horizontal space on phones. */
+    .mud-main-content .mud-container {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+    .mud-main-content .mud-container.my-6 {
+        margin-top: 12px !important;
+        margin-bottom: 12px !important;
+    }
+    /* Headings sized for small screens. */
+    .mud-typography-h4 { font-size: 1.55rem; }
+    .mud-typography-h5 { font-size: 1.25rem; }
+    /* Let title + action rows wrap instead of overflowing. */
+    .mud-paper > .mud-stack[style*="row"] { flex-wrap: wrap; gap: 8px; }
+    /* Dialogs use the full width on phones. */
+    .mud-dialog { margin: 12px; }
+}
+
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}

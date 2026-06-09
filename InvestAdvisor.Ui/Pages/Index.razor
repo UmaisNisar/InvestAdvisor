@@ -1,0 +1,402 @@
+@page "/"
+@inject IPortfolioQueries Queries
+@inject IAgentService Agent
+@inject IRunEventBus Bus
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject IScreenerQueries Screener
+@inject IProfileService Profiles
+@inject IDailyRecommendationService Recommender
+@inject IHoldingsService HoldingsSvc
+@implements IDisposable
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+    <MudText Typo="Typo.h4">Dashboard</MudText>
+    <MudTooltip Text="Runs both modules now: (1) re-analyzes your holdings, and (2) regenerates today's 'where to invest' picks. Uses fresh data and makes AI calls.">
+        <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="RunNow" Disabled="_running">
+            @(_running ? "Running…" : "Run now")
+        </MudButton>
+    </MudTooltip>
+</MudStack>
+
+@if (_snapshot is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudGrid>
+        @* ───────────── Left: your portfolio (the hero) ───────────── *@
+        <MudItem xs="12" md="9">
+            <MudPaper Class="pa-4 mb-4" Elevation="1">
+                <MudStack Row="true" Spacing="6" AlignItems="AlignItems.Start" Style="flex-wrap:wrap">
+                    <div>
+                        <MudTooltip Text="Total market value of all holdings, converted to USD at today's FX rate.">
+                            <MudText Typo="Typo.subtitle2" Color="Color.Surface">Market value (USD)</MudText>
+                        </MudTooltip>
+                        <MudText Typo="Typo.h4">@_snapshot.Totals.MarketValueUsd.ToString("C0")</MudText>
+                        <MudText Typo="Typo.caption" Color="@(_snapshot.Totals.TodaysChangeUsd >= 0 ? Color.Success : Color.Error)">
+                            Today: @_snapshot.Totals.TodaysChangeUsd.ToString("+#,##0.00;-#,##0.00;0.00") (@_snapshot.Totals.TodaysChangePct.ToString("+0.00;-0.00;0.00")%)
+                        </MudText>
+                    </div>
+                    <MudDivider Vertical="true" FlexItem="true" />
+                    <div>
+                        <MudTooltip Text="Paper gain/loss vs. what you paid (cost basis). 'Unrealized' = you still hold it; nothing is sold.">
+                            <MudText Typo="Typo.subtitle2">Unrealized P/L</MudText>
+                        </MudTooltip>
+                        <MudText Typo="Typo.h4" Color="@(_snapshot.Totals.UnrealizedPnlUsd >= 0 ? Color.Success : Color.Error)">
+                            @_snapshot.Totals.UnrealizedPnlUsd.ToString("+$#,##0.00;-$#,##0.00;$0.00")
+                        </MudText>
+                        <MudText Typo="Typo.caption">
+                            @_snapshot.Totals.UnrealizedPnlPct.ToString("+0.00;-0.00;0.00")% on @_snapshot.Totals.CostBasisUsd.ToString("C0") cost
+                        </MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                    <MudText Typo="Typo.h6">Holdings (@_snapshot.Holdings.Count)</MudText>
+                    <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
+                               OnClick="@(() => _holdingDialog?.Open(null))">Add holding</MudButton>
+                </MudStack>
+                <MudTable Items="_snapshot.Holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Class="mt-2">
+                    <HeaderContent>
+                        <MudTh><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)x.Ticker)">Ticker</MudTableSortLabel></MudTh>
+                        <MudTh>Name</MudTh>
+                        <MudTh Style="text-align:right"><MudTooltip Text="Latest price in the holding's native currency (C$ = CAD, A$ = AUD).">Price</MudTooltip></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="HoldingView" InitialDirection="SortDirection.Descending" SortBy="@(x => (object)(x.MarketValueUsd ?? 0m))"><MudTooltip Text="Each holding's value converted to USD at today's FX rate (the Price stays in its native currency).">Market value (USD)</MudTooltip></MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)(x.UnrealizedPnlPct ?? decimal.MinValue))"><MudTooltip Text="Unrealized gain/loss % vs. your average cost.">P/L %</MudTooltip></MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)(x.TodaysChangePct ?? decimal.MinValue))"><MudTooltip Text="Price change since the previous close.">Today %</MudTooltip></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)(x.CurrentAllocationPct ?? 0m))"><MudTooltip Text="@(AnyTarget ? "Current share of your portfolio vs. your target weight." : "Current share of your portfolio.")">@(AnyTarget ? "Alloc / target" : "Allocation %")</MudTooltip></MudTableSortLabel></MudTh>
+                        @if (AnyTarget)
+                        {
+                            <MudTh><MudTooltip Text="How far this position is from its target allocation (over / under).">Drift</MudTooltip></MudTh>
+                        }
+                        <MudTh Style="text-align:right"></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <code>@context.Ticker</code>
+                            @if (context.Currency != "USD")
+                            {
+                                <MudTooltip Text="@($"Priced in {context.Currency}; value converted to USD for totals.")"><MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ml-1">@context.Currency</MudChip></MudTooltip>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudTooltip Text="@context.Name">
+                                <span style="display:inline-block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">@context.Name</span>
+                            </MudTooltip>
+                        </MudTd>
+                        <MudTd Style="text-align:right">@Money(context.Price, context.Currency)</MudTd>
+                        <MudTd Style="text-align:right">@(context.MarketValueUsd?.ToString("C0") ?? "—")</MudTd>
+                        <MudTd Style="@PnlStyle(context.UnrealizedPnlPct)">@(context.UnrealizedPnlPct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
+                        <MudTd Style="@PnlStyle(context.TodaysChangePct)">@(context.TodaysChangePct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
+                        <MudTd>
+                            @(context.CurrentAllocationPct?.ToString("0.0") ?? "—")@(AnyTarget ? $" / {context.TargetAllocationPct?.ToString("0.0") ?? "—"}" : "")
+                        </MudTd>
+                        @if (AnyTarget)
+                        {
+                            <MudTd><DriftBadge DriftPct="@context.DriftPct" /></MudTd>
+                        }
+                        <MudTd Style="text-align:right;white-space:nowrap">
+                            <MudTooltip Text="Edit this holding">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditHolding(context))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Delete this holding">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteHolding(context))" />
+                            </MudTooltip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+                <MudButton Href="/settings/holdings" Variant="Variant.Text" Class="mt-2">Import from CSV / manage →</MudButton>
+            </MudPaper>
+        </MudItem>
+
+        @* ───────────── Right rail: context ───────────── *@
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-3 mb-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600">Where to invest today</MudText>
+                @if (!_recLoaded)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">Loading…</MudText>
+                }
+                else if (_rec is null)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">Today's recommendation is generating — check back shortly.</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Surface" Class="mt-1">@TeaserLine()</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Surface">
+                        Updated @Ago(_rec.GeneratedAtUtc) · refreshes daily (next @Until(_rec.GeneratedAtUtc.Date.AddDays(1)))
+                    </MudText>
+                }
+                <div class="mt-2">
+                    <MudButton Href="/invest" Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" EndIcon="@Icons.Material.Filled.ArrowForward">View picks</MudButton>
+                </div>
+            </MudPaper>
+
+            <MudPaper Class="pa-4 mb-4" Elevation="1">
+                <MudText Typo="Typo.h6" GutterBottom="true">Latest advice</MudText>
+                @if (_snapshot.LatestAdvice is null)
+                {
+                    <MudText Typo="Typo.body2">No advice runs yet.</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Surface">Runs automatically about every @_cadenceHours h (or on a price/drift trigger).</MudText>
+                    <div class="mt-2">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.PlayArrow"
+                                   OnClick="RunNow">Run now</MudButton>
+                    </div>
+                }
+                else
+                {
+                    <div @onclick="OpenLatestAdvice" style="cursor:pointer" title="Click for the full advice">
+                        <MudText Typo="Typo.body2">@Truncate(_snapshot.LatestAdvice.Summary, 220)</MudText>
+                    </div>
+                    @if (_snapshot.LatestAdvice.Positions.Count > 0)
+                    {
+                        <MudDivider Class="my-2" />
+                        <MudText Typo="Typo.caption" Color="Color.Surface">Per-holding calls</MudText>
+                        <MudStack Spacing="1" Class="mt-1 mb-1">
+                            @foreach (var p in Ordered(_snapshot.LatestAdvice.Positions))
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="1">
+                                    <MudTooltip Text="@p.Reason"><code style="cursor:help">@p.Ticker</code></MudTooltip>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudText Typo="Typo.caption" Color="Color.Surface">@ConvLabel(p.Conviction)</MudText>
+                                        <StanceChip Stance="p.Stance" />
+                                    </MudStack>
+                                </MudStack>
+                            }
+                        </MudStack>
+                    }
+                    <MudText Typo="Typo.caption">
+                        Ran @Ago(_snapshot.LatestAdvice.TimestampUtc) · @_snapshot.LatestAdvice.TimestampUtc.ToString("MMM d, HH:mm 'UTC'") · @_snapshot.LatestAdvice.Trigger
+                        @if (_snapshot.LatestAdvice.FlagCount > 0 || _snapshot.LatestAdvice.DriftAlertCount > 0)
+                        {
+                            <span> · @_snapshot.LatestAdvice.FlagCount flag(s), @_snapshot.LatestAdvice.DriftAlertCount drift alert(s)</span>
+                        }
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Surface">
+                        Next scheduled analysis @Until(_snapshot.LatestAdvice.TimestampUtc.AddHours(_cadenceHours)) · or sooner on a price/drift trigger
+                    </MudText>
+                    <MudStack Row="true" Spacing="1" Class="mt-2">
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInFull" OnClick="OpenLatestAdvice">View details</MudButton>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Href="/advice">All runs →</MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+
+            <MudPaper Class="pa-4 mb-4" Elevation="1">
+                <MudText Typo="Typo.h6" GutterBottom="true">Allocation by asset class</MudText>
+                @if (_snapshot.Allocation.ByAssetClass.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Surface">No priced holdings yet.</MudText>
+                }
+                else
+                {
+                    foreach (var kv in _snapshot.Allocation.ByAssetClass.OrderByDescending(k => k.Value))
+                    {
+                        <MudText Typo="Typo.body2">@kv.Key</MudText>
+                        <MudProgressLinear Color="Color.Primary" Value="@((double)kv.Value)" Class="mb-2" />
+                        <MudText Typo="Typo.caption">@kv.Value.ToString("0.0")%</MudText>
+                    }
+                }
+            </MudPaper>
+
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.h6" GutterBottom="true">Top movers today</MudText>
+                @if (_snapshot.TopMovers.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Surface">No movers yet.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead>
+                            <tr><th>Ticker</th><th style="text-align:right">Price</th><th style="text-align:right">% change</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in _snapshot.TopMovers)
+                            {
+                                <tr>
+                                    <td><code>@m.Ticker</code></td>
+                                    <td style="text-align:right">@m.Price.ToString("C2")</td>
+                                    <td style="text-align:right;color:@(m.PercentChange >= 0 ? "#2a7" : "#c33")">
+                                        @m.PercentChange.ToString("+0.00;-0.00;0.00")%
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+<AdviceDetailDrawer @bind-Open="_adviceDrawerOpen" AdviceLogId="_selectedAdviceId" />
+<HoldingEditDialog @ref="_holdingDialog" OnSaved="OnHoldingsChanged" />
+
+@code {
+    private DashboardSnapshot? _snapshot;
+
+    private bool _adviceDrawerOpen;
+    private long? _selectedAdviceId;
+
+    private void OpenLatestAdvice()
+    {
+        if (_snapshot?.LatestAdvice is { } a)
+        {
+            _selectedAdviceId = a.AdviceLogId;
+            _adviceDrawerOpen = true;
+        }
+    }
+
+    private DailyRecommendationView? _rec;
+    private bool _recLoaded;
+    private int _cadenceHours = 24;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Bus.RunCompleted += OnRunCompleted;
+        await Reload();
+        await LoadRecommendation();
+        try { _cadenceHours = (await Profiles.GetAsync()).RebalanceCadenceHours; } catch { /* keep default */ }
+    }
+
+    private static string Ago(DateTime utc)
+    {
+        var d = DateTime.UtcNow - utc;
+        if (d < TimeSpan.Zero) d = TimeSpan.Zero;
+        if (d.TotalMinutes < 1) return "just now";
+        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
+        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
+        return $"{(int)d.TotalDays}d ago";
+    }
+
+    private static string Until(DateTime utc)
+    {
+        var d = utc - DateTime.UtcNow;
+        if (d <= TimeSpan.Zero) return "due now";
+        if (d.TotalMinutes < 60) return $"in {(int)d.TotalMinutes}m";
+        if (d.TotalHours < 24) return $"in {(int)d.TotalHours}h";
+        return $"in {(int)d.TotalDays}d";
+    }
+
+    private async Task LoadRecommendation()
+    {
+        try { _rec = await Screener.GetDailyRecommendationAsync(); }
+        catch (Exception ex) { Snackbar.Add($"Recommendation load failed: {ex.Message}", Severity.Error); }
+        finally { _recLoaded = true; }
+    }
+
+    private static string Truncate(string s, int max) =>
+        string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max].TrimEnd() + "…";
+
+    // Native-currency price (e.g. "C$120.00"); market-value/totals are converted to USD elsewhere.
+    private static string Money(decimal? v, string currency) =>
+        v is null ? "—" : (currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" }) + v.Value.ToString("N2");
+
+    // Green for gains, red for losses; right-aligned. Null (unpriced) stays neutral.
+    private static string PnlStyle(decimal? v) =>
+        "text-align:right;" + (v is null ? string.Empty : v >= 0 ? "color:#66bb6a;" : "color:#ef5350;");
+
+    // True once any holding has a target weight — until then we hide the target/drift columns.
+    private bool AnyTarget => _snapshot?.Holdings.Any(h => h.TargetAllocationPct is not null) ?? false;
+
+    // Surface the strongest calls first: actionable stances before Hold, then by conviction.
+    private static IEnumerable<PositionCall> Ordered(IReadOnlyList<PositionCall> ps) =>
+        ps.OrderByDescending(p => (p.Stance == PositionStance.Hold ? 0 : 10) + (int)p.Conviction)
+          .ThenBy(p => p.Ticker);
+
+    private static string ConvLabel(PositionConviction c) =>
+        c switch { PositionConviction.High => "high", PositionConviction.Low => "low", _ => "med" };
+
+    private string TeaserLine()
+    {
+        if (_rec is null) return string.Empty;
+        static string Join(IReadOnlyList<RecommendationPick> p) =>
+            p.Count == 0 ? "none" : string.Join(", ", p.Select(x => x.Ticker));
+        return $"Stocks: {Join(_rec.Stocks)}  ·  ETFs: {Join(_rec.Etfs)}  ·  Crypto: {Join(_rec.Crypto)}";
+    }
+
+    private async Task Reload()
+    {
+        try
+        {
+            _snapshot = await Queries.GetDashboardAsync();
+            _holdings = (await HoldingsSvc.ListAsync()).ToList();
+        }
+        catch (Exception ex) { Snackbar.Add($"Dashboard load failed: {ex.Message}", Severity.Error); }
+    }
+
+    private HoldingEditDialog? _holdingDialog;
+    private List<Holding>? _holdings;
+
+    private Holding? FindHolding(HoldingView v) =>
+        _holdings?.FirstOrDefault(h => h.Ticker.Equals(v.Ticker, StringComparison.OrdinalIgnoreCase) && h.AccountType.ToString() == v.AccountType)
+        ?? _holdings?.FirstOrDefault(h => h.Ticker.Equals(v.Ticker, StringComparison.OrdinalIgnoreCase));
+
+    private void EditHolding(HoldingView v)
+    {
+        var h = FindHolding(v);
+        if (h is not null) _holdingDialog?.Open(h);
+        else Snackbar.Add("Couldn't find that holding to edit.", Severity.Warning);
+    }
+
+    private async Task DeleteHolding(HoldingView v)
+    {
+        var h = FindHolding(v);
+        if (h is null) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Delete holding",
+            $"Remove {h.Ticker} ({h.Name}) from your portfolio? This can't be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+        try
+        {
+            await HoldingsSvc.DeleteAsync(h.Id);
+            Snackbar.Add($"Deleted {h.Ticker}.", Severity.Success);
+            await OnHoldingsChanged();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private async Task OnHoldingsChanged()
+    {
+        await Reload();
+        StateHasChanged();
+    }
+
+    private bool _running;
+
+    private async Task RunNow()
+    {
+        if (_running) return;
+        _running = true;
+        try
+        {
+            Snackbar.Add("Running both modules — holdings analysis + where to invest…", Severity.Info);
+            await Agent.RunNowAsync("Dashboard Run now");      // 1) holdings analysis
+            await Recommender.GenerateAsync(force: true);       // 2) what to invest in
+            Snackbar.Add("Done — holdings advice and today's picks updated.", Severity.Success);
+            await Reload();
+            await LoadRecommendation();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Run failed: {ex.Message}", Severity.Error);
+        }
+        finally { _running = false; }
+    }
+
+    private async void OnRunCompleted(object? sender, RunCompletedEvent e)
+    {
+        await InvokeAsync(Reload);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Bus.RunCompleted -= OnRunCompleted;
+}

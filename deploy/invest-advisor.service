@@ -1,0 +1,34 @@
+[Unit]
+Description=InvestAdvisor (Blazor Server)
+After=network.target
+
+[Service]
+Type=notify
+User=invest
+Group=invest
+WorkingDirectory=/opt/invest-advisor
+ExecStart=/usr/bin/dotnet /opt/invest-advisor/InvestAdvisor.Server.dll
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+SyslogIdentifier=invest-advisor
+
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5174
+Environment=DOTNET_NOLOGO=1
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=ConnectionStrings__Default=Data Source=/var/lib/invest-advisor/app.db
+EnvironmentFile=-/etc/invest-advisor.env
+
+# Hardening — the app only needs to read /opt and read+write /var/lib/invest-advisor.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/invest-advisor
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

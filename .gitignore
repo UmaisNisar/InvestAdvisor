@@ -1,0 +1,39 @@
+## .NET
+bin/
+obj/
+out/
+publish/
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.binlog
+.vs/
+.vscode/
+.idea/
+
+## Build output
+[Dd]ebug/
+[Rr]elease/
+[Bb]uilds/
+TestResults/
+
+## EF
+**/Migrations/Designer.cs.bak
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets (defense in depth — user-secrets normally live outside repo)
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.env
+deploy/.env
+
+## Local SQLite (in case anyone overrides path to within repo)
+*.db
+*.db-shm
+*.db-wal

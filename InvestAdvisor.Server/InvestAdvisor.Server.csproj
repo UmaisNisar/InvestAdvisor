@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>InvestAdvisor.Server</RootNamespace>
+    <AssemblyName>InvestAdvisor.Server</AssemblyName>
+    <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
+    <UserSecretsId>investadvisor-server-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InvestAdvisor.Core\InvestAdvisor.Core.csproj" />
+    <ProjectReference Include="..\InvestAdvisor.Data\InvestAdvisor.Data.csproj" />
+    <ProjectReference Include="..\InvestAdvisor.Ui\InvestAdvisor.Ui.csproj" />
+  </ItemGroup>
+
+</Project>

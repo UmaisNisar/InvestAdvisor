@@ -1,0 +1,22 @@
+@* One asset-class column of the daily "where to invest" recommendation. *@
+
+<MudText Typo="Typo.subtitle2" Class="mb-1">@Label</MudText>
+@if (Picks.Count == 0)
+{
+    <MudText Typo="Typo.caption" Color="Color.Surface">Nothing compelling today.</MudText>
+}
+else
+{
+    @foreach (var p in Picks)
+    {
+        <div class="mb-2">
+            <MudText Typo="Typo.body2" Style="font-weight:600"><code>@p.Ticker</code>&nbsp;<MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">@p.Name</MudText></MudText>
+            <MudText Typo="Typo.caption" Color="Color.Surface">@p.Reason</MudText>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public IReadOnlyList<RecommendationPick> Picks { get; set; } = Array.Empty<RecommendationPick>();
+}

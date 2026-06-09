@@ -1,0 +1,11 @@
+<Project>
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);1701;1702;CS0168;CS1998;CA1305;IDE0022</NoWarn>
+  </PropertyGroup>
+
+</Project>

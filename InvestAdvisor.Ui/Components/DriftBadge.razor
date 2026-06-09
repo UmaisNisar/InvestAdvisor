@@ -1,0 +1,17 @@
+@if (DriftPct is null)
+{
+    <MudChip T="string" Size="Size.Small" Color="Color.Default">no target</MudChip>
+}
+else
+{
+    var pct = DriftPct.Value;
+    var abs = Math.Abs(pct);
+    var color = abs >= Threshold ? Color.Warning : Color.Default;
+    if (abs >= Threshold * 2) color = Color.Error;
+    <MudChip T="string" Size="Size.Small" Color="@color">@($"{pct:+0.00;-0.00;0.00}%")</MudChip>
+}
+
+@code {
+    [Parameter] public decimal? DriftPct { get; set; }
+    [Parameter] public decimal Threshold { get; set; } = 5m;
+}

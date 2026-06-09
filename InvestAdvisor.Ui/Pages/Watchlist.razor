@@ -1,0 +1,128 @@
+@page "/watchlist"
+@inject IWatchlistService Service
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4" GutterBottom="true">Watchlist</MudText>
+
+@if (_items is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3">
+        <MudText>@_items.Count items</MudText>
+        <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="@(() => OpenEdit(null))">Add item</MudButton>
+    </MudStack>
+
+    <MudTable Items="_items" Dense="true" Hover="true" HorizontalScrollbar="true">
+        <HeaderContent>
+            <MudTh>Ticker</MudTh>
+            <MudTh>Class</MudTh>
+            <MudTh>Note</MudTh>
+            <MudTh Style="text-align:right"><MudTooltip Text="Lower price-target band. The agent flags the stock when price drops to/below this.">Target low</MudTooltip></MudTh>
+            <MudTh Style="text-align:right"><MudTooltip Text="Upper price-target band. The agent flags the stock when price rises to/above this.">Target high</MudTooltip></MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><code>@context.Ticker</code></MudTd>
+            <MudTd>@context.AssetClass</MudTd>
+            <MudTd>@context.Note</MudTd>
+            <MudTd Style="text-align:right">@(context.PriceTargetLow?.ToString("C2") ?? "—")</MudTd>
+            <MudTd Style="text-align:right">@(context.PriceTargetHigh?.ToString("C2") ?? "—")</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => Delete(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@if (_editing is not null)
+{
+    <MudDialog @bind-Visible="_editOpen" Options="@(new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true })">
+        <TitleContent>@(_editing.Id == 0 ? "Add watchlist item" : "Edit watchlist item")</TitleContent>
+        <DialogContent>
+            <MudTextField @bind-Value="_editing.Ticker" Label="Ticker" Required="true" Immediate="true" OnKeyDown="OnKey" />
+            <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
+                @foreach (var ac in Enum.GetValues<AssetClass>())
+                {
+                    <MudSelectItem Value="ac">@ac</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_editing.Note" Label="Note" Lines="2"
+                          HelperText="Why you're watching it — shown to the AI for context." />
+            <MudNumericField T="decimal?" @bind-Value="_editing.PriceTargetLow" Label="Price target (low)" Immediate="true" OnKeyDown="OnKey"
+                             HelperText="Optional. Triggers an analysis if the price falls to/below this." />
+            <MudNumericField T="decimal?" @bind-Value="_editing.PriceTargetHigh" Label="Price target (high)" Immediate="true" OnKeyDown="OnKey"
+                             HelperText="Optional. Triggers an analysis if the price rises to/above this." />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@(() => _editOpen = false)">Cancel</MudButton>
+            <MudButton Color="Color.Primary" OnClick="Save">Save</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+@code {
+    private IReadOnlyList<WatchlistItem>? _items;
+    private WatchlistItem? _editing;
+    private bool _editOpen;
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        try { _items = await Service.ListAsync(); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private void OpenEdit(WatchlistItem? item)
+    {
+        _editing = item is null
+            ? new WatchlistItem { AssetClass = AssetClass.Equity }
+            : new WatchlistItem
+            {
+                Id = item.Id, Ticker = item.Ticker, AssetClass = item.AssetClass,
+                Note = item.Note, PriceTargetLow = item.PriceTargetLow, PriceTargetHigh = item.PriceTargetHigh,
+            };
+        _editOpen = true;
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await Save();
+    }
+
+    private async Task Save()
+    {
+        if (_editing is null) return;
+        try
+        {
+            if (_editing.Id == 0) await Service.CreateAsync(_editing);
+            else await Service.UpdateAsync(_editing.Id, _editing);
+            _editOpen = false;
+            Snackbar.Add("Saved.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task Delete(WatchlistItem item)
+    {
+        try
+        {
+            await Service.DeleteAsync(item.Id);
+            Snackbar.Add("Deleted.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

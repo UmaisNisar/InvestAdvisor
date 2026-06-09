@@ -1,0 +1,53 @@
+@* Renders one asset class's screener view: caption + optional gauges, then top/bottom panels. *@
+
+@if (!string.IsNullOrEmpty(Caption))
+{
+    <MudText Typo="Typo.body2" Color="Color.Surface" Class="mt-2 mb-1">@Caption</MudText>
+}
+@if (View?.UniverseMedianPe is { } mpe)
+{
+    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-1">
+        Universe median P/E <b>@mpe.ToString("0.0")</b> (@PeBand(mpe)) — a top rank in a rich set is still a rich name.
+    </MudText>
+}
+@if (!string.IsNullOrEmpty(ValidationText))
+{
+    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-3">@ValidationText</MudText>
+}
+
+@if (View is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (View.UniverseSize == 0)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2">
+        No data yet — the worker pulls this on its daily cycle. Give it a minute and refresh.
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h6" GutterBottom="true" Class="mt-2">Top of the universe</MudText>
+    <MudExpansionPanels MultiExpansion="true" Class="mb-6">
+        @foreach (var e in View.Opportunities)
+        {
+            <ScreenerStockPanel Entry="e" />
+        }
+    </MudExpansionPanels>
+
+    <MudText Typo="Typo.h6" GutterBottom="true">Bottom of the universe</MudText>
+    <MudExpansionPanels MultiExpansion="true">
+        @foreach (var e in View.Risks)
+        {
+            <ScreenerStockPanel Entry="e" />
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter] public ScreenerView? View { get; set; }
+    [Parameter] public string? Caption { get; set; }
+    [Parameter] public string? ValidationText { get; set; }
+
+    private static string PeBand(decimal pe) => pe < 18m ? "modest" : pe <= 28m ? "moderate" : "elevated";
+}

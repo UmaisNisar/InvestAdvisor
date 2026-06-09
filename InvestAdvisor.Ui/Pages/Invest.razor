@@ -1,0 +1,73 @@
+@page "/invest"
+@inject IScreenerQueries Screener
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1">
+    <MudTooltip Text="One AI call each day reviews the top-ranked candidates across stocks, ETFs and crypto and picks a focused shortlist, tailored to your profile. Research leads — not advice.">
+        <MudText Typo="Typo.h4">Where to invest today</MudText>
+    </MudTooltip>
+    <MudButton Href="/screener" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TrendingUp">Full screener →</MudButton>
+</MudStack>
+
+@if (!_loaded)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_rec is null)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+        Today's recommendation hasn't been generated yet — the worker produces it once a day from the latest data. Check back shortly.
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-3">
+        My read of today's data and your profile — research leads, not advice; you decide.<br />
+        Generated @_rec.GeneratedAtUtc.ToString("MMM d, HH:mm 'UTC'") (@Ago(_rec.GeneratedAtUtc)) · refreshes once daily, next @Until(_rec.GeneratedAtUtc.Date.AddDays(1))
+    </MudText>
+    <MudText Typo="Typo.body1" Class="mb-4">@_rec.Summary</MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4" Elevation="1" Style="height:100%"><RecommendationGroup Label="Stocks to buy" Picks="_rec.Stocks" /></MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4" Elevation="1" Style="height:100%"><RecommendationGroup Label="ETFs to buy" Picks="_rec.Etfs" /></MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4" Elevation="1" Style="height:100%"><RecommendationGroup Label="Crypto to buy" Picks="_rec.Crypto" /></MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (!string.IsNullOrWhiteSpace(_rec.Caution))
+    {
+        <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" Class="mt-4">@_rec.Caution</MudAlert>
+    }
+}
+
+@code {
+    private DailyRecommendationView? _rec;
+    private bool _loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _rec = await Screener.GetDailyRecommendationAsync(); }
+        finally { _loaded = true; }
+    }
+
+    private static string Ago(DateTime utc)
+    {
+        var d = DateTime.UtcNow - utc;
+        if (d < TimeSpan.Zero) d = TimeSpan.Zero;
+        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
+        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
+        return $"{(int)d.TotalDays}d ago";
+    }
+
+    private static string Until(DateTime utc)
+    {
+        var d = utc - DateTime.UtcNow;
+        if (d <= TimeSpan.Zero) return "due now";
+        if (d.TotalHours < 24) return $"in {(int)d.TotalHours}h";
+        return $"in {(int)d.TotalDays}d";
+    }
+}

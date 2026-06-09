@@ -1,0 +1,28 @@
+@if (Severity is null)
+{
+    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">&mdash;</MudChip>
+}
+else
+{
+    <MudChip T="string" Size="Size.Small" Color="@Color" Variant="Variant.Filled">@Label</MudChip>
+}
+
+@code {
+    [Parameter] public FlagSeverity? Severity { get; set; }
+
+    private Color Color => Severity switch
+    {
+        FlagSeverity.Critical => Color.Error,
+        FlagSeverity.Warn => Color.Warning,
+        FlagSeverity.Info => Color.Info,
+        _ => Color.Default,
+    };
+
+    private string Label => Severity switch
+    {
+        FlagSeverity.Critical => "critical",
+        FlagSeverity.Warn => "warn",
+        FlagSeverity.Info => "info",
+        _ => "—",
+    };
+}

@@ -1,0 +1,135 @@
+@page "/advice"
+@inject IPortfolioQueries Queries
+@inject IAgentService Agent
+@inject IRunEventBus Bus
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+    <MudText Typo="Typo.h4">Advice feed</MudText>
+    <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled" OnClick="RunNow">Run now</MudButton>
+</MudStack>
+
+@if (_page is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_page.Items.Count == 0)
+{
+    <MudText>No advice runs yet. Click "Run now" to invoke the agent.</MudText>
+}
+else
+{
+    <MudTable Items="_page.Items" Dense="true" Hover="true" OnRowClick="@OnRowClick" T="AdviceLogSummaryView">
+        <HeaderContent>
+            <MudTh>Time (UTC)</MudTh>
+            <MudTh>Trigger</MudTh>
+            <MudTh>Detail</MudTh>
+            <MudTh>Summary</MudTh>
+            <MudTh Style="text-align:right">Flags</MudTh>
+            <MudTh Style="text-align:right">Drift</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.TimestampUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@TriggerColor(context.Trigger)">@context.Trigger</MudChip>
+                @if (context.ReplayOfAdviceLogId is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default">replay</MudChip>
+                }
+            </MudTd>
+            <MudTd>@context.TriggerDetail</MudTd>
+            <MudTd Style="max-width:600px">@Truncate(context.Summary, 160)</MudTd>
+            <MudTd Style="text-align:right">
+                @if (context.CriticalFlagCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Error">@context.CriticalFlagCount</MudChip> }
+                @if (context.WarnFlagCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@context.WarnFlagCount</MudChip> }
+                @if (context.FlagCount == 0) { <span>—</span> }
+            </MudTd>
+            <MudTd Style="text-align:right">
+                @if (context.ActionSuggestedDriftCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@context.ActionSuggestedDriftCount</MudChip> }
+                @if (context.DriftAlertCount == 0) { <span>—</span> }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+        <MudButton OnClick="PrevPage" Disabled="_skip == 0">Previous</MudButton>
+        <MudText>@($"{Math.Min(_page.TotalCount, _skip + 1)}–{Math.Min(_page.TotalCount, _skip + _take)} of {_page.TotalCount}")</MudText>
+        <MudButton OnClick="NextPage" Disabled="_skip + _take >= _page.TotalCount">Next</MudButton>
+    </MudStack>
+}
+
+<AdviceDetailDrawer @bind-Open="_drawerOpen" AdviceLogId="_selectedId" />
+
+@code {
+    private AdvicePage? _page;
+    private int _skip;
+    private const int _take = 50;
+    private long? _selectedId;
+    private bool _drawerOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Bus.RunCompleted += OnRunCompleted;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        try { _page = await Queries.GetAdvicePageAsync(_skip, _take); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private async Task PrevPage()
+    {
+        _skip = Math.Max(0, _skip - _take);
+        await Reload();
+    }
+
+    private async Task NextPage()
+    {
+        _skip += _take;
+        await Reload();
+    }
+
+    private void OnRowClick(TableRowClickEventArgs<AdviceLogSummaryView> args)
+    {
+        _selectedId = args.Item?.Id;
+        _drawerOpen = _selectedId is not null;
+    }
+
+    private async Task RunNow()
+    {
+        try
+        {
+            Snackbar.Add("Running agent…", Severity.Info);
+            await Agent.RunNowAsync("Advice feed Run now");
+            Snackbar.Add("Agent run complete.", Severity.Success);
+            await Reload();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Run failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async void OnRunCompleted(object? sender, RunCompletedEvent e)
+    {
+        await InvokeAsync(Reload);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static Color TriggerColor(RunTriggerKind k) => k switch
+    {
+        RunTriggerKind.PriceTarget => Color.Warning,
+        RunTriggerKind.BigMove => Color.Warning,
+        RunTriggerKind.DriftThreshold => Color.Info,
+        RunTriggerKind.Manual => Color.Default,
+        _ => Color.Primary,
+    };
+
+    private static string Truncate(string s, int max) =>
+        string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max] + "…";
+
+    public void Dispose() => Bus.RunCompleted -= OnRunCompleted;
+}

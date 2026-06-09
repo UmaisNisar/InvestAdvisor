@@ -1,0 +1,43 @@
+@inject IPortfolioQueries Queries
+@implements IDisposable
+
+<MudTooltip Text="@_tooltip" Color="Color.Surface">
+    <MudChip T="string" Size="Size.Small" Color="@_color" Icon="@Icons.Material.Filled.Circle">@_label</MudChip>
+</MudTooltip>
+
+@code {
+    private Color _color = Color.Default;
+    private string _label = "checking";
+    private string _tooltip = "checking…";
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+        _timer = new System.Threading.Timer(async _ => { await Refresh(); await InvokeAsync(StateHasChanged); },
+            null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private async Task Refresh()
+    {
+        try
+        {
+            var s = await Queries.GetHealthAsync();
+            _color = s.DatabaseOk ? Color.Success : Color.Error;
+            _label = s.DatabaseOk ? "ready" : "db error";
+            _tooltip =
+                $"DB: {(s.DatabaseOk ? "ok" : "FAIL")}\n" +
+                $"Last Finnhub fetch: {(s.LastFinnhubFetchUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "never")}\n" +
+                $"Last Anthropic call: {(s.LastAnthropicCallUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "never")}\n" +
+                $"Total runs: {s.TotalAdviceLogs}";
+        }
+        catch (Exception ex)
+        {
+            _color = Color.Error;
+            _label = "error";
+            _tooltip = ex.Message;
+        }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

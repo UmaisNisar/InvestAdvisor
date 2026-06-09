@@ -1,0 +1,107 @@
+@* One expandable row on the Screener page: score + factor breakdown + the AI bull/bear/thesis. *@
+
+<MudExpansionPanel>
+    <TitleContent>
+        <div style="display:flex;align-items:center;gap:12px;width:100%">
+            <MudTooltip Text="Composite score 0–100: a percentile-ranked blend of the factors below, relative to this universe. A ranking signal, not a buy recommendation.">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="ScoreColor(Entry.Score.CompositeScore)">
+                    @Entry.Score.CompositeScore.ToString("0.0")
+                </MudChip>
+            </MudTooltip>
+            <div style="min-width:0;flex:1">
+                <MudText Typo="Typo.subtitle2" Style="font-weight:600">
+                    #@Entry.Rank · <code>@Entry.Score.Ticker</code>
+                    <MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">&nbsp;@Entry.Score.Name · @Entry.Score.Sector</MudText>
+                </MudText>
+            </div>
+            @if (Entry.Analysis is { } a)
+            {
+                <MudTooltip Text="The AI's qualitative confidence in its read of the data (0–100). Not a guarantee or a price target.">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ConvictionColor(a.ConvictionLabel)">
+                        @a.ConvictionLabel · @a.Conviction/100
+                    </MudChip>
+                </MudTooltip>
+            }
+        </div>
+    </TitleContent>
+
+    <ChildContent>
+    @if (Entry.Score.Snapshot.PeRatio is >= 35m)
+    {
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Class="mb-2">
+            Richly valued · P/E @Entry.Score.Snapshot.PeRatio?.ToString("0") (absolute) — a high rank here is relative to the universe, not a cheap entry.
+        </MudChip>
+    }
+    <MudText Typo="Typo.overline" Class="mb-1">Factor scores</MudText>
+    @foreach (var f in Factors())
+    {
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="width:96px">
+                <MudTooltip Text="@f.Tooltip"><MudText Typo="Typo.caption" Style="border-bottom:1px dotted var(--mud-palette-text-secondary);cursor:help">@f.Label</MudText></MudTooltip>
+            </div>
+            <div style="flex:1"><MudProgressLinear Color="Color.Primary" Value="@((double)(f.Value ?? 0m))" Class="my-1" /></div>
+            <div style="width:34px;text-align:right"><MudText Typo="Typo.caption">@(f.Value?.ToString("0") ?? "—")</MudText></div>
+        </div>
+    }
+
+    @if (Entry.Analysis is { } an)
+    {
+        <MudDivider Class="my-3" />
+        <MudText Typo="Typo.body2" Class="mb-2">@an.Summary</MudText>
+        <MudText Typo="Typo.subtitle2">Thesis</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">@an.Thesis</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudText Typo="Typo.subtitle2" Color="Color.Success">Bullish</MudText>
+                <ul style="margin:4px 0;padding-left:18px">
+                    @foreach (var x in an.BullishFactors) { <li><MudText Typo="Typo.caption">@x</MudText></li> }
+                </ul>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudText Typo="Typo.subtitle2" Color="Color.Error">Bearish</MudText>
+                <ul style="margin:4px 0;padding-left:18px">
+                    @foreach (var x in an.BearishFactors) { <li><MudText Typo="Typo.caption">@x</MudText></li> }
+                </ul>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudText Typo="Typo.subtitle2" Color="Color.Warning">Key risks</MudText>
+                <ul style="margin:4px 0;padding-left:18px">
+                    @foreach (var x in an.KeyRisks) { <li><MudText Typo="Typo.caption">@x</MudText></li> }
+                </ul>
+            </MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-2">
+            Conviction is a qualitative read of the data, not investment advice · generated @an.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")
+        </MudText>
+    }
+    else
+    {
+        <MudDivider Class="my-3" />
+        <MudText Typo="Typo.caption" Color="Color.Surface">No AI write-up for this name — ranked on the factor scores above (AI analysis runs on equities only).</MudText>
+    }
+    </ChildContent>
+</MudExpansionPanel>
+
+@code {
+    [Parameter] public ScreenerEntry Entry { get; set; } = default!;
+
+    private IEnumerable<(string Label, decimal? Value, string Tooltip)> Factors()
+    {
+        var f = Entry.Score.Factors;
+        yield return ("Growth", f.Growth, "Revenue + EPS growth, percentile-ranked vs. the universe. Higher = faster-growing.");
+        yield return ("Valuation", f.Valuation, "P/E and Price/FCF — cheaper names rank higher. (Relative to the universe, not absolute.)");
+        yield return ("Analyst", f.Analyst, "Share of analyst Buy ratings plus the recent upgrade/downgrade trend.");
+        yield return ("Momentum", f.Momentum, "13- and 26-week price return (7- and 30-day for crypto). Higher = stronger recent trend.");
+        yield return ("Quality", f.Quality, "Balance-sheet strength — lower debt/equity ranks higher. (For ETFs: lower beta; crypto: market-cap size.)");
+        yield return ("Insider", f.Insider, "Net insider buying over the last ~90 days (SEC Form 4). Higher = more insider accumulation.");
+    }
+
+    private static Color ScoreColor(decimal s) => s >= 60m ? Color.Success : s >= 45m ? Color.Default : Color.Error;
+
+    private static Color ConvictionColor(string label) => label switch
+    {
+        "high" => Color.Success,
+        "medium" => Color.Info,
+        _ => Color.Default,
+    };
+}

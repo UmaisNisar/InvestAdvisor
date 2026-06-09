@@ -1,0 +1,54 @@
+@inherits LayoutComponentBase
+@inject IPortfolioQueries Queries
+@implements IDisposable
+@inject IRunEventBus Bus
+
+<MudLayout>
+    <MudAppBar Color="Color.Default" Elevation="0">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="ToggleDrawer" Title="Toggle menu" Class="mr-1" />
+        <MudText Typo="Typo.h6" Style="font-weight:600;letter-spacing:-.01em;">InvestAdvisor</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@(RootComponent?.IsDarkMode == true ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
+                       Color="Color.Inherit" Edge="Edge.End" OnClick="ToggleTheme"
+                       Title="Toggle light/dark" Class="mr-2" />
+        <ConnectionStatusPill />
+    </MudAppBar>
+    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md"
+               ClipMode="DrawerClipMode.Always" Width="220px" Elevation="0">
+        <NavMenu />
+    </MudDrawer>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    [CascadingParameter] private Root? RootComponent { get; set; }
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    protected override void OnInitialized()
+    {
+        Bus.RunCompleted += OnRunCompleted;
+    }
+
+    private async Task ToggleTheme()
+    {
+        if (RootComponent is not null) await RootComponent.ToggleDarkModeAsync();
+    }
+
+    private void OnRunCompleted(object? sender, RunCompletedEvent e)
+    {
+        // Each page subscribes itself; no global state to refresh here.
+    }
+
+    public void Dispose()
+    {
+        Bus.RunCompleted -= OnRunCompleted;
+    }
+}

@@ -1,0 +1,47 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using InvestAdvisor.Ui.Theme
+@inject IRuntimeSettingsStore SettingsStore
+
+<MudThemeProvider Theme="_theme" @bind-IsDarkMode="_isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<CascadingValue Value="this" IsFixed="true">
+    <Router AppAssembly="@typeof(Root).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <MudText Typo="Typo.h5">Not found</MudText>
+                <MudText>That page doesn't exist.</MudText>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingValue>
+
+@code {
+    private bool _isDarkMode;
+    private readonly MudTheme _theme = AppTheme.Build();
+
+    /// <summary>Current dark-mode state, read by the layout's theme toggle.</summary>
+    public bool IsDarkMode => _isDarkMode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Restore the saved night-mode preference from the local settings DB.
+        try { _isDarkMode = (await SettingsStore.GetAsync()).DarkMode; }
+        catch { /* fall back to light if settings can't be read */ }
+    }
+
+    /// <summary>Flip light/dark and persist the choice. Called from the app bar toggle in MainLayout.</summary>
+    public async Task ToggleDarkModeAsync()
+    {
+        _isDarkMode = !_isDarkMode;
+        StateHasChanged();
+        try { await SettingsStore.UpdateAsync(s => s.DarkMode = _isDarkMode); }
+        catch { /* persistence is best-effort */ }
+    }
+}

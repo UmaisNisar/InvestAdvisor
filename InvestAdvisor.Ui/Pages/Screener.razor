@@ -1,0 +1,40 @@
+@page "/screener"
+@inject IScreenerQueries Queries
+@using InvestAdvisor.Core.Enums
+
+<MudText Typo="Typo.h4" GutterBottom="true">Screener</MudText>
+
+<MudTabs Outlined="true" Position="Position.Top" Class="mt-1" PanelClass="pt-4">
+    <MudTabPanel Text="Equities">
+        <ScreenerSection View="_equity"
+                         Caption="Stocks ranked relative to each other within your universe — percentile factor scores (growth, valuation, analyst, momentum, quality, insider), not absolute buy signals."
+                         ValidationText="@EquityValidationText()" />
+    </MudTabPanel>
+    <MudTabPanel Text="ETFs">
+        <ScreenerSection View="_etf"
+                         Caption="ETFs ranked on momentum (13- and 26-week price return) plus low beta. ETFs have no earnings, so this is a trend/risk screen — not a value model. No AI write-ups for ETFs." />
+    </MudTabPanel>
+    <MudTabPanel Text="Crypto">
+        <ScreenerSection View="_crypto"
+                         Caption="Crypto ranked on momentum (7- and 30-day) plus market-cap size (CoinGecko). No fundamentals — a pure momentum/size screen, and far more volatile than equities. Treat with extra caution." />
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private ScreenerView? _equity;
+    private ScreenerView? _etf;
+    private ScreenerView? _crypto;
+    private ScreenerValidation? _validation;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _equity = await Queries.GetAsync(AssetClass.Equity);
+        _etf = await Queries.GetAsync(AssetClass.Etf, topCount: 8, bottomCount: 6);
+        _crypto = await Queries.GetAsync(AssetClass.Crypto, topCount: 6, bottomCount: 4);
+        _validation = await Queries.GetValidationAsync();
+    }
+
+    private string EquityValidationText() => _validation is { } v
+        ? $"Score check: since {v.FromUtc:MMM d}, the top {v.TopGroupSize} by score returned {v.TopGroupReturnPct:+0.0;-0.0;0.0}% vs the universe {v.UniverseReturnPct:+0.0;-0.0;0.0}% (n={v.SampleSize}). Small sample — a sanity check, not proof."
+        : "Score validation: accruing — needs at least two daily price snapshots to compare whether high scores actually outperform.";
+}

@@ -1,0 +1,188 @@
+@inject IPortfolioQueries Queries
+@inject IAgentService Agent
+@inject ISnackbar Snackbar
+
+<MudDrawer Open="Open" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Width="640px"
+           ClipMode="DrawerClipMode.Never" Variant="DrawerVariant.Temporary" Elevation="6">
+  <div tabindex="-1" @ref="_focusRoot" @onkeydown="OnKeyDown" style="outline:none;height:100%">
+    <MudStack Class="pa-4" Spacing="3">
+        @if (_detail is null)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Advice #@_detail.Id</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+            </MudStack>
+
+            <MudText Typo="Typo.caption" Color="Color.Surface">
+                @_detail.TimestampUtc.ToString("yyyy-MM-dd HH:mm 'UTC'") · @_detail.Trigger · @_detail.TriggerDetail
+                @if (_detail.ReplayOfAdviceLogId is not null) { <span> · replay of #@_detail.ReplayOfAdviceLogId</span> }
+            </MudText>
+
+            <MudPaper Class="pa-3" Outlined="true">
+                <MudText Typo="Typo.body1">@_detail.Summary</MudText>
+            </MudPaper>
+
+            @if (_detail.Positions.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle1">Position calls</MudText>
+                @foreach (var p in _detail.Positions
+                    .OrderByDescending(x => (x.Stance == InvestAdvisor.Core.Enums.PositionStance.Hold ? 0 : 10) + (int)x.Conviction)
+                    .ThenBy(x => x.Ticker))
+                {
+                    <MudPaper Class="pa-2" Outlined="true">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <StanceChip Stance="p.Stance" />
+                            <code>@p.Ticker</code>
+                            <MudText Typo="Typo.caption" Color="Color.Surface">@p.Conviction.ToString().ToLowerInvariant() conviction</MudText>
+                            <MudText Typo="Typo.body2">@p.Reason</MudText>
+                        </MudStack>
+                    </MudPaper>
+                }
+            }
+
+            @if (_detail.Flags.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle1">Flags</MudText>
+                @foreach (var f in _detail.Flags)
+                {
+                    <MudPaper Class="pa-2" Outlined="true">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <SeverityBadge Severity="f.Severity" />
+                            <MudText Typo="Typo.body2"><strong>@f.Title</strong></MudText>
+                            @if (!string.IsNullOrEmpty(f.Ticker))
+                            {
+                                <code>@f.Ticker</code>
+                            }
+                            @if (!f.KnownTicker)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error">unknown ticker</MudChip>
+                            }
+                        </MudStack>
+                        <MudText Typo="Typo.caption">@f.Detail</MudText>
+                    </MudPaper>
+                }
+            }
+
+            @if (_detail.DriftAlerts.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle1">Drift alerts</MudText>
+                @foreach (var d in _detail.DriftAlerts)
+                {
+                    <MudPaper Class="pa-2" Outlined="true">
+                        <MudText Typo="Typo.body2">
+                            <code>@d.Ticker</code> at <strong>@d.CurrentPct.ToString("0.0")%</strong>
+                            vs target @d.TargetPct.ToString("0.0")%
+                            (drift @d.DriftPct.ToString("+0.0;-0.0"), @d.Severity)
+                        </MudText>
+                        <MudText Typo="Typo.caption">@d.Note</MudText>
+                    </MudPaper>
+                }
+            }
+
+            @if (_detail.Considerations.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle1">Considerations</MudText>
+                @foreach (var c in _detail.Considerations)
+                {
+                    <MudPaper Class="pa-2" Outlined="true">
+                        <MudText Typo="Typo.body2"><strong>@c.Topic.</strong> @c.Text</MudText>
+                    </MudPaper>
+                }
+            }
+
+            <MudExpansionPanels MultiExpansion="true">
+                <MudExpansionPanel Text="System prompt used (and re-run with this prompt)">
+                    <MudTextField T="string" @bind-Value="_editedPrompt" Lines="12" Variant="Variant.Outlined" />
+                    <MudButton OnClick="Replay" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2"
+                               StartIcon="@Icons.Material.Filled.Replay">Re-run with this prompt</MudButton>
+                </MudExpansionPanel>
+                <MudExpansionPanel Text="Structured input JSON">
+                    <pre style="max-height:300px;overflow:auto;font-size:11px">@_detail.StructuredInputJson</pre>
+                </MudExpansionPanel>
+                <MudExpansionPanel Text="Raw response body">
+                    <pre style="max-height:300px;overflow:auto;font-size:11px">@_detail.RawResponseText</pre>
+                </MudExpansionPanel>
+                <MudExpansionPanel Text="Metrics">
+                    <MudText Typo="Typo.caption">Model: @_detail.Model</MudText><br/>
+                    <MudText Typo="Typo.caption">Tokens in/out: @_detail.InputTokens / @_detail.OutputTokens</MudText><br/>
+                    <MudText Typo="Typo.caption">Latency: @_detail.LatencyMs ms</MudText><br/>
+                    <MudText Typo="Typo.caption">Parse fallback used: @_detail.ParseFallbackUsed</MudText>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+    </MudStack>
+  </div>
+</MudDrawer>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public long? AdviceLogId { get; set; }
+
+    private AdviceLogDetailView? _detail;
+    private string _editedPrompt = string.Empty;
+    private long? _loadedFor;
+    private ElementReference _focusRoot;
+    private bool _wasOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Move focus into the drawer when it opens so Escape (and the rest of the keyboard) works here.
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            try { await _focusRoot.FocusAsync(); } catch { /* element not ready; ignore */ }
+        }
+        else if (!Open)
+        {
+            _wasOpen = false;
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await Close();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Open && AdviceLogId is { } id && id != _loadedFor)
+        {
+            _detail = null;
+            try
+            {
+                _detail = await Queries.GetAdviceDetailAsync(id);
+                _editedPrompt = _detail?.SystemPromptUsed ?? string.Empty;
+                _loadedFor = id;
+            }
+            catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        }
+    }
+
+    private async Task Close() => await OpenChanged.InvokeAsync(false);
+
+    private async Task OnOpenChanged(bool open)
+    {
+        Open = open;
+        await OpenChanged.InvokeAsync(open);
+    }
+
+    private async Task Replay()
+    {
+        if (_detail is null) return;
+        try
+        {
+            Snackbar.Add("Re-running with edited prompt…", Severity.Info);
+            var newId = await Agent.ReplayAsync(_detail.Id, _editedPrompt);
+            Snackbar.Add($"Replay produced AdviceLog #{newId}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Replay failed: {ex.Message}", Severity.Error);
+        }
+    }
+}

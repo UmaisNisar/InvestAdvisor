@@ -1,0 +1,356 @@
+@page "/settings"
+@page "/settings/{Tab}"
+@inject IProfileService ProfileService
+@inject IRuntimeSettingsStore SettingsStore
+@inject IHoldingsService HoldingsService
+@inject IHoldingsImportService HoldingsImport
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" GutterBottom="true">Settings</MudText>
+
+<MudTabs Outlined="true" Position="Position.Top" ActivePanelIndex="_activeIndex" ActivePanelIndexChanged="OnTabChanged">
+    <MudTabPanel Text="Profile">
+        @if (_profile is null)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudTextField @bind-Value="_profile.GoalsText" Label="Goals" Lines="3" />
+                <MudSelect T="RiskTolerance" @bind-Value="_profile.RiskTolerance" Label="Risk tolerance">
+                    @foreach (var r in Enum.GetValues<RiskTolerance>()) { <MudSelectItem Value="r">@r</MudSelectItem> }
+                </MudSelect>
+                <MudSelect T="TimeHorizon" @bind-Value="_profile.TimeHorizon" Label="Time horizon">
+                    @foreach (var h in Enum.GetValues<TimeHorizon>()) { <MudSelectItem Value="h">@h</MudSelectItem> }
+                </MudSelect>
+                <MudNumericField @bind-Value="_profile.DriftPctThreshold" Label="Drift threshold (%)" Min="0m" Max="100m" />
+                <MudNumericField @bind-Value="_profile.SingleDayMovePctThreshold" Label="Single-day move threshold (%)" Min="0m" Max="100m" />
+                <MudNumericField @bind-Value="_profile.RebalanceCadenceHours" Label="Rebalance cadence (hours)" Min="1" />
+                <MudTextField @bind-Value="_profile.SystemPromptOverride" Label="System prompt override (blank = default)" Lines="14" />
+                <MudButton OnClick="SaveProfile" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save profile</MudButton>
+            </MudPaper>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Scheduler & Triggers">
+        @if (_settings is null)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudNumericField @bind-Value="_settings.TickIntervalSeconds" Label="Tick interval (seconds)" Min="15"
+                                 HelperText="How often the background worker refreshes prices and checks your triggers." />
+                <MudSwitch @bind-Value="_settings.MarketHoursOnly" Label="Equity triggers only during NY market hours" Color="Color.Primary" />
+                <MudTextField @bind-Value="_settings.TimeZoneId" Label="Time zone ID"
+                              HelperText="IANA zone used to decide market hours, e.g. America/New_York." />
+                <MudNumericField @bind-Value="_settings.MaxRunsPerDay" Label="Max runs per day" Min="1"
+                                 HelperText="Safety cap on AI analysis runs per day (cost guard)." />
+                <MudNumericField @bind-Value="_settings.MinSecondsBetweenRuns" Label="Min seconds between runs" Min="0"
+                                 HelperText="Minimum gap between AI runs, so rapid triggers don't pile up." />
+                <MudNumericField @bind-Value="_settings.MaxSnapshotAgeForTriggerSeconds" Label="Max snapshot age for trigger (s)" Min="60"
+                                 HelperText="Ignore price snapshots older than this when evaluating triggers." />
+                <MudNumericField @bind-Value="_settings.MinPriceFreshnessSeconds" Label="Min price freshness (s)" Min="0"
+                                 HelperText="Refresh a price if the latest snapshot is older than this." />
+                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
+            </MudPaper>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Screener weights">
+        @if (_settings is null)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">
+                    Relative importance of each factor in the screener's composite score. They don't
+                    need to add up to 100 — the score normalizes by their total. Set a factor to 0 to ignore it.
+                </MudText>
+                <MudNumericField @bind-Value="_settings.WeightGrowth" Label="Growth (revenue + EPS growth)" Min="0" Max="100" />
+                <MudNumericField @bind-Value="_settings.WeightValuation" Label="Valuation (P/E + P/FCF, lower is better)" Min="0" Max="100" />
+                <MudNumericField @bind-Value="_settings.WeightAnalyst" Label="Analyst (buy ratings + month-over-month trend)" Min="0" Max="100" />
+                <MudNumericField @bind-Value="_settings.WeightMomentum" Label="Momentum (13- and 26-week price return)" Min="0" Max="100" />
+                <MudNumericField @bind-Value="_settings.WeightQuality" Label="Quality (debt / equity, lower is better)" Min="0" Max="100" />
+                <MudNumericField @bind-Value="_settings.WeightInsider" Label="Insider (net insider buying)" Min="0" Max="100" />
+                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save weights</MudButton>
+            </MudPaper>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Email / SMTP">
+        @if (_settings is null)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudSwitch @bind-Value="_settings.EmailEnabled" Label="Email notifications enabled" Color="Color.Primary" />
+                <MudTextField @bind-Value="_settings.SmtpHost" Label="SMTP host" />
+                <MudNumericField @bind-Value="_settings.SmtpPort" Label="SMTP port" Min="1" Max="65535" />
+                <MudSwitch @bind-Value="_settings.SmtpEnableSsl" Label="Enable TLS" Color="Color.Primary" />
+                <MudTextField @bind-Value="_settings.SmtpFrom" Label="From address" />
+                <MudTextField @bind-Value="_settings.SmtpTo" Label="To address" />
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2">
+                    SMTP password is read from <code>Smtp:Password</code> via <code>dotnet user-secrets</code> or the <code>SMTP_PASSWORD</code> env var. It is never stored in SQLite.
+                </MudAlert>
+                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
+            </MudPaper>
+        }
+    </MudTabPanel>
+
+    <MudTabPanel Text="Holdings">
+        @if (_holdings is null)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudExpansionPanels Class="mb-3">
+                <MudExpansionPanel Text="Import holdings from CSV (e.g. Wealthsimple export)">
+                    <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2">
+                        Upload a CSV with at least a <b>ticker</b> column and a <b>quantity</b> column. Optional: average cost
+                        (or book cost), account, name, asset class — headers are matched flexibly. Rows are matched to existing
+                        holdings by ticker + account and updated; new ones are added. Existing positions not in the file are left as-is.
+                    </MudText>
+                    <MudFileUpload T="IBrowserFile" Accept=".csv" FilesChanged="OnImportFileSelected" MaximumFileCount="1">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile">
+                                Choose CSV & import
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.subtitle2">Auto-import (optional, ~daily)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-2">
+                        Set a <b>CSV URL</b> — e.g. a published Google Sheet that Wealthica syncs your Wealthsimple holdings
+                        into — and/or a <b>file path</b> on the server. The worker re-imports them on its daily cycle.
+                        Leave blank for manual-only. (A public sheet URL is link-accessible — use an unguessable link.)
+                    </MudText>
+                    @if (_settings is not null)
+                    {
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                            <MudTextField @bind-Value="_settings.HoldingsCsvUrl" Label="Holdings CSV URL" Placeholder="https://docs.google.com/.../export?format=csv" Class="flex-grow-1" />
+                            <MudButton OnClick="ImportFromUrl" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CloudDownload">Import now</MudButton>
+                        </MudStack>
+                        <MudTextField @bind-Value="_settings.HoldingsCsvPath" Label="Holdings CSV file path" Placeholder="/data/wealthsimple-holdings.csv" Class="mb-2" />
+                        <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Outlined">Save auto-import settings</MudButton>
+                    }
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-3">
+                <MudText>@_holdings.Count holdings</MudText>
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled"
+                           OnClick="@(() => _holdingDialog?.Open(null))">Add holding</MudButton>
+            </MudStack>
+            <MudTable Items="_holdings" Dense="true" Hover="true" HorizontalScrollbar="true">
+                <HeaderContent>
+                    <MudTh>Ticker</MudTh>
+                    <MudTh>Name</MudTh>
+                    <MudTh>Class</MudTh>
+                    <MudTh>Account</MudTh>
+                    <MudTh Style="text-align:right">Qty</MudTh>
+                    <MudTh Style="text-align:right">Avg cost</MudTh>
+                    <MudTh Style="text-align:right">Target %</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><code>@context.Ticker</code></MudTd>
+                    <MudTd>@context.Name</MudTd>
+                    <MudTd>@context.AssetClass</MudTd>
+                    <MudTd>@context.AccountType</MudTd>
+                    <MudTd Style="text-align:right">@context.Quantity</MudTd>
+                    <MudTd Style="text-align:right">@context.AvgCost.ToString("C2")</MudTd>
+                    <MudTd Style="text-align:right">@(context.TargetAllocationPct?.ToString("0.0") ?? "—")</MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => _holdingDialog?.Open(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteHolding(context))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+
+        }
+    </MudTabPanel>
+</MudTabs>
+
+<HoldingEditDialog @ref="_holdingDialog" OnSaved="ReloadAll" />
+
+@code {
+    private Profile? _profile;
+    private RuntimeSettings? _settings;
+    private List<Holding>? _holdings;
+    private HoldingEditDialog? _holdingDialog;
+
+    [Parameter] public string? Tab { get; set; }
+    private int _activeIndex;
+
+    // URL slug per tab, in panel order, so each tab is deep-linkable (e.g. /settings/holdings).
+    private static readonly string[] TabSlugs = { "profile", "triggers", "weights", "email", "holdings" };
+
+    protected override async Task OnInitializedAsync() => await ReloadAll();
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrEmpty(Tab)) return;
+        var idx = Array.IndexOf(TabSlugs, Tab.ToLowerInvariant());
+        if (idx >= 0) _activeIndex = idx;
+    }
+
+    private void OnTabChanged(int index)
+    {
+        _activeIndex = index;
+        if (index >= 0 && index < TabSlugs.Length)
+            Nav.NavigateTo($"/settings/{TabSlugs[index]}", replace: true);
+    }
+
+    private async Task OnImportFileSelected(IBrowserFile? file)
+    {
+        if (file is null) return;
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            var result = await HoldingsImport.ImportCsvAsync(content);
+            if (result.Errors.Count > 0)
+                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
+            else
+                Snackbar.Add($"Imported: {result.Added} added, {result.Updated} updated, {result.Skipped} skipped.",
+                    result.AnyChanges ? Severity.Success : Severity.Info);
+
+            await ReloadAll();
+        }
+        catch (Exception ex) { Snackbar.Add($"Import failed: {ex.Message}", Severity.Error); }
+    }
+
+    private async Task ImportFromUrl()
+    {
+        if (_settings is null || string.IsNullOrWhiteSpace(_settings.HoldingsCsvUrl))
+        {
+            Snackbar.Add("Enter a CSV URL first.", Severity.Warning);
+            return;
+        }
+        try
+        {
+            await SaveSettings(); // persist the URL/path so the daily worker uses them too
+            var result = await HoldingsImport.ImportFromUrlAsync(_settings.HoldingsCsvUrl);
+            if (result.Errors.Count > 0)
+                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors[0]}", Severity.Warning);
+            else
+                Snackbar.Add($"Imported from URL: {result.Added} added, {result.Updated} updated, {result.Skipped} skipped.",
+                    result.AnyChanges ? Severity.Success : Severity.Info);
+            await ReloadAll();
+        }
+        catch (Exception ex) { Snackbar.Add($"Import failed: {ex.Message}", Severity.Error); }
+    }
+
+    private async Task ReloadAll()
+    {
+        try
+        {
+            _profile = await ProfileService.GetAsync();
+            var settings = await SettingsStore.GetAsync();
+            // The store returns a cached instance; clone it so we don't mutate the cached snapshot directly.
+            _settings = Clone(settings);
+            _holdings = (await HoldingsService.ListAsync()).ToList();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private async Task SaveProfile()
+    {
+        try
+        {
+            _profile = await ProfileService.UpdateAsync(_profile!);
+            Snackbar.Add("Profile saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private async Task SaveSettings()
+    {
+        if (_settings is null) return;
+        try
+        {
+            await SettingsStore.UpdateAsync(row =>
+            {
+                row.TickIntervalSeconds = _settings.TickIntervalSeconds;
+                row.MarketHoursOnly = _settings.MarketHoursOnly;
+                row.TimeZoneId = _settings.TimeZoneId;
+                row.MaxRunsPerDay = _settings.MaxRunsPerDay;
+                row.MinSecondsBetweenRuns = _settings.MinSecondsBetweenRuns;
+                row.MaxSnapshotAgeForTriggerSeconds = _settings.MaxSnapshotAgeForTriggerSeconds;
+                row.MinPriceFreshnessSeconds = _settings.MinPriceFreshnessSeconds;
+                row.WeightValuation = _settings.WeightValuation;
+                row.WeightGrowth = _settings.WeightGrowth;
+                row.WeightQuality = _settings.WeightQuality;
+                row.WeightAnalyst = _settings.WeightAnalyst;
+                row.WeightInsider = _settings.WeightInsider;
+                row.WeightMomentum = _settings.WeightMomentum;
+                row.EmailEnabled = _settings.EmailEnabled;
+                row.SmtpHost = _settings.SmtpHost;
+                row.SmtpPort = _settings.SmtpPort;
+                row.SmtpEnableSsl = _settings.SmtpEnableSsl;
+                row.SmtpFrom = _settings.SmtpFrom;
+                row.SmtpTo = _settings.SmtpTo;
+                row.HoldingsCsvPath = _settings.HoldingsCsvPath;
+                row.HoldingsCsvUrl = _settings.HoldingsCsvUrl;
+            });
+            Snackbar.Add("Settings saved.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private async Task DeleteHolding(Holding h)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Delete holding",
+            $"Remove {h.Ticker} ({h.Name}) from your portfolio? This can't be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+        try
+        {
+            await HoldingsService.DeleteAsync(h.Id);
+            Snackbar.Add("Holding deleted.", Severity.Success);
+            await ReloadAll();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private static RuntimeSettings Clone(RuntimeSettings r) => new()
+    {
+        Id = r.Id,
+        TickIntervalSeconds = r.TickIntervalSeconds,
+        MarketHoursOnly = r.MarketHoursOnly,
+        TimeZoneId = r.TimeZoneId,
+        MaxRunsPerDay = r.MaxRunsPerDay,
+        MinSecondsBetweenRuns = r.MinSecondsBetweenRuns,
+        MaxSnapshotAgeForTriggerSeconds = r.MaxSnapshotAgeForTriggerSeconds,
+        MinPriceFreshnessSeconds = r.MinPriceFreshnessSeconds,
+        WeightValuation = r.WeightValuation,
+        WeightGrowth = r.WeightGrowth,
+        WeightQuality = r.WeightQuality,
+        WeightAnalyst = r.WeightAnalyst,
+        WeightInsider = r.WeightInsider,
+        WeightMomentum = r.WeightMomentum,
+        SmtpHost = r.SmtpHost,
+        SmtpPort = r.SmtpPort,
+        SmtpFrom = r.SmtpFrom,
+        SmtpTo = r.SmtpTo,
+        SmtpEnableSsl = r.SmtpEnableSsl,
+        EmailEnabled = r.EmailEnabled,
+        HoldingsCsvPath = r.HoldingsCsvPath,
+        HoldingsCsvUrl = r.HoldingsCsvUrl,
+        UpdatedAtUtc = r.UpdatedAtUtc,
+    };
+}
