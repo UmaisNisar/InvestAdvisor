@@ -3,6 +3,7 @@
 @inject IAgentService Agent
 @inject IRunEventBus Bus
 @inject ISnackbar Snackbar
+@inject ITenantContext Tenant
 @implements IDisposable
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
@@ -103,7 +104,7 @@ else
         try
         {
             Snackbar.Add("Running agent…", Severity.Info);
-            await Agent.RunNowAsync("Advice feed Run now");
+            await Agent.RunNowAsync(await Tenant.GetTenantIdAsync(), "Advice feed Run now");
             Snackbar.Add("Agent run complete.", Severity.Success);
             await Reload();
         }

@@ -4,20 +4,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
 
-public sealed class WatchlistService(IDbContextFactory<InvestAdvisorDbContext> dbFactory) : IWatchlistService
+public sealed class WatchlistService(
+    IDbContextFactory<InvestAdvisorDbContext> dbFactory,
+    ITenantContext tenant) : IWatchlistService
 {
     public async Task<IReadOnlyList<WatchlistItem>> ListAsync(CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.WatchlistItems.AsNoTracking().OrderBy(w => w.Ticker).ToListAsync(ct);
+        return await db.WatchlistItems.AsNoTracking().Where(w => w.TenantId == tid).OrderBy(w => w.Ticker).ToListAsync(ct);
     }
 
     public async Task<WatchlistItem> CreateAsync(WatchlistItem input, CancellationToken ct = default)
     {
         Validate(input);
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var entity = new WatchlistItem
         {
+            TenantId = tid,
             Ticker = input.Ticker.Trim().ToUpperInvariant(),
             AssetClass = input.AssetClass,
             Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim(),
@@ -33,8 +38,9 @@ public sealed class WatchlistService(IDbContextFactory<InvestAdvisorDbContext> d
     public async Task<WatchlistItem> UpdateAsync(int id, WatchlistItem input, CancellationToken ct = default)
     {
         Validate(input);
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.WatchlistItems.SingleOrDefaultAsync(w => w.Id == id, ct)
+        var entity = await db.WatchlistItems.SingleOrDefaultAsync(w => w.Id == id && w.TenantId == tid, ct)
             ?? throw new InvalidOperationException($"WatchlistItem {id} not found.");
         entity.Ticker = input.Ticker.Trim().ToUpperInvariant();
         entity.AssetClass = input.AssetClass;
@@ -47,8 +53,9 @@ public sealed class WatchlistService(IDbContextFactory<InvestAdvisorDbContext> d
 
     public async Task DeleteAsync(int id, CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.WatchlistItems.SingleOrDefaultAsync(w => w.Id == id, ct);
+        var entity = await db.WatchlistItems.SingleOrDefaultAsync(w => w.Id == id && w.TenantId == tid, ct);
         if (entity is null) return;
         db.WatchlistItems.Remove(entity);
         await db.SaveChangesAsync(ct);

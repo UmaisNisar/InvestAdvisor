@@ -1,8 +1,11 @@
 using System.Globalization;
+using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Data;
 using InvestAdvisor.Data.Composition;
 using InvestAdvisor.Data.HostedServices;
+using InvestAdvisor.Server.Auth;
 using InvestAdvisor.Server.Components;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -37,6 +40,14 @@ builder.Services.AddMudServices();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Multi-tenancy identity: Cloudflare Access supplies the email (dev fallback configured), which
+// flows into each circuit and is resolved to a tenant by ITenantContext.
+builder.Services.AddAuthentication(CloudflareAccessAuthHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, CloudflareAccessAuthHandler>(CloudflareAccessAuthHandler.SchemeName, null);
+builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<ICurrentUserAccessor, ClaimsCurrentUserAccessor>();
+
 // The AdviceDetailDrawer streams raw response JSON over the circuit, so raise the
 // SignalR receive cap (applies to the Blazor component hub via the global default).
 builder.Services.Configure<HubOptions>(o => o.MaximumReceiveMessageSize = 1024 * 1024);
@@ -61,6 +72,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();

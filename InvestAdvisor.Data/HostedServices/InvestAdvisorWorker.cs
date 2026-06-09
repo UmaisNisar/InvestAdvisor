@@ -17,6 +17,13 @@ public sealed class InvestAdvisorWorker(
     IServiceProvider services,
     ILogger<InvestAdvisorWorker> logger) : BackgroundService
 {
+    // Per-tenant dedup keys of condition triggers already alerted on and not yet re-armed. Held in
+    // process memory (not the DB) — a restart re-arms everything, costing at most one extra run per
+    // still-breached condition, which is fine for intraday spam suppression.
+    private static readonly IReadOnlySet<string> EmptyKeys =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, IReadOnlySet<string>> _suppressedKeysByTenant = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("InvestAdvisor worker starting.");
@@ -61,47 +68,31 @@ public sealed class InvestAdvisorWorker(
         var settings = await settingsStore.GetAsync(ct);
         var tickInterval = settings.TickIntervalSeconds;
 
-        // Load the small singletons + tracked tickers.
-        Profile profile;
-        List<Holding> holdings;
-        List<WatchlistItem> watchlist;
-        DateTime? lastRun;
-        int runsToday;
+        // --- Shared market-data refresh: the union of ALL tenants' tickers (one fetch each). ---
+        List<TickerSpec> allTickers;
+        List<Tenant> tenants;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
-            profile = await db.Profiles.AsNoTracking().SingleAsync(p => p.Id == Profile.SingletonId, ct);
-            holdings = await db.Holdings.AsNoTracking().ToListAsync(ct);
-            watchlist = await db.WatchlistItems.AsNoTracking().ToListAsync(ct);
-
-            var nowUtc = clock.UtcNow;
-            var dayStart = nowUtc.Date;
-            lastRun = await db.AdviceLogs.AsNoTracking()
-                .OrderByDescending(a => a.TimestampUtc)
-                .Select(a => (DateTime?)a.TimestampUtc)
-                .FirstOrDefaultAsync(ct);
-            runsToday = await db.AdviceLogs.AsNoTracking()
-                .CountAsync(a => a.TimestampUtc >= dayStart, ct);
+            var hs = await db.Holdings.AsNoTracking().Select(h => new TickerSpec(h.Ticker, h.AssetClass)).ToListAsync(ct);
+            var ws = await db.WatchlistItems.AsNoTracking().Select(w => new TickerSpec(w.Ticker, w.AssetClass)).ToListAsync(ct);
+            allTickers = hs.Concat(ws).Distinct().ToList();
+            tenants = await db.Tenants.AsNoTracking().ToListAsync(ct);
         }
 
-        var tickers = holdings.Select(h => new TickerSpec(h.Ticker, h.AssetClass))
-            .Concat(watchlist.Select(w => new TickerSpec(w.Ticker, w.AssetClass)))
-            .Distinct()
-            .ToArray();
-
-        if (tickers.Length > 0)
+        if (allTickers.Count > 0)
         {
-            try { await priceRefresh.RefreshAsync(tickers, ct); }
+            try { await priceRefresh.RefreshAsync(allTickers.ToArray(), ct); }
             catch (Exception ex) { logger.LogWarning(ex, "Price refresh failed."); }
 
-            try { await newsRefresh.RefreshAsync(tickers, ct); }
+            try { await newsRefresh.RefreshAsync(allTickers.ToArray(), ct); }
             catch (Exception ex) { logger.LogWarning(ex, "News refresh failed."); }
         }
 
-        // Reload latest snapshots so the evaluator sees what the refresh just wrote.
+        // Reload latest snapshots (shared across tenants) so each tenant's evaluator sees fresh prices.
         Dictionary<string, PriceSnapshot> latestSnaps;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
-            var tickerStrings = tickers.Select(t => t.Ticker).ToArray();
+            var tickerStrings = allTickers.Select(t => t.Ticker).ToArray();
             var rows = await db.PriceSnapshots.AsNoTracking()
                 .Where(s => tickerStrings.Contains(s.Ticker))
                 .OrderByDescending(s => s.FetchedAtUtc)
@@ -111,38 +102,64 @@ public sealed class InvestAdvisorWorker(
                 if (!latestSnaps.ContainsKey(s.Ticker)) latestSnaps[s.Ticker] = s;
         }
 
-        var trigger = evaluator.Evaluate(new EvaluationInput(
-            NowUtc: clock.UtcNow,
-            LastRunUtc: lastRun,
-            RunsToday: runsToday,
-            Profile: profile,
-            Settings: settings,
-            Holdings: holdings,
-            Watchlist: watchlist,
-            LatestSnapshotsByTicker: latestSnaps));
-
-        if (trigger is null)
+        // --- Per-tenant: evaluate triggers against that tenant's portfolio, run the agent if fired. ---
+        foreach (var tenant in tenants)
         {
-            logger.LogDebug("No trigger this tick.");
-            return tickInterval;
+            Profile? profile;
+            List<Holding> holdings;
+            List<WatchlistItem> watchlist;
+            DateTime? lastRun;
+            int runsToday;
+            await using (var db = await dbFactory.CreateDbContextAsync(ct))
+            {
+                profile = await db.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.TenantId == tenant.Id, ct);
+                if (profile is null) continue; // tenant not provisioned yet
+                holdings = await db.Holdings.AsNoTracking().Where(h => h.TenantId == tenant.Id).ToListAsync(ct);
+                watchlist = await db.WatchlistItems.AsNoTracking().Where(w => w.TenantId == tenant.Id).ToListAsync(ct);
+                var dayStart = clock.UtcNow.Date;
+                lastRun = await db.AdviceLogs.AsNoTracking()
+                    .Where(a => a.TenantId == tenant.Id)
+                    .OrderByDescending(a => a.TimestampUtc)
+                    .Select(a => (DateTime?)a.TimestampUtc).FirstOrDefaultAsync(ct);
+                runsToday = await db.AdviceLogs.AsNoTracking()
+                    .CountAsync(a => a.TenantId == tenant.Id && a.TimestampUtc >= dayStart, ct);
+            }
+
+            var suppressed = _suppressedKeysByTenant.GetValueOrDefault(tenant.Id, EmptyKeys);
+            var decision = evaluator.Evaluate(new EvaluationInput(
+                NowUtc: clock.UtcNow,
+                LastRunUtc: lastRun,
+                RunsToday: runsToday,
+                Profile: profile,
+                Settings: settings,
+                Holdings: holdings,
+                Watchlist: watchlist,
+                LatestSnapshotsByTicker: latestSnaps,
+                SuppressedKeys: suppressed));
+
+            // Carry the re-armed/alerted dedup set into this tenant's next tick so a persistent
+            // condition (e.g. a stock down -15% all session) fires once, not every tick.
+            _suppressedKeysByTenant[tenant.Id] = decision.ActiveKeys;
+
+            var trigger = decision.Trigger;
+            if (trigger is null) continue;
+
+            logger.LogInformation("Trigger fired for tenant {Tenant}: {Kind} — {Detail}", tenant.Id, trigger.Kind, trigger.Detail);
+
+            long adviceLogId;
+            try
+            {
+                adviceLogId = await agent.RunAsync(tenant.Id, trigger, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Agent run threw for tenant {Tenant}.", tenant.Id);
+                continue;
+            }
+
+            bus.Publish(new RunCompletedEvent(adviceLogId, clock.UtcNow, trigger.Kind.ToString()));
+            await DispatchNotificationsAsync(sp, dbFactory, adviceLogId, channels, ct);
         }
-
-        logger.LogInformation("Trigger fired: {Kind} — {Detail}", trigger.Kind, trigger.Detail);
-
-        long adviceLogId;
-        try
-        {
-            adviceLogId = await agent.RunAsync(trigger, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Agent run threw an unhandled exception after persistence layer.");
-            return tickInterval;
-        }
-
-        bus.Publish(new RunCompletedEvent(adviceLogId, clock.UtcNow, trigger.Kind.ToString()));
-
-        await DispatchNotificationsAsync(sp, dbFactory, adviceLogId, channels, ct);
 
         return tickInterval;
     }

@@ -22,7 +22,7 @@ public sealed class HoldingsImportService(
     IFxRateProvider fx,
     ILogger<HoldingsImportService>? logger = null) : IHoldingsImportService
 {
-    public async Task<HoldingsImportResult> ImportFromUrlAsync(string url, CancellationToken ct = default)
+    public async Task<HoldingsImportResult> ImportFromUrlAsync(int tenantId, string url, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(url))
             return new HoldingsImportResult(0, 0, 0, new[] { "No URL configured." });
@@ -40,10 +40,10 @@ public sealed class HoldingsImportService(
             return new HoldingsImportResult(0, 0, 0, new[] { $"Couldn't fetch the CSV URL: {ex.Message}" });
         }
 
-        return await ImportCsvAsync(content, ct);
+        return await ImportCsvAsync(tenantId, content, ct);
     }
 
-    public async Task<HoldingsImportResult> ImportCsvAsync(string csvContent, CancellationToken ct = default)
+    public async Task<HoldingsImportResult> ImportCsvAsync(int tenantId, string csvContent, CancellationToken ct = default)
     {
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(csvContent))
@@ -80,7 +80,7 @@ public sealed class HoldingsImportService(
 
         int added = 0, updated = 0, skipped = 0;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var existing = await db.Holdings.ToListAsync(ct);
+        var existing = await db.Holdings.Where(h => h.TenantId == tenantId).ToListAsync(ct);
         var now = DateTime.UtcNow;
 
         for (var r = 1; r < rows.Count; r++)
@@ -114,6 +114,7 @@ public sealed class HoldingsImportService(
                 {
                     db.Holdings.Add(new Holding
                     {
+                        TenantId = tenantId,
                         Ticker = ticker,
                         Name = name,
                         AssetClass = assetClass,

@@ -31,15 +31,15 @@ public sealed class DailyRecommendationService(
         WriteIndented = true,
     };
 
-    public async Task<bool> GenerateAsync(bool force = false, CancellationToken ct = default)
+    public async Task<bool> GenerateAsync(int tenantId, bool force = false, CancellationToken ct = default)
     {
         var todayUtc = clock.UtcNow.Date;
         Profile? profile;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
-            if (!force && await db.DailyRecommendations.AsNoTracking().AnyAsync(r => r.GeneratedAtUtc >= todayUtc, ct))
-                return false; // already done today
-            profile = await db.Profiles.AsNoTracking().FirstOrDefaultAsync(ct);
+            if (!force && await db.DailyRecommendations.AsNoTracking().AnyAsync(r => r.TenantId == tenantId && r.GeneratedAtUtc >= todayUtc, ct))
+                return false; // already done today for this tenant
+            profile = await db.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.TenantId == tenantId, ct);
         }
 
         var stocks = (await scoring.RankAsync(AssetClass.Equity, ct)).Take(StockCandidates).ToList();
@@ -82,11 +82,12 @@ public sealed class DailyRecommendationService(
         {
             if (force)
             {
-                var todays = await db.DailyRecommendations.Where(r => r.GeneratedAtUtc >= todayUtc).ToListAsync(ct);
+                var todays = await db.DailyRecommendations.Where(r => r.TenantId == tenantId && r.GeneratedAtUtc >= todayUtc).ToListAsync(ct);
                 if (todays.Count > 0) db.DailyRecommendations.RemoveRange(todays); // replace today's
             }
             db.DailyRecommendations.Add(new DailyRecommendation
             {
+                TenantId = tenantId,
                 GeneratedAtUtc = clock.UtcNow,
                 Summary = result.Summary,
                 Caution = result.Caution,

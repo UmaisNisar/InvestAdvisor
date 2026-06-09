@@ -6,10 +6,10 @@ namespace InvestAdvisor.Core.Abstractions;
 /// </summary>
 public interface IHoldingsImportService
 {
-    Task<HoldingsImportResult> ImportCsvAsync(string csvContent, CancellationToken ct = default);
+    Task<HoldingsImportResult> ImportCsvAsync(int tenantId, string csvContent, CancellationToken ct = default);
 
     /// <summary>Fetches a CSV from a URL (e.g. a published Google Sheet) and imports it.</summary>
-    Task<HoldingsImportResult> ImportFromUrlAsync(string url, CancellationToken ct = default);
+    Task<HoldingsImportResult> ImportFromUrlAsync(int tenantId, string url, CancellationToken ct = default);
 }
 
 public sealed record HoldingsImportResult(

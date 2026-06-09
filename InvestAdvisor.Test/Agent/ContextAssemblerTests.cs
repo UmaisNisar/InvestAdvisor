@@ -14,6 +14,7 @@ public class ContextAssemblerTests
 {
     private static readonly DateTime Now = new(2026, 6, 1, 14, 30, 0, DateTimeKind.Utc);
     private static readonly RunTrigger DummyTrigger = new(RunTriggerKind.Scheduled, "test");
+    private const int TestTenant = 0; // matches the default TenantId on the seeded holdings/watchlist
 
     private static (ContextAssembler assembler, SqliteFixture db, FakeSystemClock clock)
         BuildSut(int minFreshnessSec = 3600)
@@ -29,6 +30,15 @@ public class ContextAssemblerTests
              }));
         var fx = Substitute.For<IFxRateProvider>();
         fx.GetRateToUsdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(1m));
+
+        // The singleton-profile seed is gone post multi-tenancy; seed the test tenant's profile
+        // (TenantId 0, matching the default on the holdings/watchlist these tests add).
+        using (var c = db.CreateContext())
+        {
+            c.Profiles.Add(new Profile { TenantId = TestTenant, GoalsText = "test goals", UpdatedAtUtc = Now });
+            c.SaveChanges();
+        }
+
         var assembler = new ContextAssembler(db.Factory, store, clock, fx);
         return (assembler, db, clock);
     }
@@ -39,7 +49,7 @@ public class ContextAssemblerTests
         var (sut, db, _) = BuildSut();
         await using var _db = db;
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         ctx.Holdings.Should().BeEmpty();
         ctx.Totals.MarketValueUsd.Should().Be(0m);
@@ -72,7 +82,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         var h = ctx.Holdings.Single();
         h.Price.Should().Be(200m);
@@ -112,7 +122,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
         // MV: VTI = 2500, BND = 750, total = 3250
         // VTI alloc = 76.92, target 70 -> drift +6.92
         // BND alloc = 23.08, target 30 -> drift -6.92
@@ -147,7 +157,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         var h = ctx.Holdings.Single();
         h.Price.Should().BeNull();
@@ -185,7 +195,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         ctx.RecentNews.Count.Should().BeLessThanOrEqualTo(25);
         ctx.RecentNews.Should().NotContain(n => n.Headline == "very old");
@@ -214,7 +224,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         ctx.TopMovers.Should().HaveCount(5);
         var tickers = ctx.TopMovers.Select(m => m.Ticker).ToArray();
