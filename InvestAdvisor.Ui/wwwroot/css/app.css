@@ -232,6 +232,22 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
     .mud-main-content .mud-paper.mud-elevation-1:active { transform: scale(.992); }
 }
 
+/* ---------- Detail drawers on phones ---------- */
+/* Side drawers (e.g. the advice detail) use a fixed 640px on desktop, which overflows
+   a phone. Go full-width below that and honor the notch / home indicator. */
+@media (max-width: 639.95px) {
+    .mud-drawer.mud-drawer-pos-right,
+    .mud-drawer.mud-drawer-pos-left.mud-drawer-temporary {
+        width: 100% !important;
+        max-width: 100vw !important;
+    }
+    .mud-drawer.mud-drawer-pos-right > div {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        box-sizing: border-box;
+    }
+}
+
 /* ---------- Reconnect overlay (Blazor Server) ---------- */
 /* The framework toggles these classes; default markup is unstyled (white-on-white). */
 #components-reconnect-modal { display: none; }
