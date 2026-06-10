@@ -3,9 +3,10 @@ using MudBlazor;
 namespace InvestAdvisor.Ui.Theme;
 
 /// <summary>
-/// Central application theme. Replaces stock MudBlazor (Material Design 2) with a
-/// neutral slate surface palette, a single indigo accent, Inter typography, and a
-/// larger default border radius — a cleaner, more current dashboard look. Defined
+/// Central application theme. Follows Apple's iOS 26 (Liquid Glass era) color system:
+/// systemIndigo as the single tint color, the refreshed system colors for semantic
+/// states, and Apple's dynamic gray ramp for surfaces, labels and separators — with
+/// brighter color variants in dark mode, matching Apple's light/dark pairing. Defined
 /// once here so both hosts (Photino desktop + Blazor Server) share it.
 /// </summary>
 public static class AppTheme
@@ -14,53 +15,53 @@ public static class AppTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#4F46E5",            // indigo-600
+            Primary = "#6155F5",            // systemIndigo (iOS 26)
             PrimaryContrastText = "#FFFFFF",
-            Secondary = "#0EA5E9",          // sky-500
-            Info = "#2563EB",
-            Success = "#16A34A",
-            Warning = "#D97706",
-            Error = "#DC2626",
-            Background = "#F8FAFC",         // slate-50
-            BackgroundGray = "#F1F5F9",
+            Secondary = "#00C3D0",          // systemTeal
+            Info = "#0088FF",               // systemBlue
+            Success = "#34C759",            // systemGreen
+            Warning = "#FF8D28",            // systemOrange
+            Error = "#FF383C",              // systemRed
+            Background = "#F2F2F7",         // systemGroupedBackground
+            BackgroundGray = "#E5E5EA",     // systemGray5
             Surface = "#FFFFFF",
             AppbarBackground = "#FFFFFF",   // light bar with dark text, not a colored block
-            AppbarText = "#0F172A",
+            AppbarText = "#000000",
             DrawerBackground = "#FFFFFF",
-            DrawerText = "#334155",
-            DrawerIcon = "#475569",
-            TextPrimary = "#0F172A",        // slate-900
-            TextSecondary = "#64748B",      // slate-500
-            ActionDefault = "#64748B",
-            LinesDefault = "#E2E8F0",       // slate-200 hairlines
-            LinesInputs = "#CBD5E1",
-            TableLines = "#E2E8F0",
-            Divider = "#E2E8F0",
+            DrawerText = "#3A3A3C",
+            DrawerIcon = "#636366",
+            TextPrimary = "#000000",        // label
+            TextSecondary = "#8A8A8E",      // secondaryLabel flattened over white
+            ActionDefault = "#8E8E93",      // systemGray
+            LinesDefault = "#C6C6C8",       // opaqueSeparator
+            LinesInputs = "#C7C7CC",        // systemGray3
+            TableLines = "#C6C6C8",
+            Divider = "#C6C6C8",
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#818CF8",            // indigo-400 (brighter on dark)
-            PrimaryContrastText = "#0B0F19",
-            Secondary = "#38BDF8",
-            Info = "#60A5FA",
-            Success = "#4ADE80",
-            Warning = "#FBBF24",
-            Error = "#F87171",
-            Background = "#0B0F19",         // near-black slate
-            BackgroundGray = "#111827",
-            Surface = "#111827",
-            AppbarBackground = "#0F172A",
-            AppbarText = "#F1F5F9",
-            DrawerBackground = "#0F172A",
-            DrawerText = "#CBD5E1",
-            DrawerIcon = "#94A3B8",
-            TextPrimary = "#F1F5F9",
-            TextSecondary = "#94A3B8",
-            ActionDefault = "#94A3B8",
-            LinesDefault = "#1E293B",
-            LinesInputs = "#334155",
-            TableLines = "#1E293B",
-            Divider = "#1E293B",
+            Primary = "#7D7AFF",            // systemIndigo, dark/vibrant variant
+            PrimaryContrastText = "#FFFFFF",
+            Secondary = "#40C8E0",          // systemTeal (dark)
+            Info = "#0A84FF",               // systemBlue (dark)
+            Success = "#30D158",            // systemGreen (dark)
+            Warning = "#FF9F0A",            // systemOrange (dark)
+            Error = "#FF453A",              // systemRed (dark)
+            Background = "#000000",         // systemBackground (dark)
+            BackgroundGray = "#1C1C1E",     // secondarySystemBackground
+            Surface = "#1C1C1E",
+            AppbarBackground = "#1C1C1E",
+            AppbarText = "#FFFFFF",
+            DrawerBackground = "#1C1C1E",
+            DrawerText = "#D1D1D6",
+            DrawerIcon = "#8E8E93",
+            TextPrimary = "#FFFFFF",        // label (dark)
+            TextSecondary = "#8D8D93",      // secondaryLabel flattened over black
+            ActionDefault = "#8E8E93",
+            LinesDefault = "#38383A",       // opaqueSeparator (dark)
+            LinesInputs = "#48484A",        // systemGray3 (dark)
+            TableLines = "#38383A",
+            Divider = "#38383A",
         },
         Typography = new Typography
         {

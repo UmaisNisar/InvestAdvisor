@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0B0F19",
-  "theme_color": "#0B0F19",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "icons": [
     {
       "src": "_content/InvestAdvisor.Ui/favicon.svg",
