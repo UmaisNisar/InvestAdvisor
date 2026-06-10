@@ -51,12 +51,13 @@ public sealed class ContextAssembler(
 
         var latestSnapshots = await LoadLatestSnapshotsAsync(db, trackedTickers, ct);
 
-        // Only this user's tracked names plus market-wide (null-ticker) items. The same table
-        // also holds screener-universe social posts, which would otherwise crowd out the
-        // holdings' actual news within the item cap.
+        // Only this user's tracked names plus market-wide items. The same table also holds
+        // screener-universe social posts, which would otherwise crowd out the holdings' actual
+        // news within the item cap. Market-wide means null ticker — or "" on rows written
+        // before FinnhubNewsProvider normalized Finnhub's empty Related field.
         var news = await db.NewsItems.AsNoTracking()
             .Where(n => n.FetchedAtUtc >= newsCutoff
-                        && (n.Ticker == null || newsScope.Contains(n.Ticker)))
+                        && (n.Ticker == null || n.Ticker == "" || newsScope.Contains(n.Ticker)))
             .OrderByDescending(n => n.PublishedAtUtc)
             .Take(MaxNewsItems)
             .ToListAsync(ct);
