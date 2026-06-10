@@ -12,7 +12,8 @@ namespace InvestAdvisor.Data.Queries;
 /// </summary>
 public sealed class ScreenerQueries(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    IScreenerScoringService scoring) : IScreenerQueries
+    IScreenerScoringService scoring,
+    ITenantContext tenant) : IScreenerQueries
 {
     public async Task<ScreenerView> GetAsync(AssetClass assetClass = AssetClass.Equity, int topCount = 15, int bottomCount = 10, CancellationToken ct = default)
     {
@@ -40,8 +41,10 @@ public sealed class ScreenerQueries(
 
     public async Task<DailyRecommendationView?> GetDailyRecommendationAsync(CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var latest = await db.DailyRecommendations.AsNoTracking()
+            .Where(r => r.TenantId == tid)
             .OrderByDescending(r => r.GeneratedAtUtc)
             .FirstOrDefaultAsync(ct);
         if (latest is null) return null;

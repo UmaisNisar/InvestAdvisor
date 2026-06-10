@@ -12,6 +12,8 @@ namespace InvestAdvisor.Test.Services;
 
 public class HoldingsImportServiceTests
 {
+    private const int Tenant = 1;
+
     // A trimmed Wealthsimple holdings-report export (real column layout + trailing "As of" footer).
     private const string WsCsv = """
         Account Name,Account Type,Account Classification,Account Number,Symbol,Exchange,MIC,Name,Security Type,Quantity,Position Direction,Market Price,Market Price Currency,Book Value (CAD),Book Value Currency (CAD),Book Value (Market),Book Value Currency (Market),Market Value,Market Value Currency,Market Unrealized Returns,Market Unrealized Returns Currency
@@ -38,7 +40,7 @@ public class HoldingsImportServiceTests
         await using var db = new SqliteFixture();
         var sut = Build(db);
 
-        var result = await sut.ImportCsvAsync(WsCsv);
+        var result = await sut.ImportCsvAsync(Tenant, WsCsv);
 
         result.Added.Should().Be(4);          // 4 holdings; the "As of …" footer is skipped
         result.Errors.Should().BeEmpty();
@@ -78,8 +80,8 @@ public class HoldingsImportServiceTests
         await using var db = new SqliteFixture();
         var sut = Build(db);
 
-        await sut.ImportCsvAsync(WsCsv);
-        var second = await sut.ImportCsvAsync(WsCsv);
+        await sut.ImportCsvAsync(Tenant, WsCsv);
+        var second = await sut.ImportCsvAsync(Tenant, WsCsv);
 
         second.Added.Should().Be(0);
         second.Updated.Should().Be(4);

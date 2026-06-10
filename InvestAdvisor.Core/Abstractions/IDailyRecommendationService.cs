@@ -10,5 +10,5 @@ public interface IDailyRecommendationService
     /// Generates today's "where to invest" recommendation. Idempotent per day unless
     /// <paramref name="force"/> is true (a manual "Run now" regenerates it).
     /// </summary>
-    Task<bool> GenerateAsync(bool force = false, CancellationToken ct = default);
+    Task<bool> GenerateAsync(int tenantId, bool force = false, CancellationToken ct = default);
 }
