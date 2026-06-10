@@ -44,6 +44,15 @@
         </div>
     </div>
 
+    @* Left-rail collapse state: persisted in localStorage, read after first render.
+       isDesktop() lets the layout expand the rail only on desktop (phones keep it hidden). *@
+    <script>
+        window.iaRail = {
+            isDesktop: () => window.matchMedia('(min-width: 960px)').matches,
+            get: () => localStorage.getItem('ia-rail'),
+            set: (v) => localStorage.setItem('ia-rail', v)
+        };
+    </script>
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 </body>

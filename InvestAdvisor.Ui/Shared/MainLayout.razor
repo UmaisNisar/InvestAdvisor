@@ -3,47 +3,81 @@
 @implements IDisposable
 @inject IRunEventBus Bus
 @inject ITenantContext Tenant
+@inject IJSRuntime JS
 
 <MudLayout>
-    <MudAppBar Color="Color.Default" Elevation="0">
-        @* Hamburger drives the desktop drawer; on phones the bottom tab bar's "More" opens it. *@
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                       OnClick="ToggleDrawer" Title="Toggle menu" Class="mr-1 d-none d-md-inline-flex" />
+    @* Top bar is phones-only. On desktop the left rail holds the brand, nav, theme
+       and status — so we drop the top bar entirely and reclaim that vertical band. *@
+    <MudAppBar Color="Color.Default" Elevation="0" Class="d-flex d-md-none">
         <MudText Typo="Typo.h6" Style="font-weight:600;letter-spacing:-.01em;">InvestAdvisor</MudText>
         <MudSpacer />
-        @if (!string.IsNullOrEmpty(_email))
-        {
-            <MudTooltip Text="@($"Signed in as {_email}")">
-                <MudChip T="string" Icon="@Icons.Material.Outlined.AccountCircle" Size="Size.Small"
-                         Variant="Variant.Text" Color="Color.Default" Class="d-none d-sm-flex mr-1">@_email</MudChip>
-            </MudTooltip>
-        }
         <MudIconButton Icon="@(RootComponent?.IsDarkMode == true ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
-                       Color="Color.Inherit" Edge="Edge.End" OnClick="ToggleTheme"
-                       Title="Toggle light/dark" Class="mr-2" />
+                       Color="Color.Inherit" OnClick="ToggleTheme" Title="Toggle light/dark" Class="mr-2" />
         <ConnectionStatusPill />
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md"
-               ClipMode="DrawerClipMode.Always" Width="220px" Elevation="0">
+
+    @* Desktop: collapsible mini (icon) ↔ full rail. Hidden on phones (CSS) — the bottom
+       tab bar is the phone nav. *@
+    <MudDrawer @bind-Open="_railOpen" Variant="DrawerVariant.Mini" ClipMode="DrawerClipMode.Never"
+               Width="240px" MiniWidth="64px" Elevation="0" Class="ia-rail">
+        <div class="ia-rail-header">
+            <MudLink Href="/" Underline="Underline.None" Class="ia-rail-brand">
+                <img src="_content/InvestAdvisor.Ui/favicon.svg" alt="" width="26" height="26" />
+                <span class="ia-rail-brand-text">InvestAdvisor</span>
+            </MudLink>
+            <MudIconButton Icon="@(_railOpen ? Icons.Material.Filled.ChevronLeft : Icons.Material.Filled.ChevronRight)"
+                           Size="Size.Small" OnClick="ToggleRail"
+                           Title="@(_railOpen ? "Collapse menu" : "Expand menu")" Class="ia-rail-pin" />
+        </div>
+
         <NavMenu />
+
+        <div class="ia-rail-footer">
+            <MudIconButton Icon="@(RootComponent?.IsDarkMode == true ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
+                           OnClick="ToggleTheme" Title="Toggle light/dark" Size="Size.Small" />
+            @if (!string.IsNullOrEmpty(_email))
+            {
+                <MudTooltip Text="@($"Signed in as {_email}")">
+                    <MudIconButton Icon="@Icons.Material.Outlined.AccountCircle" Size="Size.Small" />
+                </MudTooltip>
+            }
+            <div class="ia-rail-status"><ConnectionStatusPill /></div>
+        </div>
     </MudDrawer>
+
+    @* Phones: temporary overlay opened from the bottom tab bar's "More". Hidden on desktop (CSS). *@
+    <MudDrawer @bind-Open="_mobileNavOpen" Variant="DrawerVariant.Temporary" Anchor="Anchor.Start"
+               ClipMode="DrawerClipMode.Never" Width="260px" Elevation="6" Class="ia-mobile-nav">
+        <div class="ia-rail-header">
+            <MudLink Href="/" Underline="Underline.None" Class="ia-rail-brand">
+                <img src="_content/InvestAdvisor.Ui/favicon.svg" alt="" width="26" height="26" />
+                <span class="ia-rail-brand-text">InvestAdvisor</span>
+            </MudLink>
+        </div>
+        <div @onclick="CloseMobileNav"><NavMenu /></div>
+    </MudDrawer>
+
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-6">
             @Body
         </MudContainer>
     </MudMainContent>
-    <BottomNav OnMore="OpenDrawer" />
+
+    <BottomNav OnMore="OpenMobileNav" />
 </MudLayout>
 
 @code {
-    private bool _drawerOpen = true;
+    // Desktop rail: true = full, false = mini. Starts collapsed; expanded from the saved
+    // preference after first render (desktop only).
+    private bool _railOpen;
+    // Phone nav overlay (opened by the bottom bar's "More").
+    private bool _mobileNavOpen;
     private string? _email;
 
     [CascadingParameter] private Root? RootComponent { get; set; }
 
-    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
-
-    private void OpenDrawer() => _drawerOpen = true;
+    private void OpenMobileNav() => _mobileNavOpen = true;
+    private void CloseMobileNav() => _mobileNavOpen = false;
 
     protected override void OnInitialized()
     {
@@ -54,6 +88,29 @@
     {
         try { _email = (await Tenant.GetCurrentAsync()).Email; }
         catch { /* no authenticated user (shouldn't happen behind Cloudflare) */ }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            // Only auto-expand on desktop; phones use the bottom bar + "More" overlay.
+            if (await JS.InvokeAsync<bool>("iaRail.isDesktop"))
+            {
+                var saved = await JS.InvokeAsync<string?>("iaRail.get");
+                _railOpen = saved != "collapsed"; // default expanded; respect a saved collapse
+                StateHasChanged();
+            }
+        }
+        catch { /* JS not ready / prerender — leave collapsed */ }
+    }
+
+    private async Task ToggleRail()
+    {
+        _railOpen = !_railOpen;
+        try { await JS.InvokeVoidAsync("iaRail.set", _railOpen ? "open" : "collapsed"); }
+        catch { /* persistence is best-effort */ }
     }
 
     private async Task ToggleTheme()

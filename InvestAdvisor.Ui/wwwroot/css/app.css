@@ -248,6 +248,78 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
     }
 }
 
+/* ---------- Desktop left rail ---------- */
+/* No top bar on desktop — the collapsible rail carries the brand, nav, theme and
+   status, so reclaim the full top band for content. */
+@media (min-width: 960px) {
+    .mud-main-content { padding-top: 0 !important; }
+    /* The phone nav overlay never shows on desktop. */
+    .ia-mobile-nav { display: none !important; }
+}
+
+/* On phones the bottom tab bar is the nav: hide the desktop rail entirely and don't
+   let it reserve space (the MudBlazor mini drawer otherwise keeps a 64px strip and
+   offsets the app bar by the same amount). */
+@media (max-width: 959.95px) {
+    .ia-rail { display: none !important; }
+    .mud-main-content { margin-left: 0 !important; }
+    .mud-appbar { left: 0 !important; margin-left: 0 !important; width: 100% !important; }
+    /* The full-width nav overlay must park fully off-screen when closed (its width is
+       100%, so the default -Width offset would leave a sliver showing). */
+    .ia-mobile-nav:not(.mud-drawer--open) { left: -100% !important; }
+}
+
+/* Column layout so the footer (theme/status) pins to the bottom of the rail. */
+.ia-rail .mud-drawer-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.ia-rail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 56px;
+    padding: 14px 12px 6px;
+    box-sizing: border-box;
+}
+.ia-rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    white-space: nowrap;
+    color: var(--mud-palette-text-primary);
+    font-weight: 600;
+    font-size: 1.05rem;
+    letter-spacing: -.01em;
+}
+.ia-rail-brand img { flex: none; display: block; }
+
+.ia-rail-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Collapsed (mini) rail shows icons only: hide the brand text and status, center things. */
+.ia-rail:not(.mud-drawer--open) .ia-rail-brand,
+.ia-rail:not(.mud-drawer--open) .ia-rail-status {
+    display: none;
+}
+.ia-rail:not(.mud-drawer--open) .ia-rail-header,
+.ia-rail:not(.mud-drawer--open) .ia-rail-footer {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+
 /* ---------- Reconnect overlay (Blazor Server) ---------- */
 /* The framework toggles these classes; default markup is unstyled (white-on-white). */
 #components-reconnect-modal { display: none; }
