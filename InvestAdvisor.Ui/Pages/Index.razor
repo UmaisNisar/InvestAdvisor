@@ -23,7 +23,42 @@
 
 @if (_snapshot is null)
 {
-    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+    @* Skeleton mirrors the real layout so the page doesn't sit blank while the
+       snapshot loads (the load can stall on slow market-data fetches). *@
+    <MudGrid>
+        <MudItem xs="12" md="9">
+            <MudPaper Class="pa-4 mb-4" Elevation="1">
+                <MudStack Row="true" Spacing="6" Style="flex-wrap:wrap">
+                    @for (var i = 0; i < 2; i++)
+                    {
+                        <div style="min-width:160px">
+                            <MudSkeleton Animation="Animation.Wave" Width="60%" Height="18px" />
+                            <MudSkeleton Animation="Animation.Wave" Width="80%" Height="40px" />
+                            <MudSkeleton Animation="Animation.Wave" Width="50%" Height="14px" />
+                        </div>
+                    }
+                </MudStack>
+            </MudPaper>
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudSkeleton Animation="Animation.Wave" Width="35%" Height="26px" Class="mb-3" />
+                @for (var i = 0; i < 6; i++)
+                {
+                    <MudSkeleton Animation="Animation.Wave" Width="100%" Height="38px" Class="mb-1" />
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            @for (var i = 0; i < 3; i++)
+            {
+                <MudPaper Class="pa-4 mb-4" Elevation="1">
+                    <MudSkeleton Animation="Animation.Wave" Width="55%" Height="22px" Class="mb-2" />
+                    <MudSkeleton Animation="Animation.Wave" Width="100%" Height="14px" />
+                    <MudSkeleton Animation="Animation.Wave" Width="85%" Height="14px" />
+                    <MudSkeleton Animation="Animation.Wave" Width="70%" Height="14px" />
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
 }
 else
 {
