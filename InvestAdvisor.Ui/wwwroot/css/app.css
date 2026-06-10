@@ -248,6 +248,15 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
     }
 }
 
+/* Single scrollbar for open detail drawers. A temporary drawer (advice/holding detail, or the
+   phone nav overlay) scrolls its own content; without locking the page behind it, the document
+   ALSO scrolls — so you see the drawer's scrollbar and the page's scrollbar side by side. Lock
+   the document while any temporary drawer is open so only the drawer scrolls. (The desktop mini
+   rail isn't temporary, so it's unaffected.) */
+html:has(.mud-drawer-temporary.mud-drawer--open) {
+    overflow: hidden;
+}
+
 /* ---------- Desktop left rail ---------- */
 /* No top bar on desktop — the collapsible rail carries the brand, nav, theme and
    status, so reclaim the full top band for content. */
