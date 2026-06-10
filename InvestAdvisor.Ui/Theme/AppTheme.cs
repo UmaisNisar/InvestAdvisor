@@ -66,7 +66,9 @@ public static class AppTheme
         {
             Default = new DefaultTypography
             {
-                FontFamily = new[] { "Inter", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif" },
+                // Prefer the platform UI font first (San Francisco on iOS/macOS, Segoe on
+                // Windows) so the app reads as native; Inter is the cross-platform fallback.
+                FontFamily = new[] { "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Inter", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif" },
             },
         },
         LayoutProperties = new LayoutProperties

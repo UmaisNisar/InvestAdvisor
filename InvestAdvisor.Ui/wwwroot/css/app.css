@@ -133,6 +133,105 @@ body {
     .mud-dialog { margin: 12px; }
 }
 
+/* ============================================================
+   Native-app feel (touch / iOS)
+   ============================================================ */
+
+:root {
+    --ia-bottomnav-height: 56px;
+}
+
+/* No web-y blue tap flash; momentum scroll; lock the page's rubber-band overscroll. */
+html { -webkit-text-size-adjust: 100%; }
+body {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+}
+button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highlight-color: transparent; }
+
+/* Honor the notch / status bar / home indicator when installed (standalone) mode.
+   On normal desktop/browser the env() insets are 0, so these are no-ops there. */
+.mud-appbar { padding-top: env(safe-area-inset-top); }
+.mud-main-content {
+    padding-top: calc(var(--mud-appbar-height) + env(safe-area-inset-top)) !important;
+}
+
+/* ---------- Phone shell (below the md drawer breakpoint) ---------- */
+@media (max-width: 959.95px) {
+    /* Frosted, translucent top bar — the iOS large-nav look. */
+    .mud-appbar {
+        background-color: color-mix(in srgb, var(--mud-palette-appbar-background) 80%, transparent) !important;
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+    }
+
+    /* Leave room for the bottom tab bar so the last content isn't hidden behind it. */
+    .mud-main-content {
+        padding-bottom: calc(var(--ia-bottomnav-height) + env(safe-area-inset-bottom) + 8px) !important;
+    }
+    body { padding-bottom: 0; }
+
+    /* 16px form fields stop iOS from zooming in when an input is focused. */
+    .mud-input-root input,
+    .mud-input-root textarea,
+    .mud-input-slot,
+    .mud-select-input input { font-size: 16px !important; }
+}
+
+/* ---------- Bottom tab bar ---------- */
+.ia-bottomnav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1250; /* above the app bar, below an open drawer overlay */
+    height: calc(var(--ia-bottomnav-height) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    justify-content: space-around;
+    align-items: stretch;
+    background-color: var(--mud-palette-surface); /* opaque fallback if color-mix is unsupported */
+    background-color: color-mix(in srgb, var(--mud-palette-surface) 82%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+.ia-tab {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 0 4px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: inherit;
+    color: var(--mud-palette-text-secondary);
+    transition: color .15s ease, transform .08s ease;
+}
+.ia-tab .mud-icon-root { width: 26px; height: 26px; }
+.ia-tab-label { font-size: .68rem; font-weight: 500; letter-spacing: .01em; }
+.ia-tab:active { transform: scale(.9); }
+.ia-tab.active { color: var(--mud-palette-primary); }
+
+/* ---------- Touch devices: replace hover affordances with press feedback ---------- */
+/* Hover lifts/underlines stick after a tap on touch screens and feel un-native, so
+   neutralize them and use a brief press-scale instead. */
+@media (hover: none) {
+    .mud-main-content .mud-paper.mud-elevation-1:hover {
+        transform: none;
+        box-shadow: 0 1px 2px rgba(2, 6, 23, .04), 0 1px 3px rgba(2, 6, 23, .05);
+    }
+    .mud-nav-link:hover { padding-left: 8px; }
+    .mud-expand-panel:hover { box-shadow: none; }
+
+    .mud-main-content .mud-paper.mud-elevation-1:active { transform: scale(.992); }
+}
+
 /* ---------- Reconnect overlay (Blazor Server) ---------- */
 /* The framework toggles these classes; default markup is unstyled (white-on-white). */
 #components-reconnect-modal { display: none; }

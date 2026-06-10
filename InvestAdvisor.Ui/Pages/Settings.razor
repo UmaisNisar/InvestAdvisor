@@ -152,7 +152,7 @@
                 <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled"
                            OnClick="@(() => _holdingDialog?.Open(null))">Add holding</MudButton>
             </MudStack>
-            <MudTable Items="_holdings" Dense="true" Hover="true" HorizontalScrollbar="true">
+            <MudTable Items="_holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.Sm">
                 <HeaderContent>
                     <MudTh>Ticker</MudTh>
                     <MudTh>Name</MudTh>
@@ -164,14 +164,14 @@
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd><code>@context.Ticker</code></MudTd>
-                    <MudTd>@context.Name</MudTd>
-                    <MudTd>@context.AssetClass</MudTd>
-                    <MudTd>@context.AccountType</MudTd>
-                    <MudTd Style="text-align:right">@context.Quantity</MudTd>
-                    <MudTd Style="text-align:right">@context.AvgCost.ToString("C2")</MudTd>
-                    <MudTd Style="text-align:right">@(context.TargetAllocationPct?.ToString("0.0") ?? "—")</MudTd>
-                    <MudTd>
+                    <MudTd DataLabel="Ticker"><code>@context.Ticker</code></MudTd>
+                    <MudTd DataLabel="Name">@context.Name</MudTd>
+                    <MudTd DataLabel="Class">@context.AssetClass</MudTd>
+                    <MudTd DataLabel="Account">@context.AccountType</MudTd>
+                    <MudTd DataLabel="Qty" Style="text-align:right">@context.Quantity</MudTd>
+                    <MudTd DataLabel="Avg cost" Style="text-align:right">@context.AvgCost.ToString("C2")</MudTd>
+                    <MudTd DataLabel="Target %" Style="text-align:right">@(context.TargetAllocationPct?.ToString("0.0") ?? "—")</MudTd>
+                    <MudTd DataLabel="">
                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => _holdingDialog?.Open(context))" />
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteHolding(context))" />
                     </MudTd>

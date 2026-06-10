@@ -1,0 +1,31 @@
+@using Microsoft.AspNetCore.Components.Routing
+
+@* iOS-style bottom tab bar. Shown only on phones (hidden at md+, where the side drawer
+   takes over). The five primary destinations live here; "More" opens the full drawer. *@
+<nav class="ia-bottomnav d-flex d-md-none">
+    <NavLink class="ia-tab" href="" Match="NavLinkMatch.All">
+        <MudIcon Icon="@Icons.Material.Filled.Dashboard" />
+        <span class="ia-tab-label">Home</span>
+    </NavLink>
+    <NavLink class="ia-tab" href="invest">
+        <MudIcon Icon="@Icons.Material.Filled.Lightbulb" />
+        <span class="ia-tab-label">Invest</span>
+    </NavLink>
+    <NavLink class="ia-tab" href="screener">
+        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" />
+        <span class="ia-tab-label">Screener</span>
+    </NavLink>
+    <NavLink class="ia-tab" href="watchlist">
+        <MudIcon Icon="@Icons.Material.Filled.Visibility" />
+        <span class="ia-tab-label">Watchlist</span>
+    </NavLink>
+    <button type="button" class="ia-tab" @onclick="OnMore">
+        <MudIcon Icon="@Icons.Material.Filled.MoreHoriz" />
+        <span class="ia-tab-label">More</span>
+    </button>
+</nav>
+
+@code {
+    /// <summary>Invoked when the user taps "More" — the layout opens the side drawer.</summary>
+    [Parameter] public EventCallback OnMore { get; set; }
+}

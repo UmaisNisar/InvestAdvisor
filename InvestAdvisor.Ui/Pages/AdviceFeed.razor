@@ -20,7 +20,7 @@ else if (_page.Items.Count == 0)
 }
 else
 {
-    <MudTable Items="_page.Items" Dense="true" Hover="true" OnRowClick="@OnRowClick" T="AdviceLogSummaryView">
+    <MudTable Items="_page.Items" Dense="true" Hover="true" OnRowClick="@OnRowClick" T="AdviceLogSummaryView" Breakpoint="Breakpoint.Sm">
         <HeaderContent>
             <MudTh>Time (UTC)</MudTh>
             <MudTh>Trigger</MudTh>
@@ -30,22 +30,22 @@ else
             <MudTh Style="text-align:right">Drift</MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd>@context.TimestampUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
-            <MudTd>
+            <MudTd DataLabel="Time (UTC)">@context.TimestampUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+            <MudTd DataLabel="Trigger">
                 <MudChip T="string" Size="Size.Small" Color="@TriggerColor(context.Trigger)">@context.Trigger</MudChip>
                 @if (context.ReplayOfAdviceLogId is not null)
                 {
                     <MudChip T="string" Size="Size.Small" Color="Color.Default">replay</MudChip>
                 }
             </MudTd>
-            <MudTd>@context.TriggerDetail</MudTd>
-            <MudTd Style="max-width:600px">@Truncate(context.Summary, 160)</MudTd>
-            <MudTd Style="text-align:right">
+            <MudTd DataLabel="Detail">@context.TriggerDetail</MudTd>
+            <MudTd DataLabel="Summary" Style="max-width:600px">@Truncate(context.Summary, 160)</MudTd>
+            <MudTd DataLabel="Flags" Style="text-align:right">
                 @if (context.CriticalFlagCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Error">@context.CriticalFlagCount</MudChip> }
                 @if (context.WarnFlagCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@context.WarnFlagCount</MudChip> }
                 @if (context.FlagCount == 0) { <span>—</span> }
             </MudTd>
-            <MudTd Style="text-align:right">
+            <MudTd DataLabel="Drift" Style="text-align:right">
                 @if (context.ActionSuggestedDriftCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@context.ActionSuggestedDriftCount</MudChip> }
                 @if (context.DriftAlertCount == 0) { <span>—</span> }
             </MudTd>

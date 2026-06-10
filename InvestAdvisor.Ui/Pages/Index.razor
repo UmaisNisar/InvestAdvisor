@@ -61,7 +61,7 @@ else
                     <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
                                OnClick="@(() => _holdingDialog?.Open(null))">Add holding</MudButton>
                 </MudStack>
-                <MudTable Items="_snapshot.Holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Class="mt-2">
+                <MudTable Items="_snapshot.Holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.Sm" Class="mt-2">
                     <HeaderContent>
                         <MudTh><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)x.Ticker)">Ticker</MudTableSortLabel></MudTh>
                         <MudTh>Name</MudTh>
@@ -77,30 +77,30 @@ else
                         <MudTh Style="text-align:right"></MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>
+                        <MudTd DataLabel="Ticker">
                             <code>@context.Ticker</code>
                             @if (context.Currency != "USD")
                             {
                                 <MudTooltip Text="@($"Priced in {context.Currency}; value converted to USD for totals.")"><MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ml-1">@context.Currency</MudChip></MudTooltip>
                             }
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Name">
                             <MudTooltip Text="@context.Name">
                                 <span style="display:inline-block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">@context.Name</span>
                             </MudTooltip>
                         </MudTd>
-                        <MudTd Style="text-align:right">@Money(context.Price, context.Currency)</MudTd>
-                        <MudTd Style="text-align:right">@(context.MarketValueUsd?.ToString("C0") ?? "—")</MudTd>
-                        <MudTd Style="@PnlStyle(context.UnrealizedPnlPct)">@(context.UnrealizedPnlPct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
-                        <MudTd Style="@PnlStyle(context.TodaysChangePct)">@(context.TodaysChangePct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Price" Style="text-align:right">@Money(context.Price, context.Currency)</MudTd>
+                        <MudTd DataLabel="Market value (USD)" Style="text-align:right">@(context.MarketValueUsd?.ToString("C0") ?? "—")</MudTd>
+                        <MudTd DataLabel="P/L %" Style="@PnlStyle(context.UnrealizedPnlPct)">@(context.UnrealizedPnlPct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
+                        <MudTd DataLabel="Today %" Style="@PnlStyle(context.TodaysChangePct)">@(context.TodaysChangePct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
+                        <MudTd DataLabel="@(AnyTarget ? "Alloc / target" : "Allocation %")">
                             @(context.CurrentAllocationPct?.ToString("0.0") ?? "—")@(AnyTarget ? $" / {context.TargetAllocationPct?.ToString("0.0") ?? "—"}" : "")
                         </MudTd>
                         @if (AnyTarget)
                         {
-                            <MudTd><DriftBadge DriftPct="@context.DriftPct" /></MudTd>
+                            <MudTd DataLabel="Drift"><DriftBadge DriftPct="@context.DriftPct" /></MudTd>
                         }
-                        <MudTd Style="text-align:right;white-space:nowrap">
+                        <MudTd DataLabel="" Style="text-align:right;white-space:nowrap">
                             <MudTooltip Text="Edit this holding">
                                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditHolding(context))" />
                             </MudTooltip>
