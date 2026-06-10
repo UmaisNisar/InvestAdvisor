@@ -40,7 +40,11 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var assembler = new ContextAssembler(db.Factory, store, clock, fx);
+        var sentiment = Substitute.For<ISentimentScoringService>();
+        sentiment.GetTickerSentimentAsync(Arg.Any<CancellationToken>())
+                 .Returns(new Dictionary<string, TickerSentiment>(StringComparer.OrdinalIgnoreCase));
+
+        var assembler = new ContextAssembler(db.Factory, store, clock, fx, sentiment);
         return (assembler, db, clock);
     }
 

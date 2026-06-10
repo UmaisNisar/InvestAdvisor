@@ -91,6 +91,17 @@ public sealed class DailyRecommendationConfiguration : IEntityTypeConfiguration<
     }
 }
 
+public sealed class SentimentRunConfiguration : IEntityTypeConfiguration<SentimentRun>
+{
+    public void Configure(EntityTypeBuilder<SentimentRun> b)
+    {
+        b.ToTable("SentimentRun");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Model).HasMaxLength(64);
+        b.HasIndex(x => x.GeneratedAtUtc);
+    }
+}
+
 public sealed class ScreenerScoreConfiguration : IEntityTypeConfiguration<ScreenerScore>
 {
     public void Configure(EntityTypeBuilder<ScreenerScore> b)

@@ -83,6 +83,7 @@
                 <MudNumericField @bind-Value="_settings.WeightMomentum" Label="Momentum (13- and 26-week price return)" Min="0" Max="100" />
                 <MudNumericField @bind-Value="_settings.WeightQuality" Label="Quality (debt / equity, lower is better)" Min="0" Max="100" />
                 <MudNumericField @bind-Value="_settings.WeightInsider" Label="Insider (net insider buying)" Min="0" Max="100" />
+                <MudNumericField @bind-Value="_settings.WeightSentiment" Label="Sentiment (news + social media, recent)" Min="0" Max="100" />
                 <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save weights</MudButton>
             </MudPaper>
         }
@@ -303,6 +304,7 @@
                 row.WeightAnalyst = _settings.WeightAnalyst;
                 row.WeightInsider = _settings.WeightInsider;
                 row.WeightMomentum = _settings.WeightMomentum;
+                row.WeightSentiment = _settings.WeightSentiment;
                 row.EmailEnabled = _settings.EmailEnabled;
                 row.SmtpHost = _settings.SmtpHost;
                 row.SmtpPort = _settings.SmtpPort;
@@ -351,6 +353,7 @@
         WeightAnalyst = r.WeightAnalyst,
         WeightInsider = r.WeightInsider,
         WeightMomentum = r.WeightMomentum,
+        WeightSentiment = r.WeightSentiment,
         SmtpHost = r.SmtpHost,
         SmtpPort = r.SmtpPort,
         SmtpFrom = r.SmtpFrom,

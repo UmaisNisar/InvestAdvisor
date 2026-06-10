@@ -36,7 +36,28 @@ public interface IAnthropicClient
         string systemPrompt,
         string candidatesContextJson,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Scores a batch of news/social items for investor sentiment in one call. Each input is a short
+    /// line (e.g. "AAPL: headline…"); the result carries one <see cref="SentimentScore"/> per input
+    /// index. Forces the <c>emit_sentiment_scores</c> tool and uses the cheaper routine model.
+    /// </summary>
+    Task<SentimentBatchResult> ScoreSentimentAsync(
+        IReadOnlyList<string> items,
+        CancellationToken ct = default);
 }
+
+/// <summary>One scored item: <paramref name="Index"/> matches the input position, score is [-1, 1].</summary>
+public sealed record SentimentScore(int Index, decimal Score, string Label);
+
+public sealed record SentimentBatchResult(
+    IReadOnlyList<SentimentScore> Scores,
+    string RawResponseBody,
+    string Model,
+    int InputTokens,
+    int OutputTokens,
+    int LatencyMs,
+    bool ParseFallbackUsed);
 
 public sealed record RecommendedPick(string Ticker, string Reason);
 

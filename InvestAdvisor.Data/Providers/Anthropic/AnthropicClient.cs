@@ -100,6 +100,23 @@ public sealed class AnthropicClient(
             ParseFallbackUsed: fallbackUsed);
     }
 
+    public async Task<SentimentBatchResult> ScoreSentimentAsync(
+        IReadOnlyList<string> items, CancellationToken ct = default)
+    {
+        var body = BuildSentimentRequestBody(items);
+        var (parsed, rawBody, latencyMs) = await SendAsync(body, ct);
+        var (scores, fallbackUsed) = ParseSentiment(parsed, rawBody);
+
+        return new SentimentBatchResult(
+            Scores: scores,
+            RawResponseBody: rawBody,
+            Model: parsed.Model ?? _opts.RoutineModel,
+            InputTokens: parsed.Usage?.InputTokens ?? 0,
+            OutputTokens: parsed.Usage?.OutputTokens ?? 0,
+            LatencyMs: latencyMs,
+            ParseFallbackUsed: fallbackUsed);
+    }
+
     private async Task<(AnthropicMessageResponse Parsed, string RawBody, int LatencyMs)> SendAsync(
         JsonObject body, CancellationToken ct)
     {
@@ -336,6 +353,104 @@ public sealed class AnthropicClient(
         }
 
         return new RecFields(Str("summary"), Str("caution"), Picks("stocks"), Picks("etfs"), Picks("crypto"));
+    }
+
+    private const string SentimentSystemPrompt =
+        "You are a financial-sentiment classifier. For each numbered item you read the headline or " +
+        "post and judge investor sentiment toward the security/asset it concerns. Output is a read of " +
+        "tone only — never a price prediction or a trade recommendation. Treat purely factual or " +
+        "procedural items as neutral (0). Call the emit_sentiment_scores tool exactly once with one " +
+        "entry per input index.";
+
+    private JsonObject BuildSentimentRequestBody(IReadOnlyList<string> items)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Score the investor sentiment of each item below. Return one entry per index.\n\n");
+        for (var i = 0; i < items.Count; i++)
+            sb.Append('[').Append(i).Append("] ").Append(items[i]).Append('\n');
+
+        return new JsonObject
+        {
+            ["model"] = _opts.RoutineModel,
+            ["max_tokens"] = _opts.MaxTokens,
+            ["system"] = SentimentSystemPrompt,
+            ["messages"] = new JsonArray
+            {
+                new JsonObject { ["role"] = "user", ["content"] = sb.ToString() },
+            },
+            ["tools"] = new JsonArray { EmitSentimentScoresToolSchema.AsToolNode() },
+            ["tool_choice"] = new JsonObject
+            {
+                ["type"] = "tool",
+                ["name"] = EmitSentimentScoresToolSchema.ToolName,
+            },
+        };
+    }
+
+    private static (IReadOnlyList<SentimentScore> Scores, bool FallbackUsed) ParseSentiment(
+        AnthropicMessageResponse response, string rawBody)
+    {
+        var toolUse = response.Content.FirstOrDefault(c =>
+            string.Equals(c.Type, "tool_use", StringComparison.Ordinal) &&
+            string.Equals(c.Name, EmitSentimentScoresToolSchema.ToolName, StringComparison.Ordinal));
+
+        if (toolUse is not null && toolUse.Input.ValueKind == JsonValueKind.Object)
+        {
+            try { return (DeserializeSentiment(toolUse.Input), false); }
+            catch (Exception ex)
+            {
+                throw new AgentParseException(
+                    "tool_use payload did not match emit_sentiment_scores schema.", rawBody, ex);
+            }
+        }
+
+        var textConcat = string.Join('\n',
+            response.Content.Where(c => c.Type == "text" && !string.IsNullOrEmpty(c.Text)).Select(c => c.Text));
+        var extracted = ExtractFirstJsonObject(textConcat);
+        if (extracted is null)
+            throw new AgentParseException(
+                "Sentiment response had no tool_use block and no parseable JSON in text.", rawBody);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(extracted);
+            return (DeserializeSentiment(doc.RootElement), true);
+        }
+        catch (JsonException ex)
+        {
+            throw new AgentParseException("Fallback JSON extraction failed for sentiment scores.", rawBody, ex);
+        }
+    }
+
+    private static IReadOnlyList<SentimentScore> DeserializeSentiment(JsonElement input)
+    {
+        if (!input.TryGetProperty("scores", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return Array.Empty<SentimentScore>();
+
+        var list = new List<SentimentScore>(arr.GetArrayLength());
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            if (!item.TryGetProperty("index", out var idxEl) ||
+                idxEl.ValueKind != JsonValueKind.Number || !idxEl.TryGetInt32(out var index))
+                continue;
+
+            decimal score = 0m;
+            if (item.TryGetProperty("score", out var scEl))
+            {
+                if (scEl.ValueKind == JsonValueKind.Number && scEl.TryGetDecimal(out var sd)) score = sd;
+                else if (scEl.ValueKind == JsonValueKind.String && decimal.TryParse(scEl.GetString(), out var ss)) score = ss;
+            }
+            score = Math.Clamp(score, -1m, 1m);
+
+            var label = (item.TryGetProperty("label", out var lEl) && lEl.ValueKind == JsonValueKind.String
+                ? lEl.GetString() : null)?.Trim().ToLowerInvariant();
+            if (label is not ("bullish" or "bearish" or "neutral"))
+                label = score > 0.15m ? "bullish" : score < -0.15m ? "bearish" : "neutral";
+
+            list.Add(new SentimentScore(index, score, label));
+        }
+        return list;
     }
 
     private static (AgentAnalysis Analysis, bool FallbackUsed) ParseAnalysis(

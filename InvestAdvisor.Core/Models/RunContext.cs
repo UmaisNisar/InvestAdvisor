@@ -14,7 +14,8 @@ public sealed record RunContext(
     IReadOnlyList<HoldingView> Holdings,
     AllocationView Allocation,
     IReadOnlyList<MoverView> TopMovers,
-    IReadOnlyList<NewsHeadline> RecentNews);
+    IReadOnlyList<NewsHeadline> RecentNews,
+    IReadOnlyList<TickerSentimentView> Sentiment);
 
 public sealed record ProfileSnapshot(
     string GoalsText,

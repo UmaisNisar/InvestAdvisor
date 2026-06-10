@@ -13,7 +13,8 @@ namespace InvestAdvisor.Data.Services;
 /// </summary>
 public sealed class ScreenerScoringService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    IRuntimeSettingsStore settingsStore) : IScreenerScoringService
+    IRuntimeSettingsStore settingsStore,
+    ISentimentScoringService sentiment) : IScreenerScoringService
 {
     private static readonly TimeSpan InsiderWindow = TimeSpan.FromDays(90);
 
@@ -23,9 +24,11 @@ public sealed class ScreenerScoringService(
         var settings = await settingsStore.GetAsync(ct);
         decimal wValuation = settings.WeightValuation, wGrowth = settings.WeightGrowth,
                 wQuality = settings.WeightQuality, wAnalyst = settings.WeightAnalyst,
-                wInsider = settings.WeightInsider, wMomentum = settings.WeightMomentum;
-        if (wValuation + wGrowth + wQuality + wAnalyst + wInsider + wMomentum <= 0m)
-            (wValuation, wGrowth, wQuality, wAnalyst, wInsider, wMomentum) = (20m, 25m, 10m, 20m, 10m, 15m);
+                wInsider = settings.WeightInsider, wMomentum = settings.WeightMomentum,
+                wSentiment = settings.WeightSentiment;
+        if (wValuation + wGrowth + wQuality + wAnalyst + wInsider + wMomentum + wSentiment <= 0m)
+            (wValuation, wGrowth, wQuality, wAnalyst, wInsider, wMomentum, wSentiment) =
+                (20m, 25m, 10m, 20m, 10m, 15m, 10m);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
@@ -34,6 +37,8 @@ public sealed class ScreenerScoringService(
             .Select(s => new { s.Ticker, s.Name, s.Sector })
             .ToListAsync(ct);
         if (stocks.Count == 0) return Array.Empty<StockScore>();
+
+        var sentimentByTicker = await sentiment.GetTickerSentimentAsync(ct);
 
         var tickers = stocks.Select(s => s.Ticker).ToList();
         var metrics = (await db.StockMetrics.AsNoTracking()
@@ -88,6 +93,7 @@ public sealed class ScreenerScoringService(
                 Beta = m?.Beta, MarketCap = m?.MarketCap,
                 BuyPct = buyPct, AnalystTotal = analystTotal, BuyCount = buyCount, TrendDelta = trendDelta,
                 NetInsider = insiderNet.TryGetValue(s.Ticker, out var net) ? net : null,
+                Sentiment = sentimentByTicker.TryGetValue(s.Ticker, out var sent) ? sent.MeanScore : null,
                 DataAsOfUtc = m?.FetchedAtUtc,
             });
         }
@@ -95,6 +101,7 @@ public sealed class ScreenerScoringService(
         // Percentile ranks (shared)
         var rMomS = Rank(rows, r => r.MomShort, higherBetter: true);
         var rMomL = Rank(rows, r => r.MomLong, higherBetter: true);
+        var rSent = Rank(rows, r => r.Sentiment, higherBetter: true);
 
         var scores = new List<StockScore>(rows.Count);
 
@@ -117,9 +124,11 @@ public sealed class ScreenerScoringService(
                 decimal? sA = Scale(Avg(Get(rBuy, r.Ticker), Get(rTrend, r.Ticker)));
                 decimal? sI = Scale(Get(rInsider, r.Ticker));
                 decimal? sM = Scale(Avg(Get(rMomS, r.Ticker), Get(rMomL, r.Ticker)));
+                decimal? sS = Scale(Get(rSent, r.Ticker));
                 var composite = Composite(
-                    (sV, wValuation), (sG, wGrowth), (sQ, wQuality), (sA, wAnalyst), (sI, wInsider), (sM, wMomentum));
-                scores.Add(MakeScore(r, composite, new FactorScores(sV, sG, sQ, sA, sI, sM)));
+                    (sV, wValuation), (sG, wGrowth), (sQ, wQuality), (sA, wAnalyst), (sI, wInsider),
+                    (sM, wMomentum), (sS, wSentiment));
+                scores.Add(MakeScore(r, composite, new FactorScores(sV, sG, sQ, sA, sI, sM, sS)));
             }
         }
         else if (assetClass == AssetClass.Etf)
@@ -129,8 +138,9 @@ public sealed class ScreenerScoringService(
             {
                 decimal? sM = Scale(Avg(Get(rMomS, r.Ticker), Get(rMomL, r.Ticker)));
                 decimal? sQ = Scale(Get(rBeta, r.Ticker));
-                var composite = Composite((sM, wMomentum), (sQ, wQuality));
-                scores.Add(MakeScore(r, composite, new FactorScores(null, null, sQ, null, null, sM)));
+                decimal? sS = Scale(Get(rSent, r.Ticker));
+                var composite = Composite((sM, wMomentum), (sQ, wQuality), (sS, wSentiment));
+                scores.Add(MakeScore(r, composite, new FactorScores(null, null, sQ, null, null, sM, sS)));
             }
         }
         else // Crypto
@@ -140,8 +150,9 @@ public sealed class ScreenerScoringService(
             {
                 decimal? sM = Scale(Avg(Get(rMomS, r.Ticker), Get(rMomL, r.Ticker)));
                 decimal? sQ = Scale(Get(rSize, r.Ticker));
-                var composite = Composite((sM, wMomentum), (sQ, wQuality));
-                scores.Add(MakeScore(r, composite, new FactorScores(null, null, sQ, null, null, sM)));
+                decimal? sS = Scale(Get(rSent, r.Ticker));
+                var composite = Composite((sM, wMomentum), (sQ, wQuality), (sS, wSentiment));
+                scores.Add(MakeScore(r, composite, new FactorScores(null, null, sQ, null, null, sM, sS)));
             }
         }
 
@@ -168,7 +179,7 @@ public sealed class ScreenerScoringService(
     private sealed class Raw
     {
         public string Ticker = "", Name = "", Sector = "";
-        public decimal? Pe, Pfcf, Rev, Eps, De, MomShort, MomLong, Beta, MarketCap, BuyPct, NetInsider;
+        public decimal? Pe, Pfcf, Rev, Eps, De, MomShort, MomLong, Beta, MarketCap, BuyPct, NetInsider, Sentiment;
         public int AnalystTotal, BuyCount;
         public int? TrendDelta;
         public DateTime? DataAsOfUtc;

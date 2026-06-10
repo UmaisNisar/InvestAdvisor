@@ -16,6 +16,7 @@ public sealed class ContextAssembler(
     IRuntimeSettingsStore settingsStore,
     ISystemClock clock,
     IFxRateProvider fx,
+    ISentimentScoringService sentiment,
     ILogger<ContextAssembler>? logger = null) : IContextAssembler
 {
     private const int MaxNewsItems = 25;
@@ -72,11 +73,25 @@ public sealed class ContextAssembler(
             Headline: Truncate(n.Headline, MaxHeadlineLength),
             Source: n.Source,
             Url: n.Url,
-            PublishedAtUtc: n.PublishedAtUtc)).ToArray();
+            PublishedAtUtc: n.PublishedAtUtc,
+            SentimentScore: n.SentimentScore,
+            SentimentLabel: n.SentimentLabel)).ToArray();
+
+        // Per-ticker sentiment digest, scoped to the names the user actually tracks.
+        var sentimentByTicker = await sentiment.GetTickerSentimentAsync(ct);
+        var sentimentViews = trackedTickers
+            .Where(t => sentimentByTicker.ContainsKey(t))
+            .Select(t =>
+            {
+                var s = sentimentByTicker[t];
+                return new TickerSentimentView(t, s.MeanScore, s.PostCount, s.Label);
+            })
+            .OrderBy(v => v.MeanScore)
+            .ToArray();
 
         logger?.LogInformation(
-            "Assembled RunContext: {HoldingCount} holdings, {SnapshotCount} fresh snapshots, {NewsCount} news items, MarketValue={MarketValue:C}",
-            holdingViews.Count, latestSnapshots.Count, newsHeadlines.Length, totals.MarketValueUsd);
+            "Assembled RunContext: {HoldingCount} holdings, {SnapshotCount} fresh snapshots, {NewsCount} news items, {SentimentCount} sentiment tickers, MarketValue={MarketValue:C}",
+            holdingViews.Count, latestSnapshots.Count, newsHeadlines.Length, sentimentViews.Length, totals.MarketValueUsd);
 
         return new RunContext(
             GeneratedAtUtc: now,
@@ -87,7 +102,8 @@ public sealed class ContextAssembler(
             Holdings: holdingViews,
             Allocation: allocation,
             TopMovers: movers,
-            RecentNews: newsHeadlines);
+            RecentNews: newsHeadlines,
+            Sentiment: sentimentViews);
     }
 
     private static async Task<Dictionary<string, PriceSnapshot>> LoadLatestSnapshotsAsync(

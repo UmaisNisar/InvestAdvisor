@@ -34,6 +34,10 @@ public static class ServiceCollectionExtensions
         services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
         services.Configure<TriggerOptions>(configuration.GetSection(TriggerOptions.SectionName));
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.Configure<StockTwitsOptions>(configuration.GetSection(StockTwitsOptions.SectionName));
+        services.Configure<RedditOptions>(configuration.GetSection(RedditOptions.SectionName));
+        services.Configure<BlueskyOptions>(configuration.GetSection(BlueskyOptions.SectionName));
+        services.Configure<HackerNewsOptions>(configuration.GetSection(HackerNewsOptions.SectionName));
 
         var connStr = configuration.GetConnectionString("Default")
                       ?? InvestAdvisorDbContext.GetDefaultConnectionString();
@@ -102,6 +106,40 @@ public static class ServiceCollectionExtensions
             http.DefaultRequestHeaders.UserAgent.ParseAdd("InvestAdvisor/1.0");
         });
 
+        // Social sentiment sources. Each concrete provider gets its own typed HttpClient; both are
+        // exposed as ISocialFeedProvider so SocialRefreshService resolves them as a set. Providers
+        // self-disable (return empty) when not enabled/configured, so registering both is harmless.
+        services.AddHttpClient<Providers.StockTwits.StockTwitsProvider>((sp, http) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<StockTwitsOptions>>().Value;
+            http.BaseAddress = new Uri(opts.BaseUrl);
+            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("InvestAdvisor/1.0");
+        });
+        services.AddHttpClient<Providers.Reddit.RedditProvider>((sp, http) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<RedditOptions>>().Value;
+            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+        });
+        services.AddHttpClient<Providers.Bluesky.BlueskyProvider>((sp, http) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<BlueskyOptions>>().Value;
+            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("InvestAdvisor/1.0");
+        });
+        services.AddHttpClient<Providers.HackerNews.HackerNewsProvider>((sp, http) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<HackerNewsOptions>>().Value;
+            http.BaseAddress = new Uri(opts.BaseUrl);
+            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("InvestAdvisor/1.0");
+        });
+        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.StockTwits.StockTwitsProvider>());
+        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.Reddit.RedditProvider>());
+        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.Bluesky.BlueskyProvider>());
+        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.HackerNews.HackerNewsProvider>());
+        services.AddScoped<ISocialRefreshService, SocialRefreshService>();
+
         services.AddScoped<IContextAssembler, ContextAssembler>();
         services.AddScoped<IAgentService, AgentService>();
         services.AddScoped<ICostService, CostService>();
@@ -110,6 +148,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IStockUniverseSeeder, StockUniverseSeeder>();
         services.AddScoped<IScreenerSyncService, ScreenerSyncService>();
+        services.AddScoped<ISentimentScoringService, SentimentScoringService>();
         services.AddScoped<IScreenerScoringService, ScreenerScoringService>();
         services.AddScoped<IStockAnalysisService, StockAnalysisService>();
         services.AddScoped<IDailyRecommendationService, DailyRecommendationService>();
@@ -138,6 +177,11 @@ public static class ServiceCollectionExtensions
         Map(dict, "ANTHROPIC_API_KEY", $"{AnthropicOptions.SectionName}:ApiKey");
         Map(dict, "FINNHUB_API_KEY", $"{FinnhubOptions.SectionName}:ApiKey");
         Map(dict, "SMTP_PASSWORD", $"{SmtpOptions.SectionName}:Password");
+        Map(dict, "STOCKTWITS_ACCESS_TOKEN", $"{StockTwitsOptions.SectionName}:AccessToken");
+        Map(dict, "REDDIT_CLIENT_ID", $"{RedditOptions.SectionName}:ClientId");
+        Map(dict, "REDDIT_CLIENT_SECRET", $"{RedditOptions.SectionName}:ClientSecret");
+        Map(dict, "BLUESKY_IDENTIFIER", $"{BlueskyOptions.SectionName}:Identifier");
+        Map(dict, "BLUESKY_APP_PASSWORD", $"{BlueskyOptions.SectionName}:AppPassword");
         if (dict.Count > 0) configBuilder.AddInMemoryCollection(dict);
         return configBuilder;
     }

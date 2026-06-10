@@ -18,6 +18,7 @@ public sealed class CostService(
     private const string SourcePortfolio = "Portfolio agent";
     private const string SourceDailyRec = "Daily recommendation";
     private const string SourceStock = "Stock analysis";
+    private const string SourceSentiment = "Sentiment scoring";
 
     private readonly record struct Row(DateTime Ts, string Source, string Trigger, string Model, long Input, long Output);
 
@@ -48,6 +49,13 @@ public sealed class CostService(
             .ToListAsync(ct);
         foreach (var s in stocks)
             rows.Add(new Row(s.GeneratedAtUtc, SourceStock, "—", s.Model, s.InputTokens, s.OutputTokens));
+
+        var sentiment = await db.SentimentRuns.AsNoTracking()
+            .Where(s => s.GeneratedAtUtc >= sinceUtc)
+            .Select(s => new { s.GeneratedAtUtc, s.Model, s.InputTokens, s.OutputTokens })
+            .ToListAsync(ct);
+        foreach (var s in sentiment)
+            rows.Add(new Row(s.GeneratedAtUtc, SourceSentiment, "—", s.Model, s.InputTokens, s.OutputTokens));
 
         return rows;
     }
