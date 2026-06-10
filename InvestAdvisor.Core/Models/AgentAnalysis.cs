@@ -18,7 +18,8 @@ public sealed record PositionCall(
     string Ticker,
     PositionStance Stance,
     PositionConviction Conviction,
-    string Reason);
+    string Reason,
+    bool KnownTicker = true);
 
 public sealed record Flag(
     FlagSeverity Severity,
@@ -34,7 +35,8 @@ public sealed record DriftAlert(
     decimal CurrentPct,
     decimal TargetPct,
     decimal DriftPct,
-    string Note);
+    string Note,
+    bool KnownTicker = true);
 
 public sealed record Consideration(string Topic, string Text);
 

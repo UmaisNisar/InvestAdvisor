@@ -94,11 +94,11 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
             if (w.PriceTargetLow is { } low && snap.Price <= low)
                 result.Add((Key(RunTriggerKind.PriceTarget, w.Ticker),
                     new RunTrigger(RunTriggerKind.PriceTarget,
-                        $"{w.Ticker} crossed below {low:C} at {snap.Price:C}")));
+                        $"{w.Ticker} crossed below {low:C} at {snap.Price:C}", w.Ticker)));
             else if (w.PriceTargetHigh is { } high && snap.Price >= high)
                 result.Add((Key(RunTriggerKind.PriceTarget, w.Ticker),
                     new RunTrigger(RunTriggerKind.PriceTarget,
-                        $"{w.Ticker} crossed above {high:C} at {snap.Price:C}")));
+                        $"{w.Ticker} crossed above {high:C} at {snap.Price:C}", w.Ticker)));
         }
 
         // 3) Big single-day move on any held position.
@@ -112,13 +112,14 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
             if (Math.Abs(snap.PercentChange) >= moveThreshold)
                 result.Add((Key(RunTriggerKind.BigMove, h.Ticker),
                     new RunTrigger(RunTriggerKind.BigMove,
-                        $"{h.Ticker} moved {snap.PercentChange:+0.##;-0.##}% today")));
+                        $"{h.Ticker} moved {snap.PercentChange:+0.##;-0.##}% today", h.Ticker)));
         }
 
         // 4) Drift threshold breach (worst absolute drift across holdings with targets).
         if (input.Profile.DriftPctThreshold > 0m)
         {
-            var drifts = ComputeDrifts(input.Holdings, input.LatestSnapshotsByTicker);
+            var drifts = ComputeDrifts(
+                input.Holdings, input.LatestSnapshotsByTicker, input.FxRatesToUsd, SnapshotFresh);
             if (drifts.Count > 0)
             {
                 var worst = drifts.OrderByDescending(d => Math.Abs(d.DriftPct)).First();
@@ -126,7 +127,8 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
                     && TriggerAllowedFor(LookupAssetClass(input.Holdings, worst.Ticker)))
                     result.Add((Key(RunTriggerKind.DriftThreshold, worst.Ticker),
                         new RunTrigger(RunTriggerKind.DriftThreshold,
-                            $"{worst.Ticker} drift {worst.DriftPct:+0.##;-0.##}% vs target {worst.TargetPct}%")));
+                            $"{worst.Ticker} drift {worst.DriftPct:+0.##;-0.##}% vs target {worst.TargetPct}%",
+                            worst.Ticker)));
             }
         }
 
@@ -146,14 +148,22 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
 
     private static List<DriftRow> ComputeDrifts(
         IReadOnlyList<Holding> holdings,
-        IReadOnlyDictionary<string, PriceSnapshot> snapshots)
+        IReadOnlyDictionary<string, PriceSnapshot> snapshots,
+        IReadOnlyDictionary<string, decimal>? fxRatesToUsd,
+        Func<PriceSnapshot, bool> snapshotFresh)
     {
+        // Allocation shares need a common denominator: convert each native-currency market value
+        // to USD. Stale snapshots are skipped — a drift computed off an old price would fire a
+        // run on numbers the user no longer sees anywhere else in the app.
         var totalMv = 0m;
         var perHolding = new List<(Holding h, decimal mv)>();
         foreach (var h in holdings)
         {
             if (!snapshots.TryGetValue(h.Ticker, out var snap)) continue;
-            var mv = h.Quantity * snap.Price;
+            if (!snapshotFresh(snap)) continue;
+            var currency = string.IsNullOrWhiteSpace(h.Currency) ? "USD" : h.Currency.Trim();
+            var rate = fxRatesToUsd is not null && fxRatesToUsd.TryGetValue(currency, out var r) ? r : 1m;
+            var mv = h.Quantity * snap.Price * rate;
             totalMv += mv;
             perHolding.Add((h, mv));
         }

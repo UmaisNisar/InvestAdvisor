@@ -3,7 +3,9 @@ namespace InvestAdvisor.Core.Entities;
 /// <summary>
 /// The single daily "where to invest today" recommendation produced by one consolidated LLM call
 /// across all asset classes. One row per day. The per-class picks are stored as JSON arrays of
-/// {ticker, name, reason}.
+/// {ticker, name, reason, priceAtRecommendation} — the price enables pick-vs-forward-return
+/// validation as history accrues (null on rows written before the field existed or when the
+/// quote fetch failed).
 /// </summary>
 public class DailyRecommendation
 {

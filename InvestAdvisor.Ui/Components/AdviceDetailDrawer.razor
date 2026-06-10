@@ -37,6 +37,10 @@
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                             <StanceChip Stance="p.Stance" />
                             <code>@p.Ticker</code>
+                            @if (!p.KnownTicker)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error">unknown ticker</MudChip>
+                            }
                             <MudText Typo="Typo.caption" Color="Color.Surface">@p.Conviction.ToString().ToLowerInvariant() conviction</MudText>
                             <MudText Typo="Typo.body2">@p.Reason</MudText>
                         </MudStack>
@@ -77,6 +81,10 @@
                             <code>@d.Ticker</code> at <strong>@d.CurrentPct.ToString("0.0")%</strong>
                             vs target @d.TargetPct.ToString("0.0")%
                             (drift @d.DriftPct.ToString("+0.0;-0.0"), @d.Severity)
+                            @if (!d.KnownTicker)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error">unknown ticker</MudChip>
+                            }
                         </MudText>
                         <MudText Typo="Typo.caption">@d.Note</MudText>
                     </MudPaper>

@@ -51,4 +51,39 @@ public class TickerHallucinationValidatorTests
 
         result.Flags[0].KnownTicker.Should().BeTrue();
     }
+
+    [Fact]
+    public void Position_calls_are_validated_too()
+    {
+        var input = new AgentAnalysis("summary", Array.Empty<Flag>(), Array.Empty<DriftAlert>(),
+            Array.Empty<Consideration>(), new AgentRunMetrics("m", 0, 0, 0, false),
+            new[]
+            {
+                new PositionCall("AAPL", PositionStance.Hold, PositionConviction.High, "r"),
+                new PositionCall("XYZQ", PositionStance.Add, PositionConviction.High, "r"),
+            });
+
+        var result = TickerHallucinationValidator.Validate(input, new[] { "AAPL" });
+
+        result.Positions[0].KnownTicker.Should().BeTrue();
+        result.Positions[1].KnownTicker.Should().BeFalse(); // a buy call on an invented ticker must be flagged
+    }
+
+    [Fact]
+    public void Drift_alerts_are_validated_too()
+    {
+        var input = new AgentAnalysis("summary", Array.Empty<Flag>(),
+            new[]
+            {
+                new DriftAlert(DriftSeverity.Note, "AAPL", 60m, 50m, 10m, "n"),
+                new DriftAlert(DriftSeverity.Note, "XYZQ", 60m, 50m, 10m, "n"),
+            },
+            Array.Empty<Consideration>(), new AgentRunMetrics("m", 0, 0, 0, false),
+            Array.Empty<PositionCall>());
+
+        var result = TickerHallucinationValidator.Validate(input, new[] { "AAPL" });
+
+        result.DriftAlerts[0].KnownTicker.Should().BeTrue();
+        result.DriftAlerts[1].KnownTicker.Should().BeFalse();
+    }
 }

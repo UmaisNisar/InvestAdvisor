@@ -22,7 +22,8 @@ public class TriggerEvaluatorTests
         Profile? profile = null,
         RuntimeSettings? settings = null,
         DateTime? nowUtc = null,
-        IReadOnlySet<string>? suppressedKeys = null) =>
+        IReadOnlySet<string>? suppressedKeys = null,
+        IReadOnlyDictionary<string, decimal>? fxRates = null) =>
         new(
             NowUtc: nowUtc ?? MarketOpenUtc,
             LastRunUtc: lastRun,
@@ -47,7 +48,8 @@ public class TriggerEvaluatorTests
             Watchlist: watchlist ?? Array.Empty<WatchlistItem>(),
             LatestSnapshotsByTicker: snaps ?? new Dictionary<string, PriceSnapshot>(),
             ManualOverride: manual,
-            SuppressedKeys: suppressedKeys);
+            SuppressedKeys: suppressedKeys,
+            FxRatesToUsd: fxRates);
 
     private static PriceSnapshot Snap(string ticker, decimal price, decimal pct, DateTime when,
         AssetClass ac = AssetClass.Equity, decimal? prev = null) =>
@@ -164,6 +166,53 @@ public class TriggerEvaluatorTests
         // VTI alloc = 8000/9000 = 88.89%, target 50, drift +38.89 → exceeds 5% threshold
         t!.Kind.Should().Be(RunTriggerKind.DriftThreshold);
         t.Detail.Should().Contain("VTI");
+    }
+
+    [Fact]
+    public void Drift_converts_native_currency_market_values_to_usd()
+    {
+        var sut = new TriggerEvaluator();
+        // Without FX conversion: VTI 800 vs RY.TO 800 → 50/50, zero drift, no trigger.
+        // With CAD at 0.5: VTI 800 vs RY.TO 400 → 66.7/33.3, drift ±16.7 → fires.
+        var input = Build(
+            holdings: new[]
+            {
+                new Holding { Ticker = "VTI", AssetClass = AssetClass.Etf, Quantity = 1m, AvgCost = 200m, TargetAllocationPct = 50m, Currency = "USD" },
+                new Holding { Ticker = "RY.TO", AssetClass = AssetClass.Equity, Quantity = 1m, AvgCost = 80m, TargetAllocationPct = 50m, Currency = "CAD" },
+            },
+            snaps: new Dictionary<string, PriceSnapshot>
+            {
+                ["VTI"] = Snap("VTI", 800m, 0.1m, MarketOpenUtc, AssetClass.Etf),
+                ["RY.TO"] = Snap("RY.TO", 800m, 0.1m, MarketOpenUtc),
+            },
+            fxRates: new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 1m, ["CAD"] = 0.5m });
+
+        var t = sut.Evaluate(input).Trigger;
+
+        t!.Kind.Should().Be(RunTriggerKind.DriftThreshold);
+        t.Detail.Should().Contain("VTI"); // the overweight side in USD terms
+        t.Ticker.Should().Be("VTI");
+    }
+
+    [Fact]
+    public void Drift_skips_stale_snapshots()
+    {
+        var sut = new TriggerEvaluator();
+        var stale = MarketOpenUtc.AddHours(-2); // older than MaxSnapshotAgeForTriggerSeconds (600s)
+        var input = Build(
+            lastRun: MarketOpenUtc.AddHours(-1), // min-gap satisfied, Scheduled cadence not due
+            holdings: new[]
+            {
+                new Holding { Ticker = "VTI", AssetClass = AssetClass.Etf, Quantity = 10m, AvgCost = 200m, TargetAllocationPct = 50m },
+                new Holding { Ticker = "BND", AssetClass = AssetClass.Etf, Quantity = 10m, AvgCost = 80m, TargetAllocationPct = 50m },
+            },
+            snaps: new Dictionary<string, PriceSnapshot>
+            {
+                ["VTI"] = Snap("VTI", 800m, 0.1m, stale, AssetClass.Etf),
+                ["BND"] = Snap("BND", 100m, 0.1m, stale, AssetClass.Etf),
+            });
+
+        sut.Evaluate(input).Trigger.Should().BeNull(); // stale prices must not fire drift runs
     }
 
     [Fact]
