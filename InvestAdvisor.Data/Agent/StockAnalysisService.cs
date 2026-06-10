@@ -22,11 +22,12 @@ public sealed class StockAnalysisService(
     private const int TopOpportunities = 15;
     private const int TopRisks = 10;
 
+    // Compact: this JSON is the per-stock LLM request context; indentation is billed whitespace.
     private static readonly JsonSerializerOptions _ctxJson = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = true,
+        WriteIndented = false,
     };
 
     public async Task<int> AnalyzeShortlistAsync(CancellationToken ct = default)

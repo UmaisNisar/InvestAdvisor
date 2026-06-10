@@ -1,0 +1,138 @@
+@page "/costs"
+@inject ICostService Cost
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+    <MudText Typo="Typo.h4">AI cost history</MudText>
+    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+        <MudButton Color="@(_days == 7 ? Color.Primary : Color.Default)" OnClick="@(() => Reload(7))">7d</MudButton>
+        <MudButton Color="@(_days == 30 ? Color.Primary : Color.Default)" OnClick="@(() => Reload(30))">30d</MudButton>
+        <MudButton Color="@(_days == 90 ? Color.Primary : Color.Default)" OnClick="@(() => Reload(90))">90d</MudButton>
+    </MudButtonGroup>
+</MudStack>
+
+@if (_report is null)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">
+        Estimated from each run's stored model + token counts. Figures are approximate and exclude any
+        prompt-cache discounts.
+    </MudText>
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-3" Elevation="0">
+                <MudText Typo="Typo.overline">Today</MudText>
+                <MudText Typo="Typo.h5">@_report.TodayUsd.ToString("C2")</MudText>
+                <MudText Typo="Typo.caption">@_report.TodayRuns run(s)@(BudgetSuffix())</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-3" Elevation="0">
+                <MudText Typo="Typo.overline">Last 7 days</MudText>
+                <MudText Typo="Typo.h5">@_report.Last7DaysUsd.ToString("C2")</MudText>
+                <MudText Typo="Typo.caption">@_report.Last7DaysRuns run(s)</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-3" Elevation="0">
+                <MudText Typo="Typo.overline">Last @_report.WindowDays days</MudText>
+                <MudText Typo="Typo.h5">@_report.WindowUsd.ToString("C2")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="pa-3" Elevation="0">
+                <MudText Typo="Typo.overline">Daily budget</MudText>
+                <MudText Typo="Typo.h5">@(_report.DailyBudgetUsd <= 0 ? "—" : _report.DailyBudgetUsd.ToString("C2"))</MudText>
+                <MudText Typo="Typo.caption">@(_report.DailyBudgetUsd <= 0 ? "unlimited" : "per UTC day")</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            @Breakdown("By source", _report.BySource)
+        </MudItem>
+        <MudItem xs="12" md="6">
+            @Breakdown("By trigger (portfolio runs)", _report.ByTrigger)
+        </MudItem>
+        <MudItem xs="12" md="6">
+            @Breakdown("By model", _report.ByModel)
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-3" Elevation="0">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Daily spend</MudText>
+                @if (_report.Daily.Count == 0)
+                {
+                    <MudText Typo="Typo.body2">No runs in this window.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead>
+                            <tr><th>Date (UTC)</th><th style="text-align:right">Runs</th><th style="text-align:right">Cost</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in _report.Daily)
+                            {
+                                <tr>
+                                    <td>@d.Date.ToString("yyyy-MM-dd")</td>
+                                    <td style="text-align:right">@d.Runs</td>
+                                    <td style="text-align:right">@d.Usd.ToString("C2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private CostReport? _report;
+    private int _days = 30;
+
+    protected override Task OnInitializedAsync() => Reload(_days);
+
+    private async Task Reload(int days)
+    {
+        _days = days;
+        _report = null;
+        try { _report = await Cost.GetReportAsync(days); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private string BudgetSuffix() =>
+        _report is { DailyBudgetUsd: > 0 } r ? $" · {r.TodayUsd / r.DailyBudgetUsd:P0} of budget" : string.Empty;
+
+    private RenderFragment Breakdown(string title, IReadOnlyList<CostLine> lines) =>@<MudPaper Class="pa-3" Elevation="0">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@title</MudText>
+        @if (lines.Count == 0)
+        {
+            <MudText Typo="Typo.body2">No runs in this window.</MudText>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true">
+                <thead>
+                    <tr><th>Bucket</th><th style="text-align:right">Runs</th><th style="text-align:right">Tokens (in/out)</th><th style="text-align:right">Cost</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var l in lines)
+                    {
+                        <tr>
+                            <td>@l.Label</td>
+                            <td style="text-align:right">@l.Runs</td>
+                            <td style="text-align:right">@($"{l.InputTokens:N0} / {l.OutputTokens:N0}")</td>
+                            <td style="text-align:right">@l.Usd.ToString("C2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>;
+}

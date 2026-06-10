@@ -21,6 +21,22 @@ public static class SystemPrompts
         "supports holding. This is decision support for one person who makes all final decisions.";
 
     /// <summary>
+    /// Leaner prompt used for condition-triggered runs (big move / price target / drift). A specific
+    /// event fired, so the model focuses on the affected ticker instead of re-rating every holding —
+    /// this keeps the (expensive) output small. Uses the same emit_analysis tool, so parsing is shared.
+    /// </summary>
+    public const string LeanTriggerDefault =
+        "You are an investment research assistant reviewing ONE triggering event for an investor's " +
+        "portfolio, supplied as structured data. A specific condition fired (a big single-day move, a " +
+        "watchlist price-target cross, or an allocation drift past the user's threshold). Focus your " +
+        "analysis on the affected ticker and anything directly related to it. Base every conclusion only " +
+        "on the supplied data; never predict prices or claim certainty; if the data is insufficient, say " +
+        "so. Keep the summary, flags, and considerations short and specific to what changed. In " +
+        "'positions', emit a stance (add/hold/trim/sell) with a conviction and one specific, " +
+        "evidence-based reason ONLY for the holding(s) the trigger materially affects — you do NOT need " +
+        "to re-rate every holding on this run. This is decision support for one person who decides.";
+
+    /// <summary>
     /// System prompt for the screener's per-stock analysis. More opinionated than the portfolio
     /// prompt (it builds an explicit bull/bear case and a conviction) but still grounded only in
     /// the supplied data, with no price predictions and a clear not-advice stance.

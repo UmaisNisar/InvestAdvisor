@@ -109,6 +109,19 @@ public sealed class ScreenerWorker(
             var dbFactory = sp.GetRequiredService<IDbContextFactory<InvestAdvisorDbContext>>();
             var rec = sp.GetRequiredService<IDailyRecommendationService>();
 
+            // Same cost guards as the agent loop: pause and the daily budget hold off the (LLM) daily rec.
+            var settings = await sp.GetRequiredService<IRuntimeSettingsStore>().GetAsync(ct);
+            if (settings.AgentPaused)
+            {
+                logger.LogInformation("Agent is paused; skipping daily recommendation.");
+                return;
+            }
+            if (await sp.GetRequiredService<ICostService>().IsOverDailyBudgetAsync(ct))
+            {
+                logger.LogWarning("Daily AI budget (${Budget}) reached; skipping daily recommendation.", settings.DailyBudgetUsd);
+                return;
+            }
+
             List<int> tenantIds;
             await using (var db = await dbFactory.CreateDbContextAsync(ct))
                 tenantIds = await db.Tenants.AsNoTracking().Select(t => t.Id).ToListAsync(ct);
