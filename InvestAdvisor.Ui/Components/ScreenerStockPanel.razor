@@ -94,6 +94,7 @@
         yield return ("Momentum", f.Momentum, "13- and 26-week price return (7- and 30-day for crypto). Higher = stronger recent trend.");
         yield return ("Quality", f.Quality, "Balance-sheet strength — lower debt/equity ranks higher. (For ETFs: lower beta; crypto: market-cap size.)");
         yield return ("Insider", f.Insider, "Net insider buying over the last ~90 days (SEC Form 4). Higher = more insider accumulation.");
+        yield return ("Sentiment", f.Sentiment, "News + social-media sentiment over the last ~72h, LLM-graded and percentile-ranked. Higher = more bullish chatter. A soft, fast-moving signal.");
     }
 
     private static Color ScoreColor(decimal s) => s >= 60m ? Color.Success : s >= 45m ? Color.Default : Color.Error;

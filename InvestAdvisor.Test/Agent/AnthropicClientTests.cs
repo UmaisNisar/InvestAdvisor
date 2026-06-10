@@ -109,7 +109,7 @@ public class AnthropicClientTests
           "type": "message",
           "model": "claude-sonnet-4-6",
           "content": [
-            { "type": "text", "text": "Sorry — here is JSON: {{fallbackJson.Replace("\"", "\\\"").Replace("\n", "\\n")}}" }
+            { "type": "text", "text": "Sorry — here is JSON: {{fallbackJson.Replace("\r", "").Replace("\"", "\\\"").Replace("\n", "\\n")}}" }
           ],
           "usage": { "input_tokens": 1, "output_tokens": 2 }
         }
@@ -218,6 +218,80 @@ public class AnthropicClientTests
         var (sut, _) = BuildSut(MinimalToolUseResponse());
         var result = await sut.AnalyzeAsync("p", "{}");
         result.Analysis.Positions.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public async Task ScoreSentiment_parses_scores_by_index_from_tool_use()
+    {
+        var responseBody = """
+        {
+          "type": "message",
+          "model": "claude-haiku-4-5",
+          "stop_reason": "tool_use",
+          "content": [
+            { "type": "tool_use", "id": "t1", "name": "emit_sentiment_scores",
+              "input": {
+                "scores": [
+                  { "index": 0, "score": 0.8, "label": "bullish" },
+                  { "index": 1, "score": -0.6, "label": "bearish" },
+                  { "index": 2, "score": 0.0, "label": "neutral" }
+                ]
+              }
+            }
+          ],
+          "usage": { "input_tokens": 10, "output_tokens": 5 }
+        }
+        """;
+        var (sut, _) = BuildSut(responseBody);
+
+        var result = await sut.ScoreSentimentAsync(new[] { "AAPL: up big", "TSLA: recall", "MSFT: filing" });
+
+        result.Scores.Should().HaveCount(3);
+        result.Scores.Single(s => s.Index == 0).Score.Should().Be(0.8m);
+        result.Scores.Single(s => s.Index == 0).Label.Should().Be("bullish");
+        result.Scores.Single(s => s.Index == 1).Score.Should().Be(-0.6m);
+        result.Model.Should().Be("claude-haiku-4-5");
+        result.ParseFallbackUsed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ScoreSentiment_uses_routine_model_and_forces_tool()
+    {
+        var (sut, handler) = BuildSut("""
+        {
+          "type": "message", "model": "claude-haiku-4-5", "content": [
+            { "type": "tool_use", "id": "t1", "name": "emit_sentiment_scores", "input": { "scores": [] } }
+          ], "usage": { "input_tokens": 1, "output_tokens": 1 }
+        }
+        """);
+
+        await sut.ScoreSentimentAsync(new[] { "AAPL: news" });
+
+        handler.LastRequestBody.Should().Contain("claude-haiku-4-5");      // routine model, not primary
+        handler.LastRequestBody.Should().Contain("emit_sentiment_scores");
+        handler.LastRequestBody.Should().Contain("\"tool_choice\"");
+    }
+
+    [Fact]
+    public async Task ScoreSentiment_clamps_out_of_range_and_falls_back_to_text_json()
+    {
+        // No tool_use block — scorer must extract the JSON object from text content.
+        var responseBody = """
+        {
+          "type": "message",
+          "model": "claude-haiku-4-5",
+          "content": [
+            { "type": "text", "text": "Here: { \"scores\": [ { \"index\": 0, \"score\": 5, \"label\": \"bullish\" } ] }" }
+          ],
+          "usage": { "input_tokens": 1, "output_tokens": 1 }
+        }
+        """;
+        var (sut, _) = BuildSut(responseBody);
+
+        var result = await sut.ScoreSentimentAsync(new[] { "AAPL: moon" });
+
+        result.ParseFallbackUsed.Should().BeTrue();
+        result.Scores.Single().Score.Should().Be(1m); // clamped from 5 to +1
     }
 
     private static string MinimalToolUseResponse() => """

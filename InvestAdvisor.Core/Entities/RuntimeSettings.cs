@@ -36,6 +36,8 @@ public class RuntimeSettings
     public int WeightAnalyst { get; set; } = 20;
     public int WeightInsider { get; set; } = 10;
     public int WeightMomentum { get; set; } = 15;
+    /// <summary>News + social-media sentiment factor (LLM-graded over a recent window).</summary>
+    public int WeightSentiment { get; set; } = 10;
 
     // Optional sources for auto-importing holdings (e.g. a Wealthsimple export). When set, the
     // import worker pulls them on its daily cycle; manual import via the Settings buttons works

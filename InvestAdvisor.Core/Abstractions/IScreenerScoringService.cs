@@ -28,7 +28,8 @@ public sealed record FactorScores(
     decimal? Quality,
     decimal? Analyst,
     decimal? Insider,
-    decimal? Momentum);
+    decimal? Momentum,
+    decimal? Sentiment);
 
 /// <summary>The underlying numbers, surfaced for display, digests, and the LLM context.</summary>
 public sealed record StockSnapshot(

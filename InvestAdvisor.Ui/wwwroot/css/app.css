@@ -252,7 +252,10 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
 /* No top bar on desktop — the collapsible rail carries the brand, nav, theme and
    status, so reclaim the full top band for content. */
 @media (min-width: 960px) {
-    .mud-main-content { padding-top: 0 !important; }
+    /* No top bar: zero the content's appbar-height padding, but contain the page
+       container's top margin (flow-root) so it doesn't collapse out and push the whole
+       layout — rail included — down by ~24px. */
+    .mud-main-content { padding-top: 0 !important; display: flow-root; }
     /* The phone nav overlay never shows on desktop. */
     .ia-mobile-nav { display: none !important; }
 }

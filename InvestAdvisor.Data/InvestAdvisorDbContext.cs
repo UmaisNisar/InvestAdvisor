@@ -23,6 +23,7 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<StockAnalysis> StockAnalyses => Set<StockAnalysis>();
     public DbSet<ScreenerScore> ScreenerScores => Set<ScreenerScore>();
     public DbSet<DailyRecommendation> DailyRecommendations => Set<DailyRecommendation>();
+    public DbSet<SentimentRun> SentimentRuns => Set<SentimentRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

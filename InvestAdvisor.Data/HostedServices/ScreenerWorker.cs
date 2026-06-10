@@ -45,6 +45,8 @@ public sealed class ScreenerWorker(
                     await scope.ServiceProvider.GetRequiredService<IScreenerSyncService>().SyncAsync(stoppingToken);
                 }
 
+                await RefreshSocialAsync(stoppingToken);
+                await ScoreSentimentAsync(stoppingToken);
                 await RankAndLogAsync(stoppingToken);
                 await RunDailyRecommendationAsync(stoppingToken);
             }
@@ -54,6 +56,28 @@ public sealed class ScreenerWorker(
             try { await Task.Delay(CheckInterval, stoppingToken); }
             catch (OperationCanceledException) { return; }
         }
+    }
+
+    private async Task RefreshSocialAsync(CancellationToken ct)
+    {
+        try
+        {
+            await using var scope = services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<ISocialRefreshService>().RefreshAsync(ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { logger.LogWarning(ex, "Social refresh failed; continuing with existing posts."); }
+    }
+
+    private async Task ScoreSentimentAsync(CancellationToken ct)
+    {
+        try
+        {
+            await using var scope = services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<ISentimentScoringService>().ScoreUnscoredAsync(ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { logger.LogWarning(ex, "Sentiment scoring failed; ranking will use prior scores."); }
     }
 
     private async Task RankAndLogAsync(CancellationToken ct)
