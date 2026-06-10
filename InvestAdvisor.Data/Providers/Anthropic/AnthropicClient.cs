@@ -35,9 +35,10 @@ public sealed class AnthropicClient(
     public async Task<AnthropicAnalysisResult> AnalyzeAsync(
         string systemPrompt,
         string runContextJson,
+        string? model = null,
         CancellationToken ct = default)
     {
-        var body = BuildRequestBody(systemPrompt, runContextJson);
+        var body = BuildRequestBody(systemPrompt, runContextJson, model);
         var (parsed, rawBody, latencyMs) = await SendAsync(body, ct);
         var (analysis, fallbackUsed) = ParseAnalysis(parsed, rawBody);
 
@@ -128,11 +129,11 @@ public sealed class AnthropicClient(
         return (parsed, rawBody, (int)sw.ElapsedMilliseconds);
     }
 
-    private JsonObject BuildRequestBody(string systemPrompt, string runContextJson)
+    private JsonObject BuildRequestBody(string systemPrompt, string runContextJson, string? model = null)
     {
         var body = new JsonObject
         {
-            ["model"] = _opts.Model,
+            ["model"] = string.IsNullOrWhiteSpace(model) ? _opts.Model : model,
             ["max_tokens"] = _opts.MaxTokens,
             ["system"] = systemPrompt,
             ["messages"] = new JsonArray

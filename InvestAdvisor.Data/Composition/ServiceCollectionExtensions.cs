@@ -104,6 +104,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IContextAssembler, ContextAssembler>();
         services.AddScoped<IAgentService, AgentService>();
+        services.AddScoped<ICostService, CostService>();
         services.AddScoped<IPriceRefreshService, PriceRefreshService>();
         services.AddScoped<INewsRefreshService, NewsRefreshService>();
 

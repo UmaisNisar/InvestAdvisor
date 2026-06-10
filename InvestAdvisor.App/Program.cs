@@ -64,7 +64,11 @@ public static class Program
 
         builder.Services.AddInvestAdvisor(configuration);
         builder.Services.AddMudServices();
-        builder.Services.AddHostedService<InvestAdvisorWorker>();
+
+        // The desktop app is launched explicitly, so the credit-spending worker defaults on; set
+        // Scheduler:WorkerEnabled=false to run the UI without the agent loop.
+        if (configuration.GetValue($"{InvestAdvisor.Core.Options.SchedulerOptions.SectionName}:WorkerEnabled", true))
+            builder.Services.AddHostedService<InvestAdvisorWorker>();
     }
 
     private static IConfiguration BuildConfiguration() =>

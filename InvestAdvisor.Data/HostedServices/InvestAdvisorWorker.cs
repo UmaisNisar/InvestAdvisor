@@ -102,6 +102,23 @@ public sealed class InvestAdvisorWorker(
                 if (!latestSnaps.ContainsKey(s.Ticker)) latestSnaps[s.Ticker] = s;
         }
 
+        // Cost guards: a manual pause or the daily budget short-circuits the LLM-spending part of the
+        // tick. Price/news refresh above still ran, so the dashboard stays fresh while runs are held.
+        if (settings.AgentPaused)
+        {
+            logger.LogInformation("Agent is paused; skipping trigger evaluation and runs this tick.");
+            return tickInterval;
+        }
+
+        var cost = sp.GetRequiredService<ICostService>();
+        if (await cost.IsOverDailyBudgetAsync(ct))
+        {
+            logger.LogWarning(
+                "Daily AI budget (${Budget}) reached; skipping agent runs until UTC midnight.",
+                settings.DailyBudgetUsd);
+            return tickInterval;
+        }
+
         // --- Per-tenant: evaluate triggers against that tenant's portfolio, run the agent if fired. ---
         foreach (var tenant in tenants)
         {

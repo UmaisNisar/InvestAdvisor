@@ -3,6 +3,7 @@ using System;
 using InvestAdvisor.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvestAdvisor.Data.Migrations
 {
     [DbContext(typeof(InvestAdvisorDbContext))]
-    partial class InvestAdvisorDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260610141556_LowerDefaultRunFrequency")]
+    partial class LowerDefaultRunFrequency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
@@ -473,12 +476,6 @@ namespace InvestAdvisor.Data.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("INTEGER");
 
-                    b.Property<bool>("AgentPaused")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("DailyBudgetUsd")
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("DarkMode")
                         .HasColumnType("INTEGER");
 
@@ -561,8 +558,6 @@ namespace InvestAdvisor.Data.Migrations
                         new
                         {
                             Id = 1,
-                            AgentPaused = false,
-                            DailyBudgetUsd = 2m,
                             DarkMode = false,
                             EmailEnabled = false,
                             MarketHoursOnly = true,

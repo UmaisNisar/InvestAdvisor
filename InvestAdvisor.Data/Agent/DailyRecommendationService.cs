@@ -24,11 +24,13 @@ public sealed class DailyRecommendationService(
     private const int EtfCandidates = 8;
     private const int CryptoCandidates = 8;
 
+    // Compact: this JSON is the LLM request context, so indentation would just be billed
+    // whitespace. (SerializePicks below uses its own default serializer for stored columns.)
     private static readonly JsonSerializerOptions _json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = true,
+        WriteIndented = false,
     };
 
     public async Task<bool> GenerateAsync(int tenantId, bool force = false, CancellationToken ct = default)

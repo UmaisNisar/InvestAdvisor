@@ -8,9 +8,14 @@ public interface IAnthropicClient
     /// Sends one analysis request to the Anthropic Messages API and returns the parsed result
     /// alongside the raw response body for AdviceLog persistence.
     /// </summary>
+    /// <param name="model">
+    /// Optional model-id override (e.g. a cheaper routine model). Falls back to the configured
+    /// primary model when null/blank.
+    /// </param>
     Task<AnthropicAnalysisResult> AnalyzeAsync(
         string systemPrompt,
         string runContextJson,
+        string? model = null,
         CancellationToken ct = default);
 
     /// <summary>

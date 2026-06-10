@@ -9,8 +9,19 @@ public class RuntimeSettings
     public int TickIntervalSeconds { get; set; } = 300;
     public bool MarketHoursOnly { get; set; } = true;
     public string TimeZoneId { get; set; } = "America/New_York";
-    public int MaxRunsPerDay { get; set; } = 24;
-    public int MinSecondsBetweenRuns { get; set; } = 900;
+    public int MaxRunsPerDay { get; set; } = 12;
+    public int MinSecondsBetweenRuns { get; set; } = 1800;
+
+    /// <summary>Master kill switch: when true, the worker skips all AI analysis runs (no LLM spend).</summary>
+    public bool AgentPaused { get; set; }
+
+    /// <summary>
+    /// Hard daily spend ceiling in USD for AI calls. When today's estimated spend reaches this,
+    /// worker-triggered runs and the daily recommendation are skipped until UTC midnight. Manual
+    /// "Run now" still works. 0 = unlimited.
+    /// </summary>
+    public decimal DailyBudgetUsd { get; set; } = 2m;
+
     public int MaxSnapshotAgeForTriggerSeconds { get; set; } = 600;
     public int MinPriceFreshnessSeconds { get; set; } = 60;
 
