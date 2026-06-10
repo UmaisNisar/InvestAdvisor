@@ -50,7 +50,10 @@ public sealed class YahooQuoteProvider(
             return null;
         }
 
-        var prev = meta.ChartPreviousClose ?? meta.PreviousClose ?? price;
+        // Use previousClose (the actual prior-session close) for the daily change. chartPreviousClose
+        // is the close *before the requested range* — with range=5d that's ~a week ago, which would
+        // turn this into a 5-day return rather than today's change.
+        var prev = meta.PreviousClose ?? meta.ChartPreviousClose ?? price;
         var pct = prev == 0m ? 0m : (price - prev) / prev * 100m;
         return new Quote(ticker.ToUpperInvariant(), assetClass, price, prev, pct, clock.UtcNow);
     }
