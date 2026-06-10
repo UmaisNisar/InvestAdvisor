@@ -16,7 +16,7 @@ else
                    OnClick="@(() => OpenEdit(null))">Add item</MudButton>
     </MudStack>
 
-    <MudTable Items="_items" Dense="true" Hover="true" HorizontalScrollbar="true">
+    <MudTable Items="_items" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.Sm">
         <HeaderContent>
             <MudTh>Ticker</MudTh>
             <MudTh>Class</MudTh>
@@ -26,12 +26,12 @@ else
             <MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd><code>@context.Ticker</code></MudTd>
-            <MudTd>@context.AssetClass</MudTd>
-            <MudTd>@context.Note</MudTd>
-            <MudTd Style="text-align:right">@(context.PriceTargetLow?.ToString("C2") ?? "—")</MudTd>
-            <MudTd Style="text-align:right">@(context.PriceTargetHigh?.ToString("C2") ?? "—")</MudTd>
-            <MudTd>
+            <MudTd DataLabel="Ticker"><code>@context.Ticker</code></MudTd>
+            <MudTd DataLabel="Class">@context.AssetClass</MudTd>
+            <MudTd DataLabel="Note">@context.Note</MudTd>
+            <MudTd DataLabel="Target low" Style="text-align:right">@(context.PriceTargetLow?.ToString("C2") ?? "—")</MudTd>
+            <MudTd DataLabel="Target high" Style="text-align:right">@(context.PriceTargetHigh?.ToString("C2") ?? "—")</MudTd>
+            <MudTd DataLabel="">
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenEdit(context))" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => Delete(context))" />
             </MudTd>

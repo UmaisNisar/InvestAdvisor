@@ -6,8 +6,9 @@
 
 <MudLayout>
     <MudAppBar Color="Color.Default" Elevation="0">
+        @* Hamburger drives the desktop drawer; on phones the bottom tab bar's "More" opens it. *@
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                       OnClick="ToggleDrawer" Title="Toggle menu" Class="mr-1" />
+                       OnClick="ToggleDrawer" Title="Toggle menu" Class="mr-1 d-none d-md-inline-flex" />
         <MudText Typo="Typo.h6" Style="font-weight:600;letter-spacing:-.01em;">InvestAdvisor</MudText>
         <MudSpacer />
         @if (!string.IsNullOrEmpty(_email))
@@ -31,6 +32,7 @@
             @Body
         </MudContainer>
     </MudMainContent>
+    <BottomNav OnMore="OpenDrawer" />
 </MudLayout>
 
 @code {
@@ -40,6 +42,8 @@
     [CascadingParameter] private Root? RootComponent { get; set; }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void OpenDrawer() => _drawerOpen = true;
 
     protected override void OnInitialized()
     {

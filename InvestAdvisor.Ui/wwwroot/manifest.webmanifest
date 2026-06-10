@@ -1,0 +1,19 @@
+{
+  "name": "InvestAdvisor",
+  "short_name": "InvestAdvisor",
+  "description": "Your portfolio advisor and market screener.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0F19",
+  "theme_color": "#0B0F19",
+  "icons": [
+    {
+      "src": "_content/InvestAdvisor.Ui/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
