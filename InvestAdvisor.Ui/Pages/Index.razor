@@ -8,6 +8,7 @@
 @inject IProfileService Profiles
 @inject IDailyRecommendationService Recommender
 @inject IHoldingsService HoldingsSvc
+@inject ITenantContext Tenant
 @implements IDisposable
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
@@ -379,8 +380,9 @@ else
         try
         {
             Snackbar.Add("Running both modules — holdings analysis + where to invest…", Severity.Info);
-            await Agent.RunNowAsync("Dashboard Run now");      // 1) holdings analysis
-            await Recommender.GenerateAsync(force: true);       // 2) what to invest in
+            var tid = await Tenant.GetTenantIdAsync();
+            await Agent.RunNowAsync(tid, "Dashboard Run now");  // 1) holdings analysis
+            await Recommender.GenerateAsync(tid, force: true);  // 2) what to invest in
             Snackbar.Add("Done — holdings advice and today's picks updated.", Severity.Success);
             await Reload();
             await LoadRecommendation();

@@ -2,6 +2,7 @@
 @inject IPortfolioQueries Queries
 @implements IDisposable
 @inject IRunEventBus Bus
+@inject ITenantContext Tenant
 
 <MudLayout>
     <MudAppBar Color="Color.Default" Elevation="0">
@@ -10,6 +11,13 @@
                        OnClick="ToggleDrawer" Title="Toggle menu" Class="mr-1 d-none d-md-inline-flex" />
         <MudText Typo="Typo.h6" Style="font-weight:600;letter-spacing:-.01em;">InvestAdvisor</MudText>
         <MudSpacer />
+        @if (!string.IsNullOrEmpty(_email))
+        {
+            <MudTooltip Text="@($"Signed in as {_email}")">
+                <MudChip T="string" Icon="@Icons.Material.Outlined.AccountCircle" Size="Size.Small"
+                         Variant="Variant.Text" Color="Color.Default" Class="d-none d-sm-flex mr-1">@_email</MudChip>
+            </MudTooltip>
+        }
         <MudIconButton Icon="@(RootComponent?.IsDarkMode == true ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
                        Color="Color.Inherit" Edge="Edge.End" OnClick="ToggleTheme"
                        Title="Toggle light/dark" Class="mr-2" />
@@ -29,6 +37,7 @@
 
 @code {
     private bool _drawerOpen = true;
+    private string? _email;
 
     [CascadingParameter] private Root? RootComponent { get; set; }
 
@@ -39,6 +48,12 @@
     protected override void OnInitialized()
     {
         Bus.RunCompleted += OnRunCompleted;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _email = (await Tenant.GetCurrentAsync()).Email; }
+        catch { /* no authenticated user (shouldn't happen behind Cloudflare) */ }
     }
 
     private async Task ToggleTheme()

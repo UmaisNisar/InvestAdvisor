@@ -14,9 +14,10 @@ public class ContextAssemblerTests
 {
     private static readonly DateTime Now = new(2026, 6, 1, 14, 30, 0, DateTimeKind.Utc);
     private static readonly RunTrigger DummyTrigger = new(RunTriggerKind.Scheduled, "test");
+    private const int TestTenant = 0; // matches the default TenantId on the seeded holdings/watchlist
 
     private static (ContextAssembler assembler, SqliteFixture db, FakeSystemClock clock)
-        BuildSut(int minFreshnessSec = 3600)
+        BuildSut(int minFreshnessSec = 3600, decimal cadToUsd = 1m)
     {
         var db = new SqliteFixture();
         var clock = new FakeSystemClock(Now);
@@ -28,7 +29,17 @@ public class ContextAssemblerTests
                  MinPriceFreshnessSeconds = minFreshnessSec,
              }));
         var fx = Substitute.For<IFxRateProvider>();
-        fx.GetRateToUsdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(1m));
+        fx.GetRateToUsdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+          .Returns(ci => Task.FromResult(ci.Arg<string>().Equals("CAD", StringComparison.OrdinalIgnoreCase) ? cadToUsd : 1m));
+
+        // The singleton-profile seed is gone post multi-tenancy; seed the test tenant's profile
+        // (TenantId 0, matching the default on the holdings/watchlist these tests add).
+        using (var c = db.CreateContext())
+        {
+            c.Profiles.Add(new Profile { TenantId = TestTenant, GoalsText = "test goals", UpdatedAtUtc = Now });
+            c.SaveChanges();
+        }
+
         var assembler = new ContextAssembler(db.Factory, store, clock, fx);
         return (assembler, db, clock);
     }
@@ -39,7 +50,7 @@ public class ContextAssemblerTests
         var (sut, db, _) = BuildSut();
         await using var _db = db;
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         ctx.Holdings.Should().BeEmpty();
         ctx.Totals.MarketValueUsd.Should().Be(0m);
@@ -72,7 +83,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         var h = ctx.Holdings.Single();
         h.Price.Should().Be(200m);
@@ -88,6 +99,38 @@ public class ContextAssemblerTests
         ctx.Totals.UnrealizedPnlUsd.Should().Be(500m);
         ctx.Totals.TodaysChangeUsd.Should().Be(100m);          // 10*(200-190)
         ctx.Totals.TodaysChangePct.Should().BeApproximately(5.263m, 0.01m); // 100 / 1900 * 100
+    }
+
+    [Fact]
+    public async Task Cad_holding_is_converted_to_usd_using_fx_rate()
+    {
+        var (sut, db, _) = BuildSut(cadToUsd: 0.5m); // 1 CAD = 0.50 USD
+        await using var _db = db;
+
+        using (var c = db.CreateContext())
+        {
+            c.Holdings.Add(new Holding
+            {
+                Ticker = "RY.TO", Name = "Royal Bank", AssetClass = AssetClass.Equity,
+                AccountType = AccountType.Taxable, Quantity = 10m, AvgCost = 100m, Currency = "CAD",
+            });
+            c.PriceSnapshots.Add(new PriceSnapshot
+            {
+                Ticker = "RY.TO", AssetClass = AssetClass.Equity,
+                Price = 120m, PreviousClose = 120m, PercentChange = 0m, FetchedAtUtc = Now.AddMinutes(-1),
+            });
+            c.SaveChanges();
+        }
+
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
+
+        var h = ctx.Holdings.Single();
+        h.Price.Should().Be(120m);            // native CAD price is left as-is
+        h.Currency.Should().Be("CAD");
+        h.MarketValueUsd.Should().Be(600m);   // 10 * 120 * 0.50
+        h.UnrealizedPnlUsd.Should().Be(100m); // (10*120 - 10*100) * 0.50
+        ctx.Totals.MarketValueUsd.Should().Be(600m);
+        ctx.Totals.CostBasisUsd.Should().Be(500m); // 10*100*0.50
     }
 
     [Fact]
@@ -112,7 +155,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
         // MV: VTI = 2500, BND = 750, total = 3250
         // VTI alloc = 76.92, target 70 -> drift +6.92
         // BND alloc = 23.08, target 30 -> drift -6.92
@@ -147,7 +190,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         var h = ctx.Holdings.Single();
         h.Price.Should().BeNull();
@@ -185,7 +228,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         ctx.RecentNews.Count.Should().BeLessThanOrEqualTo(25);
         ctx.RecentNews.Should().NotContain(n => n.Headline == "very old");
@@ -214,7 +257,7 @@ public class ContextAssemblerTests
             c.SaveChanges();
         }
 
-        var ctx = await sut.BuildAsync(DummyTrigger);
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
         ctx.TopMovers.Should().HaveCount(5);
         var tickers = ctx.TopMovers.Select(m => m.Ticker).ToArray();

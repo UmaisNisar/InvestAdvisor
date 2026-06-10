@@ -8,12 +8,12 @@ public interface IAgentService
     /// Runs the agent once for the given trigger: assembles context, calls Anthropic,
     /// persists the AdviceLog row, and returns its id.
     /// </summary>
-    Task<long> RunAsync(RunTrigger trigger, CancellationToken ct = default);
+    Task<long> RunAsync(int tenantId, RunTrigger trigger, CancellationToken ct = default);
 
     /// <summary>
-    /// Runs immediately as <see cref="Enums.RunTriggerKind.Manual"/>. The worker UI uses this.
+    /// Runs immediately as <see cref="Enums.RunTriggerKind.Manual"/> for the given tenant.
     /// </summary>
-    Task<long> RunNowAsync(string? note, CancellationToken ct = default);
+    Task<long> RunNowAsync(int tenantId, string? note, CancellationToken ct = default);
 
     /// <summary>
     /// "Re-run with this prompt": loads the original AdviceLog's StructuredInputJson and

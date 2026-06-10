@@ -105,11 +105,27 @@ public sealed class ScreenerWorker(
         try
         {
             await using var scope = services.CreateAsyncScope();
-            var generated = await scope.ServiceProvider.GetRequiredService<IDailyRecommendationService>().GenerateAsync(ct: ct);
-            if (generated) logger.LogInformation("Daily 'where to invest' recommendation generated.");
+            var sp = scope.ServiceProvider;
+            var dbFactory = sp.GetRequiredService<IDbContextFactory<InvestAdvisorDbContext>>();
+            var rec = sp.GetRequiredService<IDailyRecommendationService>();
+
+            List<int> tenantIds;
+            await using (var db = await dbFactory.CreateDbContextAsync(ct))
+                tenantIds = await db.Tenants.AsNoTracking().Select(t => t.Id).ToListAsync(ct);
+
+            foreach (var tenantId in tenantIds)
+            {
+                try
+                {
+                    var generated = await rec.GenerateAsync(tenantId, ct: ct);
+                    if (generated) logger.LogInformation("Daily recommendation generated for tenant {Tenant}.", tenantId);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { logger.LogWarning(ex, "Daily recommendation failed for tenant {Tenant}.", tenantId); }
+            }
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { logger.LogWarning(ex, "Daily recommendation failed."); }
+        catch (Exception ex) { logger.LogWarning(ex, "Daily recommendation loop failed."); }
     }
 
     private async Task<bool> IsSyncDueAsync(CancellationToken ct)

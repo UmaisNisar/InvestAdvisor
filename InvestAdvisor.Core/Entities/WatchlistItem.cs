@@ -5,6 +5,7 @@ namespace InvestAdvisor.Core.Entities;
 public class WatchlistItem
 {
     public int Id { get; set; }
+    public int TenantId { get; set; }
     public string Ticker { get; set; } = string.Empty;
     public AssetClass AssetClass { get; set; }
     public string? Note { get; set; }

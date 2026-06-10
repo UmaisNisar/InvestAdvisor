@@ -10,7 +10,8 @@ namespace InvestAdvisor.Data.Queries;
 
 public sealed class PortfolioQueries(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    IFxRateProvider fx) : IPortfolioQueries
+    IFxRateProvider fx,
+    ITenantContext tenant) : IPortfolioQueries
 {
     private static readonly JsonSerializerOptions _camel = new()
     {
@@ -20,9 +21,10 @@ public sealed class PortfolioQueries(
 
     public async Task<DashboardSnapshot> GetDashboardAsync(CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var holdings = await db.Holdings.AsNoTracking().OrderBy(h => h.Ticker).ToListAsync(ct);
+        var holdings = await db.Holdings.AsNoTracking().Where(h => h.TenantId == tid).OrderBy(h => h.Ticker).ToListAsync(ct);
         var tickers = holdings.Select(h => h.Ticker).Distinct().ToArray();
 
         var allSnaps = await db.PriceSnapshots.AsNoTracking()
@@ -44,6 +46,7 @@ public sealed class PortfolioQueries(
             .ToArray();
 
         var latestAdvice = await db.AdviceLogs.AsNoTracking()
+            .Where(a => a.TenantId == tid)
             .OrderByDescending(a => a.TimestampUtc)
             .FirstOrDefaultAsync(ct);
 
@@ -64,10 +67,12 @@ public sealed class PortfolioQueries(
 
     public async Task<AdvicePage> GetAdvicePageAsync(int skip, int take, CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var total = await db.AdviceLogs.AsNoTracking().CountAsync(ct);
+        var total = await db.AdviceLogs.AsNoTracking().CountAsync(a => a.TenantId == tid, ct);
         var rows = await db.AdviceLogs.AsNoTracking()
+            .Where(a => a.TenantId == tid)
             .OrderByDescending(a => a.TimestampUtc)
             .Skip(skip)
             .Take(take)
@@ -96,8 +101,9 @@ public sealed class PortfolioQueries(
 
     public async Task<AdviceLogDetailView?> GetAdviceDetailAsync(long id, CancellationToken ct = default)
     {
+        var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var row = await db.AdviceLogs.AsNoTracking().SingleOrDefaultAsync(a => a.Id == id, ct);
+        var row = await db.AdviceLogs.AsNoTracking().SingleOrDefaultAsync(a => a.Id == id && a.TenantId == tid, ct);
         if (row is null) return null;
 
         return new AdviceLogDetailView(

@@ -4,6 +4,7 @@
 @inject IRuntimeSettingsStore SettingsStore
 @inject IHoldingsService HoldingsService
 @inject IHoldingsImportService HoldingsImport
+@inject ITenantContext Tenant
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
@@ -221,7 +222,7 @@
             using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync();
 
-            var result = await HoldingsImport.ImportCsvAsync(content);
+            var result = await HoldingsImport.ImportCsvAsync(await Tenant.GetTenantIdAsync(), content);
             if (result.Errors.Count > 0)
                 Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
             else
@@ -243,7 +244,7 @@
         try
         {
             await SaveSettings(); // persist the URL/path so the daily worker uses them too
-            var result = await HoldingsImport.ImportFromUrlAsync(_settings.HoldingsCsvUrl);
+            var result = await HoldingsImport.ImportFromUrlAsync(await Tenant.GetTenantIdAsync(), _settings.HoldingsCsvUrl);
             if (result.Errors.Count > 0)
                 Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors[0]}", Severity.Warning);
             else

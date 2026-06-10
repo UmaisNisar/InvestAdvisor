@@ -119,6 +119,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITickerSearchService, TickerSearchService>();
         services.AddScoped<IWatchlistService, WatchlistService>();
         services.AddScoped<IProfileService, ProfileService>();
+        services.AddScoped<ITenantContext, Identity.TenantContext>();
 
         return services;
     }

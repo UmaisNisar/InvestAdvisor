@@ -23,7 +23,7 @@ public sealed class ContextAssembler(
     private const int TopMoversCount = 5;
     private static readonly TimeSpan NewsWindow = TimeSpan.FromHours(24);
 
-    public async Task<RunContext> BuildAsync(RunTrigger trigger, CancellationToken ct = default)
+    public async Task<RunContext> BuildAsync(int tenantId, RunTrigger trigger, CancellationToken ct = default)
     {
         var now = clock.UtcNow;
         var settings = await settingsStore.GetAsync(ct);
@@ -32,9 +32,9 @@ public sealed class ContextAssembler(
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var profile = await db.Profiles.AsNoTracking().SingleAsync(p => p.Id == Profile.SingletonId, ct);
-        var holdings = await db.Holdings.AsNoTracking().OrderBy(h => h.Ticker).ToListAsync(ct);
-        var watchlist = await db.WatchlistItems.AsNoTracking().OrderBy(w => w.Ticker).ToListAsync(ct);
+        var profile = await db.Profiles.AsNoTracking().SingleAsync(p => p.TenantId == tenantId, ct);
+        var holdings = await db.Holdings.AsNoTracking().Where(h => h.TenantId == tenantId).OrderBy(h => h.Ticker).ToListAsync(ct);
+        var watchlist = await db.WatchlistItems.AsNoTracking().Where(w => w.TenantId == tenantId).OrderBy(w => w.Ticker).ToListAsync(ct);
 
         var trackedTickers = holdings.Select(h => h.Ticker)
             .Concat(watchlist.Select(w => w.Ticker))

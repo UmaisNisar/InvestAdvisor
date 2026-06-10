@@ -5,6 +5,7 @@ namespace InvestAdvisor.Data;
 
 public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbContext> options) : DbContext(options)
 {
+    public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Profile> Profiles => Set<Profile>();
     public DbSet<RuntimeSettings> RuntimeSettings => Set<RuntimeSettings>();
     public DbSet<Holding> Holdings => Set<Holding>();

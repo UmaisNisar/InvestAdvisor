@@ -9,36 +9,82 @@ namespace InvestAdvisor.Core.Agent;
 /// Decides whether the worker should fire an agent run on this tick. Pure logic — no DB,
 /// no HTTP. Priority (first match wins):
 /// 1) Manual override · 2) PriceTarget · 3) BigMove · 4) DriftThreshold · 5) Scheduled.
+///
+/// Condition triggers (2–4) are edge-triggered with a dedup key of <c>"{Kind}:{Ticker}"</c>:
+/// a breached condition fires once, then stays suppressed (via <see cref="EvaluationInput.SuppressedKeys"/>)
+/// until it clears and re-breaches. Without this a level condition — a stock down -15% for the
+/// whole session — re-fires every <c>MinSecondsBetweenRuns</c> until the daily cap, each a Claude call.
 /// </summary>
 public sealed class TriggerEvaluator : ITriggerEvaluator
 {
-    public RunTrigger? Evaluate(EvaluationInput input)
+    private static readonly IReadOnlySet<string> Empty =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    public TriggerDecision Evaluate(EvaluationInput input)
     {
-        // 1) Manual override bypasses the min-gap and daily cap.
+        var suppressed = input.SuppressedKeys ?? Empty;
+
+        // 1) Manual override bypasses the gates and the dedup machinery entirely.
         if (input.ManualOverride)
         {
             var note = string.IsNullOrWhiteSpace(input.ManualNote) ? "Manual run" : input.ManualNote!;
-            return new RunTrigger(RunTriggerKind.Manual, note);
+            return new TriggerDecision(new RunTrigger(RunTriggerKind.Manual, note), suppressed);
         }
 
-        // 2) Hard rate-limit.
-        if (input.LastRunUtc is { } last
-            && (input.NowUtc - last).TotalSeconds < input.Settings.MinSecondsBetweenRuns)
-            return null;
+        // Every condition breached on this tick, in priority order, paired with its dedup key.
+        var candidates = CollectBreaches(input);
+        var breachedKeys = candidates.Select(c => c.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // 3) Daily cap.
-        if (input.RunsToday >= input.Settings.MaxRunsPerDay) return null;
+        // Re-arm: drop previously-alerted keys whose condition is no longer breached. Done every
+        // tick regardless of the firing gates below, so a clear is observed as soon as it happens.
+        var active = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in suppressed)
+            if (breachedKeys.Contains(key)) active.Add(key);
 
-        // 4) Market-hours gate. Applies to equity/ETF triggers; crypto trades 24/7.
+        // Firing gates (backstops). Re-arm bookkeeping above is preserved even when blocked.
+        var blocked =
+            (input.LastRunUtc is { } last
+                && (input.NowUtc - last).TotalSeconds < input.Settings.MinSecondsBetweenRuns)
+            || input.RunsToday >= input.Settings.MaxRunsPerDay;
+
+        if (!blocked)
+        {
+            // First breached condition we have not already alerted on (the rising edge).
+            foreach (var (key, trigger) in candidates)
+            {
+                if (active.Contains(key)) continue; // still-active alert → suppress
+                active.Add(key);
+                return new TriggerDecision(trigger, active);
+            }
+
+            // No new condition. Fall back to scheduled cadence (no dedup key).
+            var scheduled = ScheduledTrigger(input);
+            if (scheduled is not null)
+                return new TriggerDecision(scheduled, active);
+        }
+
+        return new TriggerDecision(null, active);
+    }
+
+    /// <summary>
+    /// All currently-breached condition triggers, ordered PriceTarget &gt; BigMove &gt; Drift,
+    /// each tagged with its <c>"{Kind}:{Ticker}"</c> dedup key. Honours snapshot freshness and
+    /// the market-hours gate (crypto trades 24/7; equity/ETF only when allowed).
+    /// </summary>
+    private static List<(string Key, RunTrigger Trigger)> CollectBreaches(EvaluationInput input)
+    {
+        var result = new List<(string, RunTrigger)>();
+
         var marketOpen = MarketHours.IsOpenNY(input.NowUtc, input.Settings.TimeZoneId);
         var equityTriggersAllowed = !input.Settings.MarketHoursOnly || marketOpen;
-
         var maxSnapAge = TimeSpan.FromSeconds(input.Settings.MaxSnapshotAgeForTriggerSeconds);
         bool SnapshotFresh(PriceSnapshot s) => (input.NowUtc - s.FetchedAtUtc) <= maxSnapAge;
-        bool TriggerAllowedFor(AssetClass ac) =>
-            ac == AssetClass.Crypto || equityTriggersAllowed;
+        bool TriggerAllowedFor(AssetClass ac) => ac == AssetClass.Crypto || equityTriggersAllowed;
 
-        // 5) Watchlist price target hit (highest-priority real trigger).
+        static string Key(RunTriggerKind kind, string ticker) => $"{kind}:{ticker}";
+
+        // 2) Watchlist price target hit (highest-priority real trigger).
         foreach (var w in input.Watchlist)
         {
             if (!input.LatestSnapshotsByTicker.TryGetValue(w.Ticker, out var snap)) continue;
@@ -46,15 +92,16 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
             if (!TriggerAllowedFor(w.AssetClass)) continue;
 
             if (w.PriceTargetLow is { } low && snap.Price <= low)
-                return new RunTrigger(RunTriggerKind.PriceTarget,
-                    $"{w.Ticker} crossed below {low:C} at {snap.Price:C}");
-
-            if (w.PriceTargetHigh is { } high && snap.Price >= high)
-                return new RunTrigger(RunTriggerKind.PriceTarget,
-                    $"{w.Ticker} crossed above {high:C} at {snap.Price:C}");
+                result.Add((Key(RunTriggerKind.PriceTarget, w.Ticker),
+                    new RunTrigger(RunTriggerKind.PriceTarget,
+                        $"{w.Ticker} crossed below {low:C} at {snap.Price:C}")));
+            else if (w.PriceTargetHigh is { } high && snap.Price >= high)
+                result.Add((Key(RunTriggerKind.PriceTarget, w.Ticker),
+                    new RunTrigger(RunTriggerKind.PriceTarget,
+                        $"{w.Ticker} crossed above {high:C} at {snap.Price:C}")));
         }
 
-        // 6) Big single-day move on any held position.
+        // 3) Big single-day move on any held position.
         var moveThreshold = input.Profile.SingleDayMovePctThreshold;
         foreach (var h in input.Holdings)
         {
@@ -63,11 +110,12 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
             if (!TriggerAllowedFor(h.AssetClass)) continue;
 
             if (Math.Abs(snap.PercentChange) >= moveThreshold)
-                return new RunTrigger(RunTriggerKind.BigMove,
-                    $"{h.Ticker} moved {snap.PercentChange:+0.##;-0.##}% today");
+                result.Add((Key(RunTriggerKind.BigMove, h.Ticker),
+                    new RunTrigger(RunTriggerKind.BigMove,
+                        $"{h.Ticker} moved {snap.PercentChange:+0.##;-0.##}% today")));
         }
 
-        // 7) Drift threshold breach (worst absolute drift across holdings with targets).
+        // 4) Drift threshold breach (worst absolute drift across holdings with targets).
         if (input.Profile.DriftPctThreshold > 0m)
         {
             var drifts = ComputeDrifts(input.Holdings, input.LatestSnapshotsByTicker);
@@ -76,24 +124,24 @@ public sealed class TriggerEvaluator : ITriggerEvaluator
                 var worst = drifts.OrderByDescending(d => Math.Abs(d.DriftPct)).First();
                 if (Math.Abs(worst.DriftPct) >= input.Profile.DriftPctThreshold
                     && TriggerAllowedFor(LookupAssetClass(input.Holdings, worst.Ticker)))
-                    return new RunTrigger(RunTriggerKind.DriftThreshold,
-                        $"{worst.Ticker} drift {worst.DriftPct:+0.##;-0.##}% vs target {worst.TargetPct}%");
+                    result.Add((Key(RunTriggerKind.DriftThreshold, worst.Ticker),
+                        new RunTrigger(RunTriggerKind.DriftThreshold,
+                            $"{worst.Ticker} drift {worst.DriftPct:+0.##;-0.##}% vs target {worst.TargetPct}%")));
             }
         }
 
-        // 8) Scheduled cadence.
+        return result;
+    }
+
+    private static RunTrigger? ScheduledTrigger(EvaluationInput input)
+    {
         var cadence = TimeSpan.FromHours(input.Profile.RebalanceCadenceHours);
         var scheduledDue = input.LastRunUtc is null
             || (input.NowUtc - input.LastRunUtc.Value) >= cadence;
-        if (scheduledDue)
-        {
-            // Always allow at least one scheduled run path; the equity-vs-crypto gate
-            // only bites real condition triggers, not the catch-up cadence.
-            return new RunTrigger(RunTriggerKind.Scheduled,
-                $"Scheduled cadence ({input.Profile.RebalanceCadenceHours}h) elapsed");
-        }
-
-        return null;
+        return scheduledDue
+            ? new RunTrigger(RunTriggerKind.Scheduled,
+                $"Scheduled cadence ({input.Profile.RebalanceCadenceHours}h) elapsed")
+            : null;
     }
 
     private static List<DriftRow> ComputeDrifts(

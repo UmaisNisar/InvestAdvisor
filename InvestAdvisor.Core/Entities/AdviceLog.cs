@@ -5,6 +5,7 @@ namespace InvestAdvisor.Core.Entities;
 public class AdviceLog
 {
     public long Id { get; set; }
+    public int TenantId { get; set; }
     public DateTime TimestampUtc { get; set; }
     public RunTriggerKind Trigger { get; set; }
     public string TriggerDetail { get; set; } = string.Empty;
