@@ -76,7 +76,10 @@ public static class ServiceCollectionExtensions
             http.Timeout = TimeSpan.FromSeconds(12);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (InvestAdvisor)");
         });
-        services.AddScoped<IMarketDataProvider, Providers.CompositeMarketDataProvider>();
+        // One composite instance backs both quote and history reads (it routes each to the right source).
+        services.AddScoped<Providers.CompositeMarketDataProvider>();
+        services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<Providers.CompositeMarketDataProvider>());
+        services.AddScoped<IPriceHistoryProvider>(sp => sp.GetRequiredService<Providers.CompositeMarketDataProvider>());
 
         services.AddHttpClient<INewsProvider, FinnhubNewsProvider>((sp, http) =>
         {

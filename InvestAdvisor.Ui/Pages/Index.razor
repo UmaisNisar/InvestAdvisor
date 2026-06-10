@@ -97,7 +97,8 @@ else
                     <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
                                OnClick="@(() => _holdingDialog?.Open(null))">Add holding</MudButton>
                 </MudStack>
-                <MudTable Items="_snapshot.Holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.Sm" Class="mt-2">
+                <MudTable T="HoldingView" Items="_snapshot.Holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.Sm" Class="mt-2"
+                          OnRowClick="OpenDetails" RowStyle="cursor:pointer">
                     <HeaderContent>
                         <MudTh><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)x.Ticker)">Ticker</MudTableSortLabel></MudTh>
                         <MudTh>Name</MudTh>
@@ -137,12 +138,14 @@ else
                             <MudTd DataLabel="Drift"><DriftBadge DriftPct="@context.DriftPct" /></MudTd>
                         }
                         <MudTd DataLabel="" Style="text-align:right;white-space:nowrap">
-                            <MudTooltip Text="Edit this holding">
-                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditHolding(context))" />
-                            </MudTooltip>
-                            <MudTooltip Text="Delete this holding">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteHolding(context))" />
-                            </MudTooltip>
+                            <div @onclick:stopPropagation="true" style="display:inline-block">
+                                <MudTooltip Text="Edit this holding">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => EditHolding(context))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Delete this holding">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteHolding(context))" />
+                                </MudTooltip>
+                            </div>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
@@ -273,6 +276,7 @@ else
 }
 
 <AdviceDetailDrawer @bind-Open="_adviceDrawerOpen" AdviceLogId="_selectedAdviceId" />
+<HoldingDetailDrawer @bind-Open="_detailDrawerOpen" Holding="_detailHolding" />
 <HoldingEditDialog @ref="_holdingDialog" OnSaved="OnHoldingsChanged" />
 
 @code {
@@ -280,6 +284,17 @@ else
 
     private bool _adviceDrawerOpen;
     private long? _selectedAdviceId;
+
+    private bool _detailDrawerOpen;
+    private HoldingView? _detailHolding;
+
+    // Open the price-history/candle drawer for the clicked holding.
+    private void OpenDetails(TableRowClickEventArgs<HoldingView> args)
+    {
+        if (args.Item is null) return;
+        _detailHolding = args.Item;
+        _detailDrawerOpen = true;
+    }
 
     private void OpenLatestAdvice()
     {

@@ -1,0 +1,287 @@
+@using ApexCharts
+@* ApexCharts also defines `Color`/`Size`; aliases keep MudBlazor's the default in this file. *@
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IPriceHistoryProvider History
+@inject ISnackbar Snackbar
+
+<MudDrawer Open="Open" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Width="760px"
+           ClipMode="DrawerClipMode.Never" Variant="DrawerVariant.Temporary" Elevation="6">
+  <div tabindex="-1" @ref="_focusRoot" @onkeydown="OnKeyDown" style="outline:none;height:100%;overflow-y:auto">
+    @if (Holding is null)
+    {
+        <MudStack Class="pa-4"><MudProgressLinear Color="Color.Primary" Indeterminate="true" /></MudStack>
+    }
+    else
+    {
+        <MudStack Class="pa-4" Spacing="3">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                <div>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.h6"><code>@Holding.Ticker</code></MudText>
+                        @if (Holding.Currency != "USD")
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@Holding.Currency</MudChip>
+                        }
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Color="Color.Surface">@Holding.Name</MudText>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+            </MudStack>
+
+            @* ── Key metrics ── *@
+            <MudPaper Class="pa-3" Outlined="true">
+                <MudStack Row="true" Spacing="6" Style="flex-wrap:wrap">
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Surface">Price</MudText>
+                        <MudText Typo="Typo.h6">@Money(Holding.Price, Holding.Currency)</MudText>
+                    </div>
+                    <div>
+                        <MudTooltip Text="Change since yesterday's close.">
+                            <MudText Typo="Typo.caption" Color="Color.Surface">Today</MudText>
+                        </MudTooltip>
+                        <MudText Typo="Typo.h6" Style="@PnlColor(Holding.TodaysChangePct)">
+                            @(Holding.TodaysChangePct?.ToString("+0.00;-0.00;0.00") ?? "—")%
+                        </MudText>
+                    </div>
+                    <div>
+                        <MudTooltip Text="Your gain or loss vs. what you paid (you still hold it — nothing sold).">
+                            <MudText Typo="Typo.caption" Color="Color.Surface">Unrealized P/L</MudText>
+                        </MudTooltip>
+                        <MudText Typo="Typo.h6" Style="@PnlColor(Holding.UnrealizedPnlPct)">
+                            @(Holding.UnrealizedPnlPct?.ToString("+0.00;-0.00;0.00") ?? "—")%
+                        </MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.caption" Color="Color.Surface">Market value</MudText>
+                        <MudText Typo="Typo.h6">@(Holding.MarketValueUsd?.ToString("C0") ?? "—")</MudText>
+                    </div>
+                    <div>
+                        <MudTooltip Text="This holding's share of your whole portfolio.">
+                            <MudText Typo="Typo.caption" Color="Color.Surface">Allocation</MudText>
+                        </MudTooltip>
+                        <MudText Typo="Typo.h6">@(Holding.CurrentAllocationPct?.ToString("0.0") ?? "—")%</MudText>
+                    </div>
+                </MudStack>
+            </MudPaper>
+
+            @* ── Chart header: title + how the price moved over this window + range ── *@
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="flex-wrap:wrap;gap:8px">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudText Typo="Typo.subtitle1">Price history</MudText>
+                    @if (PeriodChangePct is { } chg)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                 Color="@(chg >= 0 ? Color.Success : Color.Error)"
+                                 Icon="@(chg >= 0 ? Icons.Material.Filled.TrendingUp : Icons.Material.Filled.TrendingDown)">
+                            @RangeLabel(_range) @chg.ToString("+0.0;-0.0;0.0")%
+                        </MudChip>
+                    }
+                </MudStack>
+                <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                    @foreach (var r in Ranges)
+                    {
+                        <MudButton Color="@(r.Range == _range ? Color.Primary : Color.Default)"
+                                   Variant="@(r.Range == _range ? Variant.Filled : Variant.Outlined)"
+                                   OnClick="@(() => SetRange(r.Range))">@r.Label</MudButton>
+                    }
+                </MudButtonGroup>
+            </MudStack>
+
+            @* ── View toggle: a plain price line by default; candlesticks one tap away ── *@
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="flex-wrap:wrap;gap:8px">
+                <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                    <MudButton StartIcon="@Icons.Material.Filled.ShowChart"
+                               Color="@(_view == ChartView.Line ? Color.Primary : Color.Default)"
+                               Variant="@(_view == ChartView.Line ? Variant.Filled : Variant.Outlined)"
+                               OnClick="@(() => _view = ChartView.Line)">Line</MudButton>
+                    <MudButton StartIcon="@Icons.Material.Filled.CandlestickChart"
+                               Color="@(_view == ChartView.Candles ? Color.Primary : Color.Default)"
+                               Variant="@(_view == ChartView.Candles ? Variant.Filled : Variant.Outlined)"
+                               OnClick="@(() => _view = ChartView.Candles)">Candles</MudButton>
+                </MudButtonGroup>
+                <MudText Typo="Typo.caption" Color="Color.Surface" Style="max-width:430px;text-align:right">@ViewHelp()</MudText>
+            </MudStack>
+
+            @* ── Chart ── *@
+            <MudPaper Class="pa-2" Outlined="true" Style="min-height:380px">
+                @if (_loading)
+                {
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+                }
+                else if (_history is null || _history.Candles.Count == 0)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:360px">
+                        <MudIcon Icon="@Icons.Material.Filled.ShowChart" Size="Size.Large" Color="Color.Surface" />
+                        <MudText Typo="Typo.body2" Color="Color.Surface">No price history available for this ticker.</MudText>
+                    </MudStack>
+                }
+                else
+                {
+                    <ApexChart TItem="Candle" Height="360" Options="_options" @key="@($"{_loadedTicker}-{_range}-{_view}")">
+                        @if (_view == ChartView.Candles)
+                        {
+                            <ApexCandleSeries TItem="Candle"
+                                              Items="_history.Candles"
+                                              Name="@_loadedTicker"
+                                              XValue="@(c => c.Time)"
+                                              Open="@(c => Round(c.Open))"
+                                              High="@(c => Round(c.High))"
+                                              Low="@(c => Round(c.Low))"
+                                              Close="@(c => Round(c.Close))" />
+                        }
+                        else
+                        {
+                            <ApexPointSeries TItem="Candle"
+                                             Items="_history.Candles"
+                                             Name="Price"
+                                             XValue="@(c => c.Time)"
+                                             YValue="@(c => Round(c.Close))"
+                                             SeriesType="SeriesType.Area" />
+                        }
+                    </ApexChart>
+                    <MudText Typo="Typo.caption" Color="Color.Surface" Class="px-2">
+                        @(_view == ChartView.Candles ? "Daily open/high/low/close" : "Daily closing price") in @_history.Currency · source: Yahoo Finance
+                    </MudText>
+                }
+            </MudPaper>
+        </MudStack>
+    }
+  </div>
+</MudDrawer>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public HoldingView? Holding { get; set; }
+
+    private enum ChartView { Line, Candles }
+
+    private static readonly (HistoryRange Range, string Label)[] Ranges =
+    {
+        (HistoryRange.OneMonth, "1M"),
+        (HistoryRange.ThreeMonths, "3M"),
+        (HistoryRange.SixMonths, "6M"),
+        (HistoryRange.OneYear, "1Y"),
+    };
+
+    private readonly ApexChartOptions<Candle> _options = new()
+    {
+        // Animations off: range/view switches recreate the chart, and the intro tween otherwise
+        // leaves a half-drawn frame on first paint. A price chart reads better static anyway.
+        Chart = new Chart { Toolbar = new Toolbar { Show = false }, Animations = new Animations { Enabled = false } },
+        Xaxis = new XAxis { Type = XAxisType.Datetime },
+        Yaxis = new List<YAxis> { new() { DecimalsInFloat = 2 } },
+        // Default tooltip is a light theme — unreadable (white-on-white) on the dark drawer.
+        Tooltip = new Tooltip { Theme = Mode.Dark },
+        // Smooth line with no point dots for the (default) area view; ignored by candlesticks.
+        Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 },
+        Markers = new Markers { Size = 0 },
+    };
+
+    private HistoryRange _range = HistoryRange.SixMonths;
+    private ChartView _view = ChartView.Line;
+    private PriceHistory? _history;
+    private bool _loading;
+    private string? _loadedTicker;       // the ticker the current _history belongs to
+    private ElementReference _focusRoot;
+    private bool _wasOpen;
+
+    // How much the closing price moved across the whole loaded window — the plain-English
+    // "is it up or down over this period?" a beginner actually wants.
+    private decimal? PeriodChangePct
+    {
+        get
+        {
+            var c = _history?.Candles;
+            if (c is null || c.Count < 2) return null;
+            var first = c[0].Close;
+            return first == 0m ? null : (c[^1].Close - first) / first * 100m;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // (Re)load whenever the drawer opens for a holding we haven't charted yet.
+        if (Open && Holding is not null && !string.Equals(Holding.Ticker, _loadedTicker, StringComparison.OrdinalIgnoreCase))
+        {
+            _range = HistoryRange.SixMonths;
+            await LoadHistory();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            try { await _focusRoot.FocusAsync(); } catch { /* element not ready; ignore */ }
+        }
+        else if (!Open)
+        {
+            _wasOpen = false;
+        }
+    }
+
+    private async Task SetRange(HistoryRange range)
+    {
+        if (range == _range && _history is not null) return;
+        _range = range;
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        if (Holding is null) return;
+        var ticker = Holding.Ticker;
+        var assetClass = Enum.TryParse<AssetClass>(Holding.AssetClass, ignoreCase: true, out var ac) ? ac : AssetClass.Equity;
+        _loading = true;
+        _history = null;
+        try
+        {
+            _history = await History.GetHistoryAsync(ticker, assetClass, _range);
+            _loadedTicker = ticker;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Couldn't load price history: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await Close();
+    }
+
+    private async Task Close() => await OpenChanged.InvokeAsync(false);
+
+    private async Task OnOpenChanged(bool open)
+    {
+        Open = open;
+        await OpenChanged.InvokeAsync(open);
+    }
+
+    private static string RangeLabel(HistoryRange r) =>
+        Ranges.FirstOrDefault(x => x.Range == r).Label ?? string.Empty;
+
+    private string ViewHelp() => _view == ChartView.Candles
+        ? "Each candle is one day: the body runs open→close (green = up, red = down), the thin wicks mark the day's high and low."
+        : "Each day's closing price. Hover any point for the exact price and date.";
+
+    // Yahoo returns full double precision (e.g. 14.729999542236328); ApexCharts shows those raw in
+    // the candle tooltip. Round for display — 2 dp normally, 4 for sub-dollar so penny stocks and
+    // low-priced coins don't collapse to 0.00.
+    private static decimal Round(decimal v) =>
+        Math.Round(v, Math.Abs(v) >= 1m ? 2 : 4, MidpointRounding.AwayFromZero);
+
+    // Native-currency price (e.g. "C$120.00"), matching the dashboard's formatting.
+    private static string Money(decimal? v, string currency) =>
+        v is null ? "—" : (currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" }) + v.Value.ToString("N2");
+
+    private static string PnlColor(decimal? v) =>
+        v is null ? string.Empty : v >= 0 ? "color:#66bb6a" : "color:#ef5350";
+}

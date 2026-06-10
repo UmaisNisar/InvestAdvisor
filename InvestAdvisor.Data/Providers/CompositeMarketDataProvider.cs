@@ -18,7 +18,7 @@ public sealed class CompositeMarketDataProvider(
     YahooQuoteProvider yahoo,
     ICryptoMarketProvider coinGecko,
     ISystemClock clock,
-    ILogger<CompositeMarketDataProvider>? logger = null) : IMarketDataProvider
+    ILogger<CompositeMarketDataProvider>? logger = null) : IMarketDataProvider, IPriceHistoryProvider
 {
     public async Task<Quote?> GetQuoteAsync(string ticker, AssetClass assetClass, CancellationToken ct = default)
     {
@@ -32,6 +32,19 @@ public sealed class CompositeMarketDataProvider(
         // US equities/ETFs via Finnhub; if it has nothing, try Yahoo as a backup.
         return await finnhub.GetQuoteAsync(ticker, assetClass, ct)
             ?? await yahoo.GetQuoteAsync(ticker, assetClass, ct);
+    }
+
+    /// <summary>
+    /// All history comes from Yahoo's chart endpoint: it covers US and non-US listings, and crypto
+    /// via the <c>{TICKER}-USD</c> pair. Finnhub's candle endpoints are premium, so there's nothing
+    /// to route around here — only the crypto symbol needs the USD pair suffix.
+    /// </summary>
+    public async Task<PriceHistory?> GetHistoryAsync(string ticker, AssetClass assetClass, HistoryRange range, CancellationToken ct = default)
+    {
+        var symbol = assetClass == AssetClass.Crypto ? $"{ticker}-USD" : ticker;
+        var history = await yahoo.GetHistoryAsync(symbol, assetClass, range, ct);
+        // Report under the user's own ticker, not the routed -USD pair.
+        return history is null ? null : history with { Ticker = ticker.ToUpperInvariant() };
     }
 
     private async Task<Quote?> GetCryptoQuoteAsync(string ticker, CancellationToken ct)
