@@ -1,0 +1,41 @@
+@implements IDisposable
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using Microsoft.AspNetCore.Components.Routing
+
+@* Thin indeterminate bar pinned to the very top of the viewport. Pulses on every route change so a
+   navigation never feels like a dead blank screen while the next page assembles its data. *@
+<div class="ia-loadbar @(_visible ? "ia-loadbar--on" : null)" aria-hidden="true"></div>
+
+@code {
+    private bool _visible;
+    private CancellationTokenSource? _cts;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = PulseAsync();
+
+    private async Task PulseAsync()
+    {
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        _visible = true;
+        await InvokeAsync(StateHasChanged);
+        try { await JS.InvokeVoidAsync("iaBusy.on"); } catch { /* JS not ready */ }
+
+        try { await Task.Delay(650, token); }
+        catch (TaskCanceledException) { return; } // a newer navigation took over
+
+        _visible = false;
+        await InvokeAsync(StateHasChanged);
+        try { await JS.InvokeVoidAsync("iaBusy.off"); } catch { /* JS not ready */ }
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        _cts?.Cancel();
+    }
+}

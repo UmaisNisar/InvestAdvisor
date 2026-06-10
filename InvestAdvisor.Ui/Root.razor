@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Routing
 @using InvestAdvisor.Ui.Theme
 @inject IRuntimeSettingsStore SettingsStore
+@inject IJSRuntime JS
 
 <MudThemeProvider Theme="_theme" @bind-IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
@@ -34,6 +35,13 @@
         // Restore the saved night-mode preference from the local settings DB.
         try { _isDarkMode = (await SettingsStore.GetAsync()).DarkMode; }
         catch { /* fall back to light if settings can't be read */ }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The app is now interactive — drop the boot splash that covered the blank pre-circuit screen.
+        if (firstRender)
+            try { await JS.InvokeVoidAsync("iaSplash.hide"); } catch { /* JS not ready; splash self-clears on nav */ }
     }
 
     /// <summary>Flip light/dark and persist the choice. Called from the app bar toggle in MainLayout.</summary>

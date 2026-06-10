@@ -25,6 +25,14 @@
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 </head>
 <body>
+    @* Boot splash: visible immediately as static HTML and removed once the interactive circuit
+       connects (Root calls iaSplash.hide on first render). Without prerendering the app area is
+       blank until the circuit is up, so this gives instant "something is loading" feedback. *@
+    <div id="ia-splash">
+        <div class="ia-splash-spinner"></div>
+        <div class="ia-splash-text">Loading InvestAdvisor…</div>
+    </div>
+
     <InvestAdvisor.Ui.Root @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 
     <div id="blazor-error-ui">
@@ -52,6 +60,48 @@
             get: () => localStorage.getItem('ia-rail'),
             set: (v) => localStorage.setItem('ia-rail', v)
         };
+
+        // Boot splash control — Root hides it once the circuit is interactive.
+        window.iaSplash = {
+            hide: () => {
+                var el = document.getElementById('ia-splash');
+                if (el) { el.classList.add('ia-hide'); setTimeout(() => el.remove(), 400); }
+            }
+        };
+
+        // Busy cursor: the nav loading bar toggles this so the pointer shows progress during loads.
+        window.iaBusy = {
+            on: () => document.documentElement.classList.add('ia-busy'),
+            off: () => document.documentElement.classList.remove('ia-busy')
+        };
+
+        // Mobile haptics. navigator.vibrate is Android/Chromium only (iOS Safari ignores it).
+        // Honors a localStorage opt-out ('ia-haptics' = 'off'). Patterns are deliberately subtle.
+        window.iaHaptics = {
+            enabled: () => 'vibrate' in navigator && localStorage.getItem('ia-haptics') !== 'off',
+            tap: () => { if (window.iaHaptics.enabled()) navigator.vibrate(10); },
+            success: () => { if (window.iaHaptics.enabled()) navigator.vibrate([12, 40, 12]); },
+            warn: () => { if (window.iaHaptics.enabled()) navigator.vibrate(28); }
+        };
+
+        // Global: a light tap pulse on any actionable element, touch input only (mouse never buzzes).
+        document.addEventListener('pointerup', function (e) {
+            if (e.pointerType !== 'touch') return;
+            if (e.target && e.target.closest('button, a[href], .mud-button-root, .mud-icon-button, .mud-nav-link, [role="button"], .mud-list-item-clickable'))
+                window.iaHaptics.tap();
+        }, true);
+
+        // Global: success/warning buzz when a snackbar appears, keyed off MudBlazor's severity class.
+        new MutationObserver(function (muts) {
+            for (var m of muts) for (var n of m.addedNodes) {
+                if (!(n instanceof HTMLElement)) continue;
+                var alert = n.matches && n.matches('.mud-snackbar') ? n : n.querySelector && n.querySelector('.mud-snackbar');
+                if (!alert) continue;
+                var c = alert.className || '';
+                if (/error|warning/i.test(c)) window.iaHaptics.warn();
+                else if (/success/i.test(c)) window.iaHaptics.success();
+            }
+        }).observe(document.body, { childList: true, subtree: true });
     </script>
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
