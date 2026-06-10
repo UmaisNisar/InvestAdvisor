@@ -23,14 +23,99 @@ body {
     box-shadow: 0 1px 2px rgba(2, 6, 23, .04), 0 1px 3px rgba(2, 6, 23, .05);
 }
 
-/* App bar + drawer: hairline dividers, no drop shadow. */
+/* ============================================================
+   Liquid Glass chrome
+   Translucent, blurred fixed chrome — top bar, bottom tabs, nav
+   rail, overlay drawers, dialogs and menus — with a specular top
+   edge and a faint sheen, on both phone and desktop. Content
+   surfaces (cards, tables) stay opaque for readability. Opaque
+   fallbacks below for no-backdrop-filter browsers and
+   prefers-reduced-transparency.
+   ============================================================ */
+
+:root {
+    --ia-glass-blur: blur(24px) saturate(180%);
+    /* Bright top lip where light "catches" the glass; near-invisible on white
+       light-mode surfaces, a soft highlight in dark mode. */
+    --ia-glass-edge: inset 0 1px 0 rgba(255, 255, 255, .18);
+    --ia-glass-sheen: linear-gradient(to bottom, rgba(255, 255, 255, .09), rgba(255, 255, 255, 0) 45%);
+}
+
+/* App bar (phones-only in this layout): glass top bar, hairline divider,
+   specular edge instead of a drop shadow. */
 .mud-appbar {
-    box-shadow: none !important;
     border-bottom: 1px solid var(--mud-palette-lines-default);
+    background-color: var(--mud-palette-appbar-background) !important; /* opaque fallback if color-mix is unsupported */
+    background-color: color-mix(in srgb, var(--mud-palette-appbar-background) 72%, transparent) !important;
+    background-image: var(--ia-glass-sheen);
+    backdrop-filter: var(--ia-glass-blur);
+    -webkit-backdrop-filter: var(--ia-glass-blur);
+    box-shadow: var(--ia-glass-edge) !important;
 }
 
 .mud-drawer {
     border-right: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Desktop nav rail: translucent sidebar (the macOS-sidebar read of the material). */
+.mud-drawer.ia-rail {
+    background-color: var(--mud-palette-drawer-background);
+    background-color: color-mix(in srgb, var(--mud-palette-drawer-background) 78%, transparent);
+    backdrop-filter: var(--ia-glass-blur);
+    -webkit-backdrop-filter: var(--ia-glass-blur);
+}
+
+/* Overlay drawers (phone nav, advice/holding detail): glass over the page they
+   cover. Kept more opaque than the bars — they carry dense reading content. */
+.mud-drawer.mud-drawer-temporary {
+    background-color: var(--mud-palette-drawer-background);
+    background-color: color-mix(in srgb, var(--mud-palette-drawer-background) 84%, transparent);
+    backdrop-filter: var(--ia-glass-blur);
+    -webkit-backdrop-filter: var(--ia-glass-blur);
+}
+
+/* Dialogs: glass panel with a softer, larger radius. */
+.mud-dialog {
+    background-color: var(--mud-palette-surface);
+    background-color: color-mix(in srgb, var(--mud-palette-surface) 85%, transparent);
+    background-image: var(--ia-glass-sheen);
+    backdrop-filter: var(--ia-glass-blur);
+    -webkit-backdrop-filter: var(--ia-glass-blur);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 16px;
+}
+
+/* Floating menus, selects, pickers. */
+.mud-popover {
+    background-color: var(--mud-palette-surface);
+    background-color: color-mix(in srgb, var(--mud-palette-surface) 88%, transparent);
+    backdrop-filter: var(--ia-glass-blur);
+    -webkit-backdrop-filter: var(--ia-glass-blur);
+}
+
+/* Without backdrop blur, translucency alone would smear page content through the
+   chrome — fall back to fully opaque surfaces. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .mud-appbar { background-color: var(--mud-palette-appbar-background) !important; background-image: none; }
+    .mud-drawer.ia-rail,
+    .mud-drawer.mud-drawer-temporary { background-color: var(--mud-palette-drawer-background); }
+    .mud-dialog, .mud-popover { background-color: var(--mud-palette-surface); background-image: none; }
+    .ia-bottomnav { background-color: var(--mud-palette-surface); background-image: none; }
+}
+
+/* Accessibility escape hatch: solid surfaces, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+    .mud-appbar, .mud-drawer.ia-rail, .mud-drawer.mud-drawer-temporary,
+    .mud-dialog, .mud-popover, .ia-bottomnav {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background-image: none;
+    }
+    .mud-appbar { background-color: var(--mud-palette-appbar-background) !important; }
+    .mud-drawer.ia-rail,
+    .mud-drawer.mud-drawer-temporary { background-color: var(--mud-palette-drawer-background); }
+    .mud-dialog, .mud-popover { background-color: var(--mud-palette-surface); }
+    .ia-bottomnav { background-color: var(--mud-palette-surface); }
 }
 
 /* Calmer nav: rounded, inset links with a soft active state. */
@@ -159,12 +244,7 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
 
 /* ---------- Phone shell (below the md drawer breakpoint) ---------- */
 @media (max-width: 959.95px) {
-    /* Frosted, translucent top bar — the iOS large-nav look. */
-    .mud-appbar {
-        background-color: color-mix(in srgb, var(--mud-palette-appbar-background) 80%, transparent) !important;
-        backdrop-filter: saturate(180%) blur(20px);
-        -webkit-backdrop-filter: saturate(180%) blur(20px);
-    }
+    /* (Top-bar glass now comes from the shared Liquid Glass section above.) */
 
     /* Leave room for the bottom tab bar so the last content isn't hidden behind it. */
     .mud-main-content {
@@ -191,10 +271,12 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
     justify-content: space-around;
     align-items: stretch;
     background-color: var(--mud-palette-surface); /* opaque fallback if color-mix is unsupported */
-    background-color: color-mix(in srgb, var(--mud-palette-surface) 82%, transparent);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background-color: color-mix(in srgb, var(--mud-palette-surface) 78%, transparent);
+    background-image: var(--ia-glass-sheen);
+    backdrop-filter: var(--ia-glass-blur);
+    -webkit-backdrop-filter: var(--ia-glass-blur);
     border-top: 1px solid var(--mud-palette-lines-default);
+    box-shadow: var(--ia-glass-edge);
 }
 
 .ia-tab {
@@ -382,3 +464,64 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
     width: 100%;
     z-index: 1000;
 }
+
+/* ---------- Boot splash ---------- */
+/* Shown as static HTML before the interactive circuit connects (no prerender = blank app area
+   otherwise). Root.razor removes it on first render. prefers-color-scheme keeps it from flashing
+   white in dark mode during the brief pre-theme window. */
+#ia-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 21000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: #ffffff;
+    color: #475569;
+    font-family: 'Inter', system-ui, sans-serif;
+    transition: opacity .35s ease;
+}
+#ia-splash.ia-hide { opacity: 0; pointer-events: none; }
+.ia-splash-spinner {
+    width: 38px; height: 38px;
+    border: 3px solid rgba(129, 140, 248, .25);
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: ia-spin .8s linear infinite;
+}
+.ia-splash-text { font-size: 14px; letter-spacing: .01em; }
+@media (prefers-color-scheme: dark) {
+    #ia-splash { background: #0B0F19; color: #94a3b8; }
+}
+
+/* ---------- Top navigation loading bar ---------- */
+/* A thin indeterminate bar that pulses across the top on each route change. */
+.ia-loadbar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 3px;
+    width: 100%;
+    z-index: 20500;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+}
+.ia-loadbar--on { opacity: 1; }
+.ia-loadbar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, var(--mud-palette-primary, #6366f1), transparent);
+    animation: ia-loadbar-slide 1s ease-in-out infinite;
+}
+@keyframes ia-loadbar-slide {
+    0%   { left: -40%; }
+    100% { left: 100%; }
+}
+
+/* Busy cursor while the loading bar is active, so the pointer signals work-in-progress too. */
+html.ia-busy, html.ia-busy * { cursor: progress !important; }
