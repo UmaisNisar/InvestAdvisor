@@ -29,6 +29,8 @@
     <PackageVersion Include="Photino.Blazor" Version="4.0.13" />
     <!-- MudBlazor (UI components) -->
     <PackageVersion Include="MudBlazor" Version="9.5.0" />
+    <!-- Blazor-ApexCharts (candlestick / price charts) -->
+    <PackageVersion Include="Blazor-ApexCharts" Version="6.1.0" />
     <!-- ASP.NET Core (for the shared RCL + Blazor Server host) -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.8" />
     <!-- Email / SMTP -->

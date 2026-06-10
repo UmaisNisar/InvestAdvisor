@@ -58,9 +58,62 @@ public sealed class YahooQuoteProvider(
         return new Quote(ticker.ToUpperInvariant(), assetClass, price, prev, pct, clock.UtcNow);
     }
 
+    /// <summary>
+    /// Daily OHLCV bars from the same chart endpoint as <see cref="GetQuoteAsync"/>; only the
+    /// range/interval differ. Bars Yahoo emits as null (holidays, halts) are dropped.
+    /// </summary>
+    public async Task<PriceHistory?> GetHistoryAsync(string ticker, AssetClass assetClass, HistoryRange range, CancellationToken ct = default)
+    {
+        var (yRange, yInterval) = range switch
+        {
+            HistoryRange.OneMonth => ("1mo", "1d"),
+            HistoryRange.ThreeMonths => ("3mo", "1d"),
+            HistoryRange.SixMonths => ("6mo", "1d"),
+            _ => ("1y", "1d"),
+        };
+        var url = $"/v8/finance/chart/{Uri.EscapeDataString(ToYahooSymbol(ticker))}?interval={yInterval}&range={yRange}";
+        YahooChartResponse? body;
+        try { body = await http.GetFromJsonAsync<YahooChartResponse>(url, ct); }
+        catch (Exception ex) { logger?.LogWarning(ex, "Yahoo history failed for {Ticker}.", ticker); return null; }
+
+        var result = body?.Chart?.Result?.FirstOrDefault();
+        var timestamps = result?.Timestamp;
+        var q = result?.Indicators?.Quote?.FirstOrDefault();
+        if (result is null || timestamps is null || q is null || timestamps.Length == 0)
+        {
+            logger?.LogInformation("Yahoo returned no history for {Ticker}.", ticker);
+            return null;
+        }
+
+        var candles = new List<Candle>(timestamps.Length);
+        for (var i = 0; i < timestamps.Length; i++)
+        {
+            // Yahoo aligns each array to the timestamp index and emits null for gap sessions; an
+            // incomplete bar (any OHLC missing) is useless for a candle, so skip it entirely.
+            if (q.Open?[i] is not { } o || q.High?[i] is not { } h ||
+                q.Low?[i] is not { } l || q.Close?[i] is not { } c)
+                continue;
+            var time = DateTimeOffset.FromUnixTimeSeconds(timestamps[i]).UtcDateTime;
+            candles.Add(new Candle(time, o, h, l, c, q.Volume?[i] ?? 0));
+        }
+
+        if (candles.Count == 0) return null;
+        return new PriceHistory(ticker.ToUpperInvariant(), result.Meta?.Currency ?? "USD", candles);
+    }
+
     private sealed record YahooChartResponse([property: JsonPropertyName("chart")] YahooChart? Chart);
     private sealed record YahooChart([property: JsonPropertyName("result")] YahooResult[]? Result);
-    private sealed record YahooResult([property: JsonPropertyName("meta")] YahooMeta? Meta);
+    private sealed record YahooResult(
+        [property: JsonPropertyName("meta")] YahooMeta? Meta,
+        [property: JsonPropertyName("timestamp")] long[]? Timestamp,
+        [property: JsonPropertyName("indicators")] YahooIndicators? Indicators);
+    private sealed record YahooIndicators([property: JsonPropertyName("quote")] YahooQuoteArrays[]? Quote);
+    private sealed record YahooQuoteArrays(
+        [property: JsonPropertyName("open")] decimal?[]? Open,
+        [property: JsonPropertyName("high")] decimal?[]? High,
+        [property: JsonPropertyName("low")] decimal?[]? Low,
+        [property: JsonPropertyName("close")] decimal?[]? Close,
+        [property: JsonPropertyName("volume")] long?[]? Volume);
     private sealed record YahooMeta(
         [property: JsonPropertyName("regularMarketPrice")] decimal? RegularMarketPrice,
         [property: JsonPropertyName("chartPreviousClose")] decimal? ChartPreviousClose,
