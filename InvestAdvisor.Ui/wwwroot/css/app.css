@@ -17,11 +17,17 @@ body {
     padding-bottom: 3rem;
 }
 
-/* Modern card surfaces: hairline border + soft shadow instead of heavy MD2 elevation. */
+/* Modern card surfaces: hairline border + soft shadow instead of heavy MD2
+   elevation, with a generous continuous-curve radius. */
 .mud-paper.mud-elevation-1 {
     border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 18px;
     box-shadow: 0 1px 2px rgba(2, 6, 23, .04), 0 1px 3px rgba(2, 6, 23, .05);
 }
+
+/* Pill buttons everywhere — the single biggest "curvy" cue. Icon buttons are
+   already circular; chips inherit the larger theme radius. */
+.mud-button-root:not(.mud-icon-button) { border-radius: 999px; }
 
 /* ============================================================
    Liquid Glass chrome
@@ -34,24 +40,33 @@ body {
    ============================================================ */
 
 :root {
-    --ia-glass-blur: blur(24px) saturate(180%);
-    /* Bright top lip where light "catches" the glass; near-invisible on white
-       light-mode surfaces, a soft highlight in dark mode. */
-    --ia-glass-edge: inset 0 1px 0 rgba(255, 255, 255, .18);
-    --ia-glass-sheen: linear-gradient(to bottom, rgba(255, 255, 255, .09), rgba(255, 255, 255, 0) 45%);
+    --ia-glass-blur: blur(40px) saturate(190%);
+    /* Bright top lip + faint bottom lip where light "catches" the glass;
+       near-invisible on white light-mode surfaces, a clear highlight in dark mode. */
+    --ia-glass-edge: inset 0 1px 0 rgba(255, 255, 255, .28), inset 0 -1px 0 rgba(255, 255, 255, .06);
+    --ia-glass-sheen: linear-gradient(to bottom, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 50%);
+    /* Soft layered drop shadow that lifts floating capsules off the page. */
+    --ia-glass-shadow: 0 12px 32px rgba(2, 6, 23, .16), 0 2px 8px rgba(2, 6, 23, .08);
 }
 
-/* App bar (phones-only in this layout): glass top bar, hairline divider,
-   specular edge instead of a drop shadow. */
+/* App bar (phones-only in this layout): floating glass capsule detached from
+   the screen edges — content scrolls under the status bar and behind it. */
 .mud-appbar {
-    border-bottom: 1px solid var(--mud-palette-lines-default);
+    top: calc(8px + env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left)) !important;
+    right: max(12px, env(safe-area-inset-right));
+    width: auto !important;
+    height: 56px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--mud-palette-lines-default) 80%, transparent);
     background-color: var(--mud-palette-appbar-background) !important; /* opaque fallback if color-mix is unsupported */
-    background-color: color-mix(in srgb, var(--mud-palette-appbar-background) 72%, transparent) !important;
+    background-color: color-mix(in srgb, var(--mud-palette-appbar-background) 65%, transparent) !important;
     background-image: var(--ia-glass-sheen);
     backdrop-filter: var(--ia-glass-blur);
     -webkit-backdrop-filter: var(--ia-glass-blur);
-    box-shadow: var(--ia-glass-edge) !important;
+    box-shadow: var(--ia-glass-edge), var(--ia-glass-shadow) !important;
 }
+.mud-appbar .mud-toolbar { height: 56px; min-height: 56px; }
 
 .mud-drawer {
     border-right: 1px solid var(--mud-palette-lines-default);
@@ -74,7 +89,7 @@ body {
     -webkit-backdrop-filter: var(--ia-glass-blur);
 }
 
-/* Dialogs: glass panel with a softer, larger radius. */
+/* Dialogs: glass capsule — big continuous radius, lifted by the glass shadow. */
 .mud-dialog {
     background-color: var(--mud-palette-surface);
     background-color: color-mix(in srgb, var(--mud-palette-surface) 85%, transparent);
@@ -82,7 +97,15 @@ body {
     backdrop-filter: var(--ia-glass-blur);
     -webkit-backdrop-filter: var(--ia-glass-blur);
     border: 1px solid var(--mud-palette-lines-default);
-    border-radius: 16px;
+    border-radius: 28px;
+    box-shadow: var(--ia-glass-edge), var(--ia-glass-shadow);
+}
+
+/* Detail drawers slide in as rounded glass sheets (only when they don't span
+   the full screen width — full-width phone drawers stay square-edged). */
+@media (min-width: 640px) {
+    .mud-drawer.mud-drawer-temporary.mud-drawer-pos-right { border-radius: 28px 0 0 28px; }
+    .mud-drawer.mud-drawer-temporary.mud-drawer-pos-left { border-radius: 0 28px 28px 0; }
 }
 
 /* Floating menus, selects, pickers. */
@@ -236,19 +259,21 @@ body {
 button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highlight-color: transparent; }
 
 /* Honor the notch / status bar / home indicator when installed (standalone) mode.
-   On normal desktop/browser the env() insets are 0, so these are no-ops there. */
-.mud-appbar { padding-top: env(safe-area-inset-top); }
+   On normal desktop/browser the env() insets are 0, so these are no-ops there.
+   The app bar floats below the status bar (its own top offset), so the content
+   clears the 8px gap + 56px capsule + a 12px breathing gap. */
 .mud-main-content {
-    padding-top: calc(var(--mud-appbar-height) + env(safe-area-inset-top)) !important;
+    padding-top: calc(76px + env(safe-area-inset-top)) !important;
 }
 
 /* ---------- Phone shell (below the md drawer breakpoint) ---------- */
 @media (max-width: 959.95px) {
     /* (Top-bar glass now comes from the shared Liquid Glass section above.) */
 
-    /* Leave room for the bottom tab bar so the last content isn't hidden behind it. */
+    /* Leave room for the floating bottom capsule (10px gap below it) so the last
+       content isn't hidden behind it. */
     .mud-main-content {
-        padding-bottom: calc(var(--ia-bottomnav-height) + env(safe-area-inset-bottom) + 8px) !important;
+        padding-bottom: calc(var(--ia-bottomnav-height) + env(safe-area-inset-bottom) + 30px) !important;
     }
     body { padding-bottom: 0; }
 
@@ -259,24 +284,26 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
     .mud-select-input input { font-size: 16px !important; }
 }
 
-/* ---------- Bottom tab bar ---------- */
+/* ---------- Bottom tab bar: floating glass capsule ---------- */
 .ia-bottomnav {
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: calc(10px + env(safe-area-inset-bottom));
     z-index: 1250; /* above the app bar, below an open drawer overlay */
-    height: calc(var(--ia-bottomnav-height) + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
+    height: var(--ia-bottomnav-height);
+    padding: 5px;
+    box-sizing: border-box;
     justify-content: space-around;
     align-items: stretch;
     background-color: var(--mud-palette-surface); /* opaque fallback if color-mix is unsupported */
-    background-color: color-mix(in srgb, var(--mud-palette-surface) 78%, transparent);
+    background-color: color-mix(in srgb, var(--mud-palette-surface) 70%, transparent);
     background-image: var(--ia-glass-sheen);
     backdrop-filter: var(--ia-glass-blur);
     -webkit-backdrop-filter: var(--ia-glass-blur);
-    border-top: 1px solid var(--mud-palette-lines-default);
-    box-shadow: var(--ia-glass-edge);
+    border: 1px solid color-mix(in srgb, var(--mud-palette-lines-default) 80%, transparent);
+    border-radius: 999px;
+    box-shadow: var(--ia-glass-edge), var(--ia-glass-shadow);
 }
 
 .ia-tab {
@@ -285,20 +312,25 @@ button, a, .mud-nav-link, .mud-button-root, .mud-icon-button { -webkit-tap-highl
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    padding: 6px 0 4px;
+    gap: 1px;
+    padding: 4px 0 3px;
     border: none;
     background: none;
+    border-radius: 999px;
     cursor: pointer;
     text-decoration: none;
     font-family: inherit;
     color: var(--mud-palette-text-secondary);
-    transition: color .15s ease, transform .08s ease;
+    transition: color .15s ease, background-color .2s ease, transform .08s ease;
 }
-.ia-tab .mud-icon-root { width: 26px; height: 26px; }
-.ia-tab-label { font-size: .68rem; font-weight: 500; letter-spacing: .01em; }
+.ia-tab .mud-icon-root { width: 24px; height: 24px; }
+.ia-tab-label { font-size: .66rem; font-weight: 500; letter-spacing: .01em; }
 .ia-tab:active { transform: scale(.9); }
-.ia-tab.active { color: var(--mud-palette-primary); }
+.ia-tab.active {
+    color: var(--mud-palette-primary);
+    /* The selected tab sits in its own tinted pill inside the capsule. */
+    background-color: color-mix(in srgb, var(--mud-palette-primary) 14%, transparent);
+}
 
 /* ---------- Touch devices: replace hover affordances with press feedback ---------- */
 /* Hover lifts/underlines stick after a tap on touch screens and feel un-native, so
@@ -357,7 +389,7 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 @media (max-width: 959.95px) {
     .ia-rail { display: none !important; }
     .mud-main-content { margin-left: 0 !important; }
-    .mud-appbar { left: 0 !important; margin-left: 0 !important; width: 100% !important; }
+    .mud-appbar { left: max(12px, env(safe-area-inset-left)) !important; margin-left: 0 !important; width: auto !important; }
     /* The full-width nav overlay must park fully off-screen when closed (its width is
        100%, so the default -Width offset would leave a sliver showing). */
     .ia-mobile-nav:not(.mud-drawer--open) { left: -100% !important; }

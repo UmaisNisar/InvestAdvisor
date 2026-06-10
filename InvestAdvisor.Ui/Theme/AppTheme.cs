@@ -73,7 +73,8 @@ public static class AppTheme
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "10px",
+            // Generous curvature: inputs, menus, panels and chips all inherit this.
+            DefaultBorderRadius = "14px",
         },
     };
 }
