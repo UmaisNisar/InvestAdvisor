@@ -71,12 +71,26 @@ public sealed class InvestAdvisorWorker(
         // --- Shared market-data refresh: the union of ALL tenants' tickers (one fetch each). ---
         List<TickerSpec> allTickers;
         List<Tenant> tenants;
+        List<string> holdingCurrencies;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             var hs = await db.Holdings.AsNoTracking().Select(h => new TickerSpec(h.Ticker, h.AssetClass)).ToListAsync(ct);
             var ws = await db.WatchlistItems.AsNoTracking().Select(w => new TickerSpec(w.Ticker, w.AssetClass)).ToListAsync(ct);
             allTickers = hs.Concat(ws).Distinct().ToList();
             tenants = await db.Tenants.AsNoTracking().ToListAsync(ct);
+            holdingCurrencies = await db.Holdings.AsNoTracking().Select(h => h.Currency).Distinct().ToListAsync(ct);
+        }
+
+        // FX rates for drift evaluation: allocation percentages need every holding in USD.
+        var fxRates = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 1m };
+        var fx = sp.GetRequiredService<IFxRateProvider>();
+        foreach (var c in holdingCurrencies
+                     .Select(c => string.IsNullOrWhiteSpace(c) ? "USD" : c.Trim().ToUpperInvariant())
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (fxRates.ContainsKey(c)) continue;
+            try { fxRates[c] = await fx.GetRateToUsdAsync(c, ct); }
+            catch (Exception ex) { logger.LogWarning(ex, "FX rate fetch failed for {Currency}; using 1.0 for drift math.", c); }
         }
 
         if (allTickers.Count > 0)
@@ -152,7 +166,8 @@ public sealed class InvestAdvisorWorker(
                 Holdings: holdings,
                 Watchlist: watchlist,
                 LatestSnapshotsByTicker: latestSnaps,
-                SuppressedKeys: suppressed));
+                SuppressedKeys: suppressed,
+                FxRatesToUsd: fxRates));
 
             // Carry the re-armed/alerted dedup set into this tenant's next tick so a persistent
             // condition (e.g. a stock down -15% all session) fires once, not every tick.

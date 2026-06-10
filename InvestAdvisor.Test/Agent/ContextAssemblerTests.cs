@@ -174,7 +174,7 @@ public class ContextAssemblerTests
     }
 
     [Fact]
-    public async Task Stale_snapshot_is_excluded_holding_price_is_null()
+    public async Task Stale_snapshot_is_included_but_flagged_and_caveated()
     {
         var (sut, db, _) = BuildSut(minFreshnessSec: 60);
         await using var _db = db;
@@ -196,11 +196,90 @@ public class ContextAssemblerTests
 
         var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
+        // A stale price flagged as stale beats a holding silently vanishing from totals.
+        var h = ctx.Holdings.Single();
+        h.Price.Should().Be(200m);
+        h.PriceIsStale.Should().BeTrue();
+        h.PriceAsOfUtc.Should().Be(Now.AddHours(-2));
+        h.MarketValueUsd.Should().Be(2000m);
+        ctx.Totals.MarketValueUsd.Should().Be(2000m);
+        ctx.TopMovers.Should().BeEmpty(); // stale % change is not "today's move"
+        ctx.DataCaveats.Should().NotBeNull();
+        ctx.DataCaveats!.Should().Contain(c => c.Contains("AAPL") && c.Contains("older than"));
+    }
+
+    [Fact]
+    public async Task Holding_with_no_snapshot_at_all_is_caveated_as_missing()
+    {
+        var (sut, db, _) = BuildSut();
+        await using var _db = db;
+        using (var c = db.CreateContext())
+        {
+            c.Holdings.Add(new Holding
+            {
+                Ticker = "AAPL", Name = "Apple", AssetClass = AssetClass.Equity,
+                AccountType = AccountType.Taxable, Quantity = 10m, AvgCost = 150m,
+            });
+            c.SaveChanges();
+        }
+
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
+
         var h = ctx.Holdings.Single();
         h.Price.Should().BeNull();
-        h.MarketValueUsd.Should().BeNull();
-        h.UnrealizedPnlUsd.Should().BeNull();
+        h.PriceIsStale.Should().BeFalse();
         ctx.Totals.MarketValueUsd.Should().Be(0m);
+        ctx.DataCaveats.Should().NotBeNull();
+        ctx.DataCaveats!.Should().Contain(c => c.Contains("AAPL") && c.Contains("No price"));
+    }
+
+    [Fact]
+    public async Task News_is_scoped_to_tracked_tickers_plus_market_wide()
+    {
+        var (sut, db, _) = BuildSut();
+        await using var _db = db;
+        using (var c = db.CreateContext())
+        {
+            c.Holdings.Add(new Holding
+            {
+                Ticker = "AAPL", Name = "Apple", AssetClass = AssetClass.Equity,
+                AccountType = AccountType.Taxable, Quantity = 1m, AvgCost = 100m,
+            });
+            c.NewsItems.AddRange(
+                new NewsItem { Ticker = "AAPL", Headline = "apple news", Source = "s", Url = "https://e.com/1", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) },
+                new NewsItem { Ticker = null, Headline = "market news", Source = "s", Url = "https://e.com/2", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) },
+                // Screener-universe social noise about a name the user doesn't track:
+                new NewsItem { Ticker = "GME", Headline = "to the moon", Source = "stocktwits", Url = "https://e.com/3", PublishedAtUtc = Now.AddMinutes(-5), FetchedAtUtc = Now.AddMinutes(-5) });
+            c.SaveChanges();
+        }
+
+        var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
+
+        ctx.RecentNews.Select(n => n.Headline).Should().BeEquivalentTo(new[] { "apple news", "market news" });
+    }
+
+    [Fact]
+    public async Task Condition_trigger_scopes_news_and_sentiment_to_the_affected_ticker()
+    {
+        var (sut, db, _) = BuildSut();
+        await using var _db = db;
+        using (var c = db.CreateContext())
+        {
+            c.Holdings.AddRange(
+                new Holding { Ticker = "AAPL", Name = "Apple", AssetClass = AssetClass.Equity, AccountType = AccountType.Taxable, Quantity = 1m, AvgCost = 100m },
+                new Holding { Ticker = "MSFT", Name = "Microsoft", AssetClass = AssetClass.Equity, AccountType = AccountType.Taxable, Quantity = 1m, AvgCost = 100m });
+            c.NewsItems.AddRange(
+                new NewsItem { Ticker = "AAPL", Headline = "apple news", Source = "s", Url = "https://e.com/1", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) },
+                new NewsItem { Ticker = "MSFT", Headline = "msft news", Source = "s", Url = "https://e.com/2", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) },
+                new NewsItem { Ticker = null, Headline = "market news", Source = "s", Url = "https://e.com/3", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) });
+            c.SaveChanges();
+        }
+
+        var trigger = new RunTrigger(RunTriggerKind.BigMove, "AAPL moved -8% today", "AAPL");
+        var ctx = await sut.BuildAsync(TestTenant, trigger);
+
+        ctx.RecentNews.Select(n => n.Headline).Should().BeEquivalentTo(new[] { "apple news", "market news" });
+        ctx.Holdings.Should().HaveCount(2); // full portfolio stays — totals/drift still need it
     }
 
     [Fact]

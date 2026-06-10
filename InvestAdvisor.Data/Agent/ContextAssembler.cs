@@ -42,13 +42,33 @@ public sealed class ContextAssembler(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var latestSnapshots = await LoadLatestSnapshotsAsync(db, trackedTickers, freshnessCutoff, ct);
+        // Condition triggers review ONE event (lean prompt): scope news/sentiment to the
+        // affected ticker so input tokens aren't spent on names the model won't re-rate.
+        var focusTicker = trigger.Kind is RunTriggerKind.PriceTarget
+            or RunTriggerKind.BigMove or RunTriggerKind.DriftThreshold
+            ? trigger.Ticker : null;
+        var newsScope = focusTicker is not null ? new[] { focusTicker } : trackedTickers;
 
+        var latestSnapshots = await LoadLatestSnapshotsAsync(db, trackedTickers, ct);
+
+        // Only this user's tracked names plus market-wide (null-ticker) items. The same table
+        // also holds screener-universe social posts, which would otherwise crowd out the
+        // holdings' actual news within the item cap.
         var news = await db.NewsItems.AsNoTracking()
-            .Where(n => n.FetchedAtUtc >= newsCutoff)
+            .Where(n => n.FetchedAtUtc >= newsCutoff
+                        && (n.Ticker == null || newsScope.Contains(n.Ticker)))
             .OrderByDescending(n => n.PublishedAtUtc)
             .Take(MaxNewsItems)
             .ToListAsync(ct);
+
+        // Latest screener metrics give the model 13-week/26-week momentum (7d/30d for crypto)
+        // per holding — far better trend evidence than a single day's move.
+        var metricsByTicker = (await db.StockMetrics.AsNoTracking()
+                .Where(m => trackedTickers.Contains(m.Ticker))
+                .ToListAsync(ct))
+            .GroupBy(m => m.Ticker, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.FetchedAtUtc).First(),
+                StringComparer.OrdinalIgnoreCase);
 
         var profileSnapshot = new ProfileSnapshot(
             GoalsText: profile.GoalsText,
@@ -62,11 +82,11 @@ public sealed class ContextAssembler(
         foreach (var c in holdings.Select(h => Cur(h.Currency)).Distinct(StringComparer.OrdinalIgnoreCase))
             if (!rates.ContainsKey(c)) rates[c] = await fx.GetRateToUsdAsync(c, ct);
 
-        var holdingViews = ComputeHoldingViews(holdings, latestSnapshots, rates);
+        var holdingViews = ComputeHoldingViews(holdings, latestSnapshots, rates, freshnessCutoff, metricsByTicker);
         var totals = ComputePortfolioTotals(holdings, latestSnapshots, rates);
         var allocation = ComputeAllocation(holdings, holdingViews, totals.MarketValueUsd);
 
-        var movers = ComputeTopMovers(latestSnapshots);
+        var movers = ComputeTopMovers(latestSnapshots, freshnessCutoff);
 
         var newsHeadlines = news.Select(n => new NewsHeadline(
             Ticker: n.Ticker,
@@ -77,9 +97,10 @@ public sealed class ContextAssembler(
             SentimentScore: n.SentimentScore,
             SentimentLabel: n.SentimentLabel)).ToArray();
 
-        // Per-ticker sentiment digest, scoped to the names the user actually tracks.
+        // Per-ticker sentiment digest, scoped to the names the user actually tracks
+        // (or just the triggering ticker on a condition run).
         var sentimentByTicker = await sentiment.GetTickerSentimentAsync(ct);
-        var sentimentViews = trackedTickers
+        var sentimentViews = newsScope
             .Where(t => sentimentByTicker.ContainsKey(t))
             .Select(t =>
             {
@@ -89,9 +110,11 @@ public sealed class ContextAssembler(
             .OrderBy(v => v.MeanScore)
             .ToArray();
 
+        var caveats = BuildDataCaveats(holdings, holdingViews, settings.MinPriceFreshnessSeconds, focusTicker);
+
         logger?.LogInformation(
-            "Assembled RunContext: {HoldingCount} holdings, {SnapshotCount} fresh snapshots, {NewsCount} news items, {SentimentCount} sentiment tickers, MarketValue={MarketValue:C}",
-            holdingViews.Count, latestSnapshots.Count, newsHeadlines.Length, sentimentViews.Length, totals.MarketValueUsd);
+            "Assembled RunContext: {HoldingCount} holdings, {SnapshotCount} snapshots, {NewsCount} news items, {SentimentCount} sentiment tickers, {CaveatCount} caveats, MarketValue={MarketValue:C}",
+            holdingViews.Count, latestSnapshots.Count, newsHeadlines.Length, sentimentViews.Length, caveats?.Count ?? 0, totals.MarketValueUsd);
 
         return new RunContext(
             GeneratedAtUtc: now,
@@ -103,20 +126,61 @@ public sealed class ContextAssembler(
             Allocation: allocation,
             TopMovers: movers,
             RecentNews: newsHeadlines,
-            Sentiment: sentimentViews);
+            Sentiment: sentimentViews,
+            DataCaveats: caveats);
     }
 
+    /// <summary>
+    /// Plain-language data-quality warnings the model must weigh: stale or missing prices and
+    /// the FX simplification on cost basis. Null when there is nothing to caveat (the common
+    /// case), so no tokens are spent on it.
+    /// </summary>
+    private static IReadOnlyList<string>? BuildDataCaveats(
+        IReadOnlyList<Holding> holdings,
+        IReadOnlyList<HoldingView> views,
+        int minPriceFreshnessSeconds,
+        string? focusTicker)
+    {
+        var caveats = new List<string>();
+
+        var stale = views.Where(v => v.PriceIsStale).Select(v => v.Ticker).ToArray();
+        if (stale.Length > 0)
+            caveats.Add(
+                $"Prices for {string.Join(", ", stale)} are older than {minPriceFreshnessSeconds}s " +
+                "(see priceAsOfUtc); market values and allocations for those holdings may be out of date.");
+
+        var missing = views.Where(v => v.Price is null).Select(v => v.Ticker).ToArray();
+        if (missing.Length > 0)
+            caveats.Add(
+                $"No price is available for {string.Join(", ", missing)}; those holdings are excluded " +
+                "from portfolio totals and allocation percentages.");
+
+        if (holdings.Any(h => Cur(h.Currency) != "USD"))
+            caveats.Add(
+                "Non-USD holdings are converted to USD at current FX rates, including cost basis — " +
+                "unrealizedPnl excludes FX gain/loss since purchase.");
+
+        if (focusTicker is not null)
+            caveats.Add(
+                $"News and sentiment in this payload are scoped to {focusTicker} (the triggering ticker) " +
+                "plus market-wide items.");
+
+        return caveats.Count > 0 ? caveats : null;
+    }
+
+    // Loads the latest snapshot per ticker regardless of age: a stale price flagged as stale is
+    // more useful to the model than a holding that silently vanishes from totals. Staleness is
+    // marked per holding in ComputeHoldingViews and called out in DataCaveats.
     private static async Task<Dictionary<string, PriceSnapshot>> LoadLatestSnapshotsAsync(
         InvestAdvisorDbContext db,
         IReadOnlyCollection<string> tickers,
-        DateTime freshnessCutoff,
         CancellationToken ct)
     {
         if (tickers.Count == 0)
             return new Dictionary<string, PriceSnapshot>(StringComparer.OrdinalIgnoreCase);
 
         var candidate = await db.PriceSnapshots.AsNoTracking()
-            .Where(s => tickers.Contains(s.Ticker) && s.FetchedAtUtc >= freshnessCutoff)
+            .Where(s => tickers.Contains(s.Ticker))
             .OrderByDescending(s => s.FetchedAtUtc)
             .ToListAsync(ct);
 
@@ -134,7 +198,9 @@ public sealed class ContextAssembler(
     private static IReadOnlyList<HoldingView> ComputeHoldingViews(
         IReadOnlyList<Holding> holdings,
         IReadOnlyDictionary<string, PriceSnapshot> snapshots,
-        IReadOnlyDictionary<string, decimal> rates)
+        IReadOnlyDictionary<string, decimal> rates,
+        DateTime freshnessCutoff,
+        IReadOnlyDictionary<string, StockMetric> metricsByTicker)
     {
         var totalMarketValue = 0m;
         var perHolding = new List<(Holding h, decimal? mv, decimal? price, decimal? pnl, decimal? pnlPct, decimal? todayPct)>();
@@ -161,6 +227,9 @@ public sealed class ContextAssembler(
                 ? null
                 : currentAlloc - h.TargetAllocationPct;
 
+            snapshots.TryGetValue(h.Ticker, out var snap);
+            metricsByTicker.TryGetValue(h.Ticker, out var metric);
+
             views.Add(new HoldingView(
                 Ticker: h.Ticker,
                 Name: h.Name,
@@ -176,7 +245,11 @@ public sealed class ContextAssembler(
                 CurrentAllocationPct: currentAlloc,
                 TargetAllocationPct: h.TargetAllocationPct,
                 DriftPct: drift,
-                Currency: Cur(h.Currency)));
+                Currency: Cur(h.Currency),
+                PriceAsOfUtc: snap?.FetchedAtUtc,
+                PriceIsStale: snap is not null && snap.FetchedAtUtc < freshnessCutoff,
+                MomentumShortPct: metric?.MomentumShort,
+                MomentumLongPct: metric?.MomentumLong));
         }
         return views;
     }
@@ -250,9 +323,13 @@ public sealed class ContextAssembler(
         return new AllocationView(byAssetClass, byAccountType, drifts);
     }
 
-    private static IReadOnlyList<MoverView> ComputeTopMovers(IReadOnlyDictionary<string, PriceSnapshot> snapshots)
+    // Movers only consider fresh snapshots: a stale percent-change is a previous session's move
+    // and would be presented as "today".
+    private static IReadOnlyList<MoverView> ComputeTopMovers(
+        IReadOnlyDictionary<string, PriceSnapshot> snapshots, DateTime freshnessCutoff)
     {
         return snapshots.Values
+            .Where(s => s.FetchedAtUtc >= freshnessCutoff)
             .OrderByDescending(s => Math.Abs(s.PercentChange))
             .Take(TopMoversCount)
             .Select(s => new MoverView(

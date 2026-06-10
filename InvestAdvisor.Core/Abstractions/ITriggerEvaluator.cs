@@ -30,7 +30,13 @@ public sealed record EvaluationInput(
     /// Dedup keys of condition triggers already alerted on and not yet re-armed. The caller
     /// passes back the <see cref="TriggerDecision.ActiveKeys"/> from the previous tick.
     /// </summary>
-    IReadOnlySet<string>? SuppressedKeys = null);
+    IReadOnlySet<string>? SuppressedKeys = null,
+    /// <summary>
+    /// Currency → USD conversion rates for the holdings' currencies. Drift percentages are
+    /// allocation shares, so mixed-currency portfolios need a common denominator; a missing
+    /// currency falls back to 1 (treated as USD).
+    /// </summary>
+    IReadOnlyDictionary<string, decimal>? FxRatesToUsd = null);
 
 /// <summary>
 /// Result of one evaluation. <see cref="ActiveKeys"/> is the dedup-key set the caller must

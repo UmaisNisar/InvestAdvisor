@@ -59,6 +59,8 @@ public class ScreenerScoringServiceTests
         using (var c = db.CreateContext())
         {
             c.Stocks.Add(new Stock { Ticker = "AAPL", AssetClass = AssetClass.Equity, IsActive = true });
+            // Some metric data so the stock is rankable at all (zero-data names are excluded).
+            c.StockMetrics.Add(new StockMetric { Ticker = "AAPL", MomentumShort = 5m, MomentumLong = 10m });
             c.SaveChanges();
         }
         var sut = BuildSut(db, new RuntimeSettings(),
@@ -68,5 +70,27 @@ public class ScreenerScoringServiceTests
 
         ranked.Should().ContainSingle();
         ranked[0].Factors.Sentiment.Should().BeNull(); // no data -> factor absent, not zero
+    }
+
+    [Fact]
+    public async Task Stock_with_no_data_at_all_is_excluded_from_ranking()
+    {
+        await using var db = new SqliteFixture();
+        using (var c = db.CreateContext())
+        {
+            c.Stocks.AddRange(
+                new Stock { Ticker = "AAPL", AssetClass = AssetClass.Equity, IsActive = true },
+                new Stock { Ticker = "NODATA", AssetClass = AssetClass.Equity, IsActive = true });
+            c.StockMetrics.Add(new StockMetric { Ticker = "AAPL", MomentumShort = 5m, MomentumLong = 10m });
+            c.SaveChanges();
+        }
+        var sut = BuildSut(db, new RuntimeSettings(),
+            new Dictionary<string, TickerSentiment>(StringComparer.OrdinalIgnoreCase));
+
+        var ranked = await sut.RankAsync(AssetClass.Equity);
+
+        // A zero-data name must not appear at the bottom masquerading as a "top risk".
+        ranked.Should().ContainSingle();
+        ranked[0].Ticker.Should().Be("AAPL");
     }
 }

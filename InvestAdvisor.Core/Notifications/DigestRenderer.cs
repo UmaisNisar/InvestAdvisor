@@ -56,8 +56,9 @@ public static class DigestRenderer
             {
                 sb.AppendLine(
                     $"<li><code>{Encode(d.Ticker)}</code> at <strong>{d.CurrentPct:0.0}%</strong> vs target {d.TargetPct:0.0}% " +
-                    $"(drift {d.DriftPct:+0.0;-0.0}%, {Encode(d.Severity.ToString())})<br>" +
-                    $"<span style=\"color:#444\">{Encode(d.Note)}</span></li>");
+                    $"(drift {d.DriftPct:+0.0;-0.0}%, {Encode(d.Severity.ToString())})" +
+                    (d.KnownTicker ? "" : " <em style=\"color:#a00\">(unknown ticker)</em>") +
+                    $"<br><span style=\"color:#444\">{Encode(d.Note)}</span></li>");
             }
             sb.AppendLine("</ul>");
         }

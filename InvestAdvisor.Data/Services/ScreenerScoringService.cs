@@ -128,7 +128,8 @@ public sealed class ScreenerScoringService(
                 var composite = Composite(
                     (sV, wValuation), (sG, wGrowth), (sQ, wQuality), (sA, wAnalyst), (sI, wInsider),
                     (sM, wMomentum), (sS, wSentiment));
-                scores.Add(MakeScore(r, composite, new FactorScores(sV, sG, sQ, sA, sI, sM, sS)));
+                if (composite is null) continue; // no data at all — excluding beats a fake bottom rank
+                scores.Add(MakeScore(r, composite.Value, new FactorScores(sV, sG, sQ, sA, sI, sM, sS)));
             }
         }
         else if (assetClass == AssetClass.Etf)
@@ -140,7 +141,8 @@ public sealed class ScreenerScoringService(
                 decimal? sQ = Scale(Get(rBeta, r.Ticker));
                 decimal? sS = Scale(Get(rSent, r.Ticker));
                 var composite = Composite((sM, wMomentum), (sQ, wQuality), (sS, wSentiment));
-                scores.Add(MakeScore(r, composite, new FactorScores(null, null, sQ, null, null, sM, sS)));
+                if (composite is null) continue;
+                scores.Add(MakeScore(r, composite.Value, new FactorScores(null, null, sQ, null, null, sM, sS)));
             }
         }
         else // Crypto
@@ -152,7 +154,8 @@ public sealed class ScreenerScoringService(
                 decimal? sQ = Scale(Get(rSize, r.Ticker));
                 decimal? sS = Scale(Get(rSent, r.Ticker));
                 var composite = Composite((sM, wMomentum), (sQ, wQuality), (sS, wSentiment));
-                scores.Add(MakeScore(r, composite, new FactorScores(null, null, sQ, null, null, sM, sS)));
+                if (composite is null) continue;
+                scores.Add(MakeScore(r, composite.Value, new FactorScores(null, null, sQ, null, null, sM, sS)));
             }
         }
 
@@ -168,12 +171,15 @@ public sealed class ScreenerScoringService(
                 r.AnalystTotal, r.BuyCount, r.BuyPct ?? 0m, r.TrendDelta ?? 0,
                 r.NetInsider ?? 0m, r.DataAsOfUtc));
 
-    private static decimal Composite(params (decimal? Score, decimal Weight)[] parts)
+    // Null (not 0) when no weighted factor has data: a 0 would rank the stock as the worst in
+    // the universe and put data-gap names at the top of the "risks" list, where they'd burn
+    // LLM analysis spend on what is really a fetch failure.
+    private static decimal? Composite(params (decimal? Score, decimal Weight)[] parts)
     {
         decimal acc = 0m, wsum = 0m;
         foreach (var (sc, w) in parts)
             if (sc.HasValue) { acc += sc.Value * w; wsum += w; }
-        return wsum > 0m ? Math.Round(acc / wsum, 1) : 0m;
+        return wsum > 0m ? Math.Round(acc / wsum, 1) : null;
     }
 
     private sealed class Raw

@@ -44,7 +44,7 @@ public sealed record DailyRecommendationView(
     IReadOnlyList<RecommendationPick> Etfs,
     IReadOnlyList<RecommendationPick> Crypto);
 
-public sealed record RecommendationPick(string Ticker, string Name, string Reason);
+public sealed record RecommendationPick(string Ticker, string Name, string Reason, decimal? PriceAtRecommendation = null);
 
 public sealed record StockAnalysisView(
     DateTime GeneratedAtUtc,

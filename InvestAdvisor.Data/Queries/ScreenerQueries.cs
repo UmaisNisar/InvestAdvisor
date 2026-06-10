@@ -65,12 +65,12 @@ public sealed class ScreenerQueries(
             var raw = JsonSerializer.Deserialize<List<PickDto>>(json);
             return raw is null
                 ? Array.Empty<RecommendationPick>()
-                : raw.Select(p => new RecommendationPick(p.ticker ?? "", p.name ?? "", p.reason ?? "")).ToList();
+                : raw.Select(p => new RecommendationPick(p.ticker ?? "", p.name ?? "", p.reason ?? "", p.priceAtRecommendation)).ToList();
         }
         catch { return Array.Empty<RecommendationPick>(); }
     }
 
-    private sealed record PickDto(string? ticker, string? name, string? reason);
+    private sealed record PickDto(string? ticker, string? name, string? reason, decimal? priceAtRecommendation = null);
 
     public async Task<ScreenerValidation?> GetValidationAsync(CancellationToken ct = default)
     {

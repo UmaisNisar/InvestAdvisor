@@ -13,6 +13,7 @@ public sealed class NewsRefreshService(
     ILogger<NewsRefreshService>? logger = null) : INewsRefreshService
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(30);
+    private const int MaxTickersPerRun = 20; // cap to avoid rate-limit burn
 
     public async Task<int> RefreshAsync(IEnumerable<TickerSpec> tickers, CancellationToken ct = default)
     {
@@ -31,7 +32,21 @@ public sealed class NewsRefreshService(
             await db.NewsItems.AsNoTracking().Select(n => n.Url).ToListAsync(ct),
             StringComparer.OrdinalIgnoreCase);
 
-        var perTickerCalls = tickers.Distinct().Take(20).ToArray(); // cap to avoid rate-limit burn
+        // Rotate fairly: least-recently-fetched tickers first, so a list longer than the
+        // per-run cap still gets every name covered across successive runs (a fixed-order
+        // Take would starve everything past the first 20 forever).
+        var lastFetchByTicker = (await db.NewsItems.AsNoTracking()
+                .Where(n => n.Ticker != null)
+                .GroupBy(n => n.Ticker!)
+                .Select(g => new { Ticker = g.Key, Last = g.Max(n => n.FetchedAtUtc) })
+                .ToListAsync(ct))
+            .ToDictionary(x => x.Ticker, x => x.Last, StringComparer.OrdinalIgnoreCase);
+
+        var perTickerCalls = tickers.Distinct()
+            .OrderBy(t => lastFetchByTicker.TryGetValue(t.Ticker, out var last) ? last : DateTime.MinValue)
+            .ThenBy(t => t.Ticker, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxTickersPerRun)
+            .ToArray();
         foreach (var spec in perTickerCalls)
         {
             IReadOnlyList<NewsHeadline> headlines;

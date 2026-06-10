@@ -15,7 +15,8 @@ public sealed record RunContext(
     AllocationView Allocation,
     IReadOnlyList<MoverView> TopMovers,
     IReadOnlyList<NewsHeadline> RecentNews,
-    IReadOnlyList<TickerSentimentView> Sentiment);
+    IReadOnlyList<TickerSentimentView> Sentiment,
+    IReadOnlyList<string>? DataCaveats = null);
 
 public sealed record ProfileSnapshot(
     string GoalsText,
@@ -48,7 +49,11 @@ public sealed record HoldingView(
     decimal? CurrentAllocationPct,
     decimal? TargetAllocationPct,
     decimal? DriftPct,
-    string Currency = "USD");
+    string Currency = "USD",
+    DateTime? PriceAsOfUtc = null,
+    bool PriceIsStale = false,
+    decimal? MomentumShortPct = null,
+    decimal? MomentumLongPct = null);
 
 public sealed record AllocationView(
     IReadOnlyDictionary<string, decimal> ByAssetClass,
