@@ -77,7 +77,9 @@ public sealed class FinnhubNewsProvider(
         return items
             .Where(i => !string.IsNullOrEmpty(i.Headline) && !string.IsNullOrEmpty(i.Url))
             .Select(i => new NewsHeadline(
-                Ticker: i.Related ?? fallbackTicker,
+                // Finnhub sends Related as "" (not null) on market news; an empty-string ticker
+                // would dodge the "market-wide" (null) classification downstream.
+                Ticker: string.IsNullOrWhiteSpace(i.Related) ? fallbackTicker : i.Related,
                 Headline: i.Headline!,
                 Source: i.Source ?? "",
                 Url: i.Url!,

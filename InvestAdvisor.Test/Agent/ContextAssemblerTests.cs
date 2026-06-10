@@ -248,6 +248,8 @@ public class ContextAssemblerTests
             c.NewsItems.AddRange(
                 new NewsItem { Ticker = "AAPL", Headline = "apple news", Source = "s", Url = "https://e.com/1", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) },
                 new NewsItem { Ticker = null, Headline = "market news", Source = "s", Url = "https://e.com/2", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) },
+                // Legacy market-news rows: Finnhub's Related field arrived as "" pre-normalization.
+                new NewsItem { Ticker = "", Headline = "old market news", Source = "s", Url = "https://e.com/4", PublishedAtUtc = Now.AddHours(-1), FetchedAtUtc = Now.AddHours(-1) },
                 // Screener-universe social noise about a name the user doesn't track:
                 new NewsItem { Ticker = "GME", Headline = "to the moon", Source = "stocktwits", Url = "https://e.com/3", PublishedAtUtc = Now.AddMinutes(-5), FetchedAtUtc = Now.AddMinutes(-5) });
             c.SaveChanges();
@@ -255,7 +257,7 @@ public class ContextAssemblerTests
 
         var ctx = await sut.BuildAsync(TestTenant, DummyTrigger);
 
-        ctx.RecentNews.Select(n => n.Headline).Should().BeEquivalentTo(new[] { "apple news", "market news" });
+        ctx.RecentNews.Select(n => n.Headline).Should().BeEquivalentTo(new[] { "apple news", "market news", "old market news" });
     }
 
     [Fact]
