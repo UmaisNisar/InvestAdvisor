@@ -43,8 +43,16 @@ public sealed class ContextAssembler(
 
         var latestSnapshots = await LoadLatestSnapshotsAsync(db, trackedTickers, freshnessCutoff, ct);
 
-        var news = await db.NewsItems.AsNoTracking()
-            .Where(n => n.FetchedAtUtc >= newsCutoff)
+        // News by run type. Scheduled + Manual runs are the review/discovery runs, so they get the
+        // full broad feed (the "where to invest next" signal, including names outside the portfolio).
+        // Condition triggers (big move / price target / drift) are event-focused and frequent — they
+        // only need news about the affected positions, so scope those to the user's tracked tickers.
+        var isCondition = trigger.Kind is RunTriggerKind.PriceTarget
+            or RunTriggerKind.BigMove or RunTriggerKind.DriftThreshold;
+        var newsQuery = db.NewsItems.AsNoTracking().Where(n => n.FetchedAtUtc >= newsCutoff);
+        if (isCondition)
+            newsQuery = newsQuery.Where(n => trackedTickers.Contains(n.Ticker));
+        var news = await newsQuery
             .OrderByDescending(n => n.PublishedAtUtc)
             .Take(MaxNewsItems)
             .ToListAsync(ct);
