@@ -118,9 +118,13 @@
                 }
                 else
                 {
-                    @* @key on the reveal wrapper recreates chart and animation together, so every
-                       ticker/range/view switch replays the left-to-right draw-in. *@
-                    <div class="ia-chart-reveal" @key="@($"{_loadedTicker}-{_range}-{_view}")">
+                    @* Host overlays a skeleton until ApexCharts actually paints (CSS :has watches for
+                       the canvas) — covers cold loads where the chart JS arrives after the data.
+                       @key recreates chart and animations together, so every ticker/range/view
+                       switch replays the left-to-right draw-in. *@
+                    <div class="ia-chart-host" style="height:360px" @key="@($"{_loadedTicker}-{_range}-{_view}")">
+                    <ChartSkeleton Height="360" />
+                    <div class="ia-chart-reveal">
                     <ApexChart TItem="Candle" Height="360" Options="_options">
                         @if (_view == ChartView.Candles)
                         {
@@ -143,6 +147,7 @@
                                              SeriesType="SeriesType.Area" />
                         }
                     </ApexChart>
+                    </div>
                     </div>
                     <MudText Typo="Typo.caption" Color="Color.Surface" Class="px-2">
                         @(_view == ChartView.Candles ? "Daily open/high/low/close" : "Daily closing price") in @_history.Currency · source: Yahoo Finance

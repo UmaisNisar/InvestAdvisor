@@ -70,17 +70,22 @@
         }
         else
         {
-            @* @key on the reveal wrapper recreates chart and animation together, so every
-               range/currency switch replays the left-to-right draw-in. *@
-            <div class="ia-chart-reveal" @key="_chartVersion">
-                <ApexChart TItem="ChartPoint" Height="190" Options="_options">
-                    <ApexPointSeries TItem="ChartPoint"
-                                     Items="_chartPoints"
-                                     Name="Portfolio value"
-                                     XValue="@(p => p.Time)"
-                                     YValue="@(p => p.Value)"
-                                     SeriesType="SeriesType.Area" />
-                </ApexChart>
+            @* Host overlays a skeleton until ApexCharts actually paints (CSS :has watches for the
+               canvas) — data being ready isn't enough on cold loads where the JS is still coming in.
+               @key recreates chart and animations together, so every range/currency switch replays
+               the left-to-right draw-in. *@
+            <div class="ia-chart-host" style="height:190px" @key="_chartVersion">
+                <ChartSkeleton Height="190" />
+                <div class="ia-chart-reveal">
+                    <ApexChart TItem="ChartPoint" Height="190" Options="_options">
+                        <ApexPointSeries TItem="ChartPoint"
+                                         Items="_chartPoints"
+                                         Name="Portfolio value"
+                                         XValue="@(p => p.Time)"
+                                         YValue="@(p => p.Value)"
+                                         SeriesType="SeriesType.Area" />
+                    </ApexChart>
+                </div>
             </div>
         }
     </div>
