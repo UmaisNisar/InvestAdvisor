@@ -14,7 +14,8 @@ namespace InvestAdvisor.Data.Services;
 /// portfolio. Headers are matched flexibly so it tolerates different export layouts. It reconstructs
 /// quotable tickers (Symbol + exchange suffix, e.g. IDIV.B + TSX → IDIV.B.TO), reads the per-row
 /// currency, and converts crypto cost to USD (our crypto feed is USD-priced). Upsert keys on
-/// (ticker, account); positions not present in the file are left untouched (non-destructive).
+/// (ticker, account). By default positions not present in the file are left untouched; with
+/// <c>replaceExisting</c> the file is the full portfolio and absent positions are removed.
 /// </summary>
 public sealed class HoldingsImportService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
@@ -22,7 +23,7 @@ public sealed class HoldingsImportService(
     IFxRateProvider fx,
     ILogger<HoldingsImportService>? logger = null) : IHoldingsImportService
 {
-    public async Task<HoldingsImportResult> ImportFromUrlAsync(int tenantId, string url, CancellationToken ct = default)
+    public async Task<HoldingsImportResult> ImportFromUrlAsync(int tenantId, string url, bool replaceExisting = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(url))
             return new HoldingsImportResult(0, 0, 0, new[] { "No URL configured." });
@@ -40,10 +41,10 @@ public sealed class HoldingsImportService(
             return new HoldingsImportResult(0, 0, 0, new[] { $"Couldn't fetch the CSV URL: {ex.Message}" });
         }
 
-        return await ImportCsvAsync(tenantId, content, ct);
+        return await ImportCsvAsync(tenantId, content, replaceExisting, ct);
     }
 
-    public async Task<HoldingsImportResult> ImportCsvAsync(int tenantId, string csvContent, CancellationToken ct = default)
+    public async Task<HoldingsImportResult> ImportCsvAsync(int tenantId, string csvContent, bool replaceExisting = false, CancellationToken ct = default)
     {
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(csvContent))
@@ -82,6 +83,7 @@ public sealed class HoldingsImportService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var existing = await db.Holdings.Where(h => h.TenantId == tenantId).ToListAsync(ct);
         var now = DateTime.UtcNow;
+        var touched = new HashSet<Holding>(); // pre-existing rows the file mentioned (replace mode keeps these)
 
         for (var r = 1; r < rows.Count; r++)
         {
@@ -136,6 +138,7 @@ public sealed class HoldingsImportService(
                     match.AssetClass = assetClass;
                     if (!string.IsNullOrWhiteSpace(name)) match.Name = name;
                     match.UpdatedAtUtc = now;
+                    touched.Add(match);
                     updated++;
                 }
             }
@@ -145,9 +148,21 @@ public sealed class HoldingsImportService(
             }
         }
 
+        // Replace mode: the file is the whole portfolio, so drop positions it doesn't mention.
+        // Only when at least one row imported — a wrong/empty/garbled file must never wipe holdings.
+        var removed = 0;
+        if (replaceExisting && added + updated > 0)
+        {
+            var stale = existing.Where(h => !touched.Contains(h)).ToList();
+            db.Holdings.RemoveRange(stale);
+            removed = stale.Count;
+        }
+
         await db.SaveChangesAsync(ct);
-        logger?.LogInformation("Holdings CSV import: {Added} added, {Updated} updated, {Skipped} skipped.", added, updated, skipped);
-        return new HoldingsImportResult(added, updated, skipped, errors);
+        logger?.LogInformation(
+            "Holdings CSV import: {Added} added, {Updated} updated, {Removed} removed, {Skipped} skipped.",
+            added, updated, removed, skipped);
+        return new HoldingsImportResult(added, updated, skipped, errors, removed);
     }
 
     private async Task<decimal> ComputeAvgCostAsync(

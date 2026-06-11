@@ -64,7 +64,7 @@ public sealed class HoldingsImportWorker(
                 try
                 {
                     var content = await File.ReadAllTextAsync(path, ct);
-                    var result = await importer.ImportCsvAsync(ownerTenantId, content, ct);
+                    var result = await importer.ImportCsvAsync(ownerTenantId, content, ct: ct);
                     _lastImportedFileTimeUtc = writeTime;
                     logger.LogInformation("Auto-imported holdings from file {Path}: {Added} added, {Updated} updated, {Skipped} skipped.",
                         path, result.Added, result.Updated, result.Skipped);
@@ -78,7 +78,7 @@ public sealed class HoldingsImportWorker(
         var url = settings.HoldingsCsvUrl;
         if (!string.IsNullOrWhiteSpace(url))
         {
-            var result = await importer.ImportFromUrlAsync(ownerTenantId, url, ct);
+            var result = await importer.ImportFromUrlAsync(ownerTenantId, url, ct: ct);
             if (result.Errors.Count == 0)
                 logger.LogInformation("Auto-imported holdings from URL: {Added} added, {Updated} updated, {Skipped} skipped.",
                     result.Added, result.Updated, result.Skipped);

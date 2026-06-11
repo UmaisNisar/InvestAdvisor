@@ -88,4 +88,79 @@ public class HoldingsImportServiceTests
         using var c = db.CreateContext();
         (await c.Holdings.CountAsync()).Should().Be(4);
     }
+
+    // A one-row export: the CSV is the whole portfolio, so replace mode must drop the other 3.
+    private const string WsCsvOneRow = """
+        Account Name,Account Type,Account Classification,Account Number,Symbol,Exchange,MIC,Name,Security Type,Quantity,Position Direction,Market Price,Market Price Currency,Book Value (CAD),Book Value Currency (CAD),Book Value (Market),Book Value Currency (Market),Market Value,Market Value Currency,Market Unrealized Returns,Market Unrealized Returns Currency
+        "TFSA","TFSA","Trade","HQ2","TOI","TSX-V","XTSX","Topicus","EQUITY","4","LONG","100","CAD","400","CAD","400","CAD","397","CAD","-3","CAD"
+        """;
+
+    [Fact]
+    public async Task Replace_import_removes_holdings_not_in_the_file()
+    {
+        await using var db = new SqliteFixture();
+        var sut = Build(db);
+
+        await sut.ImportCsvAsync(Tenant, WsCsv);
+        var result = await sut.ImportCsvAsync(Tenant, WsCsvOneRow, replaceExisting: true);
+
+        result.Updated.Should().Be(1);
+        result.Removed.Should().Be(3);
+        result.AnyChanges.Should().BeTrue();
+        using var c = db.CreateContext();
+        var remaining = await c.Holdings.ToListAsync();
+        remaining.Should().ContainSingle(h => h.Ticker == "TOI.V");
+    }
+
+    [Fact]
+    public async Task Replace_import_with_no_valid_rows_never_wipes_the_portfolio()
+    {
+        await using var db = new SqliteFixture();
+        var sut = Build(db);
+        await sut.ImportCsvAsync(Tenant, WsCsv);
+
+        // Right header, but every row is unusable (blank symbol / zero quantity).
+        var noValidRows = """
+            Symbol,Quantity
+            "",5
+            "ELMT",0
+            """;
+        var result = await sut.ImportCsvAsync(Tenant, noValidRows, replaceExisting: true);
+
+        result.Removed.Should().Be(0);
+        using var c = db.CreateContext();
+        (await c.Holdings.CountAsync()).Should().Be(4);
+    }
+
+    [Fact]
+    public async Task Default_import_stays_non_destructive()
+    {
+        await using var db = new SqliteFixture();
+        var sut = Build(db);
+
+        await sut.ImportCsvAsync(Tenant, WsCsv);
+        var result = await sut.ImportCsvAsync(Tenant, WsCsvOneRow); // no replaceExisting
+
+        result.Removed.Should().Be(0);
+        using var c = db.CreateContext();
+        (await c.Holdings.CountAsync()).Should().Be(4);
+    }
+
+    [Fact]
+    public async Task Replace_import_only_touches_the_importing_tenant()
+    {
+        await using var db = new SqliteFixture();
+        var sut = Build(db);
+        const int otherTenant = 2;
+
+        await sut.ImportCsvAsync(Tenant, WsCsv);
+        await sut.ImportCsvAsync(otherTenant, WsCsv);
+
+        var result = await sut.ImportCsvAsync(Tenant, WsCsvOneRow, replaceExisting: true);
+
+        result.Removed.Should().Be(3);
+        using var c = db.CreateContext();
+        (await c.Holdings.CountAsync(h => h.TenantId == otherTenant)).Should().Be(4);
+        (await c.Holdings.CountAsync(h => h.TenantId == Tenant)).Should().Be(1);
+    }
 }
