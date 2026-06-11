@@ -544,6 +544,7 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
     border: none !important; /* neutralize the Outlined variant's borders */
     border-radius: 999px;
     padding: 4px;
+    margin-bottom: 16px; /* breathing room between the capsule and the panel content */
 }
 .mud-tabs-tabbar .mud-tabs-tabbar-inner { min-height: 40px; }
 .mud-tab {
@@ -732,8 +733,8 @@ html.ia-busy, html.ia-busy * { cursor: progress !important; }
     to { transform: translateX(100%); }
 }
 
-/* Real charts enter with a left-to-right reveal once their data lands, instead of a
-   hard pop-in. clip-path ends fully open so tooltips/interaction are unaffected. */
+/* Real charts enter with a left-to-right reveal, instead of a hard pop-in.
+   clip-path ends fully open so tooltips/interaction are unaffected. */
 .ia-chart-reveal {
     animation: ia-chart-reveal .7s cubic-bezier(.4, 0, .2, 1) both;
 }
@@ -741,9 +742,35 @@ html.ia-busy, html.ia-busy * { cursor: progress !important; }
     from { opacity: 0; clip-path: inset(0 100% 0 0); }
     to   { opacity: 1; clip-path: inset(0 0 0 0); }
 }
+
+/* ia-chart-host: data being loaded isn't enough — on a cold first visit ApexCharts' JS is
+   still downloading after the markup lands, and the slot would sit blank for seconds. The
+   host keeps a skeleton overlaid on the chart and watches (via :has) for the canvas
+   ApexCharts injects when it actually paints; only then does the reveal play and the
+   skeleton fade. Without :has support the host degrades to the plain reveal-on-mount. */
+.ia-chart-host { position: relative; }
+.ia-chart-host > .ia-chart-skeleton { display: none; }
+@supports selector(:has(*)) {
+    .ia-chart-host > .ia-chart-reveal { animation: none; opacity: 0; }
+    .ia-chart-host > .ia-chart-reveal:has(.apexcharts-canvas) {
+        animation: ia-chart-reveal .7s cubic-bezier(.4, 0, .2, 1) both;
+    }
+    .ia-chart-host > .ia-chart-skeleton {
+        display: block;
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        transition: opacity .35s ease;
+    }
+    .ia-chart-host:has(.apexcharts-canvas) > .ia-chart-skeleton { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ia-chart-skeleton svg, .ia-chart-skeleton-line, .ia-chart-skeleton-area,
     .ia-chart-skeleton::after, .ia-chart-reveal { animation: none; }
     .ia-chart-skeleton-line { stroke-dashoffset: 0; }
     .ia-chart-skeleton-area { opacity: 1; }
+    /* The reveal normally starts at opacity 0 inside a host; without the animation the
+       canvas-arrival selector must restore visibility directly. */
+    .ia-chart-host > .ia-chart-reveal:has(.apexcharts-canvas) { opacity: 1; }
 }
