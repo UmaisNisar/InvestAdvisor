@@ -44,19 +44,22 @@ else
     <MudDialog @bind-Visible="_editOpen" Options="@(new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true })">
         <TitleContent>@(_editing.Id == 0 ? "Add watchlist item" : "Edit watchlist item")</TitleContent>
         <DialogContent>
-            <MudTextField @bind-Value="_editing.Ticker" Label="Ticker" Required="true" Immediate="true" OnKeyDown="OnKey" />
-            <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
-                @foreach (var ac in Enum.GetValues<AssetClass>())
-                {
-                    <MudSelectItem Value="ac">@ac</MudSelectItem>
-                }
-            </MudSelect>
-            <MudTextField @bind-Value="_editing.Note" Label="Note" Lines="2"
-                          HelperText="Why you're watching it — shown to the AI for context." />
-            <MudNumericField T="decimal?" @bind-Value="_editing.PriceTargetLow" Label="Price target (low)" Immediate="true" OnKeyDown="OnKey"
-                             HelperText="Optional. Triggers an analysis if the price falls to/below this." />
-            <MudNumericField T="decimal?" @bind-Value="_editing.PriceTargetHigh" Label="Price target (high)" Immediate="true" OnKeyDown="OnKey"
-                             HelperText="Optional. Triggers an analysis if the price rises to/above this." />
+            <MudForm @ref="_form" Model="@_editing" Validation="@(_validator.ValidateValue)">
+                <MudTextField @bind-Value="_editing.Ticker" For="@(() => _editing!.Ticker)" Label="Ticker" Required="true"
+                              RequiredError="Ticker is required." Immediate="true" OnKeyDown="OnKey" />
+                <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
+                    @foreach (var ac in Enum.GetValues<AssetClass>())
+                    {
+                        <MudSelectItem Value="ac">@ac</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_editing.Note" For="@(() => _editing!.Note)" Label="Note" Lines="2"
+                              HelperText="Why you're watching it — shown to the AI for context." />
+                <MudNumericField T="decimal?" @bind-Value="_editing.PriceTargetLow" For="@(() => _editing!.PriceTargetLow)" Label="Price target (low)" Immediate="true" OnKeyDown="OnKey"
+                                 HelperText="Optional. Triggers an analysis if the price falls to/below this." />
+                <MudNumericField T="decimal?" @bind-Value="_editing.PriceTargetHigh" For="@(() => _editing!.PriceTargetHigh)" Label="Price target (high)" Immediate="true" OnKeyDown="OnKey"
+                                 HelperText="Optional. Triggers an analysis if the price rises to/above this." />
+            </MudForm>
         </DialogContent>
         <DialogActions>
             <MudButton OnClick="@(() => _editOpen = false)">Cancel</MudButton>
@@ -69,6 +72,8 @@ else
     private IReadOnlyList<WatchlistItem>? _items;
     private WatchlistItem? _editing;
     private bool _editOpen;
+    private MudForm? _form;
+    private readonly WatchlistItemValidator _validator = new();
 
     protected override async Task OnInitializedAsync() => await Reload();
 
@@ -98,6 +103,16 @@ else
     private async Task Save()
     {
         if (_editing is null) return;
+
+        var validation = await _validator.ValidateAsync(_editing);
+        if (!validation.IsValid)
+        {
+            if (_form is not null) await _form.ValidateAsync();
+            Snackbar.Add(validation.Errors[0].ErrorMessage, Severity.Warning);
+            return;
+        }
+
+        _editing.Ticker = _editing.Ticker.Trim().ToUpperInvariant();
         try
         {
             if (_editing.Id == 0) await Service.CreateAsync(_editing);

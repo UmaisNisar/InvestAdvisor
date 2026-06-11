@@ -20,17 +20,19 @@
         else
         {
             <MudPaper Class="pa-4" Elevation="0">
-                <MudTextField @bind-Value="_profile.GoalsText" Label="Goals" Lines="3" />
-                <MudSelect T="RiskTolerance" @bind-Value="_profile.RiskTolerance" Label="Risk tolerance">
-                    @foreach (var r in Enum.GetValues<RiskTolerance>()) { <MudSelectItem Value="r">@r</MudSelectItem> }
-                </MudSelect>
-                <MudSelect T="TimeHorizon" @bind-Value="_profile.TimeHorizon" Label="Time horizon">
-                    @foreach (var h in Enum.GetValues<TimeHorizon>()) { <MudSelectItem Value="h">@h</MudSelectItem> }
-                </MudSelect>
-                <MudNumericField @bind-Value="_profile.DriftPctThreshold" Label="Drift threshold (%)" Min="0m" Max="100m" />
-                <MudNumericField @bind-Value="_profile.SingleDayMovePctThreshold" Label="Single-day move threshold (%)" Min="0m" Max="100m" />
-                <MudNumericField @bind-Value="_profile.RebalanceCadenceHours" Label="Rebalance cadence (hours)" Min="1" />
-                <MudTextField @bind-Value="_profile.SystemPromptOverride" Label="System prompt override (blank = default)" Lines="14" />
+                <MudForm @ref="_profileForm" Model="@_profile" Validation="@(_profileValidator.ValidateValue)">
+                    <MudTextField @bind-Value="_profile.GoalsText" For="@(() => _profile!.GoalsText)" Label="Goals" Lines="3" />
+                    <MudSelect T="RiskTolerance" @bind-Value="_profile.RiskTolerance" Label="Risk tolerance">
+                        @foreach (var r in Enum.GetValues<RiskTolerance>()) { <MudSelectItem Value="r">@r</MudSelectItem> }
+                    </MudSelect>
+                    <MudSelect T="TimeHorizon" @bind-Value="_profile.TimeHorizon" Label="Time horizon">
+                        @foreach (var h in Enum.GetValues<TimeHorizon>()) { <MudSelectItem Value="h">@h</MudSelectItem> }
+                    </MudSelect>
+                    <MudNumericField @bind-Value="_profile.DriftPctThreshold" For="@(() => _profile!.DriftPctThreshold)" Label="Drift threshold (%)" Min="0m" Max="100m" />
+                    <MudNumericField @bind-Value="_profile.SingleDayMovePctThreshold" For="@(() => _profile!.SingleDayMovePctThreshold)" Label="Single-day move threshold (%)" Min="0m" Max="100m" />
+                    <MudNumericField @bind-Value="_profile.RebalanceCadenceHours" For="@(() => _profile!.RebalanceCadenceHours)" Label="Rebalance cadence (hours)" Min="1" />
+                    <MudTextField @bind-Value="_profile.SystemPromptOverride" For="@(() => _profile!.SystemPromptOverride)" Label="System prompt override (blank = default)" Lines="14" />
+                </MudForm>
                 <MudButton OnClick="SaveProfile" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save profile</MudButton>
             </MudPaper>
         }
@@ -44,23 +46,25 @@
         else
         {
             <MudPaper Class="pa-4" Elevation="0">
-                <MudSwitch @bind-Value="_settings.AgentPaused" Label="Pause automated AI runs (worker stops triggering analyses; manual 'Run now' still works)" Color="Color.Warning" />
-                <MudNumericField @bind-Value="_settings.DailyBudgetUsd" Label="Daily AI budget (USD)" Min="0" Step="0.5M" Format="F2"
-                                 HelperText="Hard ceiling on AI spend per UTC day; worker runs pause when reached. Manual 'Run now' still works. 0 = unlimited." />
-                <MudNumericField @bind-Value="_settings.TickIntervalSeconds" Label="Tick interval (seconds)" Min="15"
-                                 HelperText="How often the background worker refreshes prices and checks your triggers." />
-                <MudSwitch @bind-Value="_settings.MarketHoursOnly" Label="Equity triggers only during NY market hours" Color="Color.Primary" />
-                <MudTextField @bind-Value="_settings.TimeZoneId" Label="Time zone ID"
-                              HelperText="IANA zone used to decide market hours, e.g. America/New_York." />
-                <MudNumericField @bind-Value="_settings.MaxRunsPerDay" Label="Max runs per day" Min="1"
-                                 HelperText="Safety cap on AI analysis runs per day (cost guard)." />
-                <MudNumericField @bind-Value="_settings.MinSecondsBetweenRuns" Label="Min seconds between runs" Min="0"
-                                 HelperText="Minimum gap between AI runs, so rapid triggers don't pile up." />
-                <MudNumericField @bind-Value="_settings.MaxSnapshotAgeForTriggerSeconds" Label="Max snapshot age for trigger (s)" Min="60"
-                                 HelperText="Ignore price snapshots older than this when evaluating triggers." />
-                <MudNumericField @bind-Value="_settings.MinPriceFreshnessSeconds" Label="Min price freshness (s)" Min="0"
-                                 HelperText="Refresh a price if the latest snapshot is older than this." />
-                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
+                <MudForm @ref="_schedulerForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                    <MudSwitch @bind-Value="_settings.AgentPaused" Label="Pause automated AI runs (worker stops triggering analyses; manual 'Run now' still works)" Color="Color.Warning" />
+                    <MudNumericField @bind-Value="_settings.DailyBudgetUsd" For="@(() => _settings!.DailyBudgetUsd)" Label="Daily AI budget (USD)" Min="0" Step="0.5M" Format="F2"
+                                     HelperText="Hard ceiling on AI spend per UTC day; worker runs pause when reached. Manual 'Run now' still works. 0 = unlimited." />
+                    <MudNumericField @bind-Value="_settings.TickIntervalSeconds" For="@(() => _settings!.TickIntervalSeconds)" Label="Tick interval (seconds)" Min="15"
+                                     HelperText="How often the background worker refreshes prices and checks your triggers." />
+                    <MudSwitch @bind-Value="_settings.MarketHoursOnly" Label="Equity triggers only during NY market hours" Color="Color.Primary" />
+                    <MudTextField @bind-Value="_settings.TimeZoneId" For="@(() => _settings!.TimeZoneId)" Label="Time zone ID"
+                                  HelperText="IANA zone used to decide market hours, e.g. America/New_York." />
+                    <MudNumericField @bind-Value="_settings.MaxRunsPerDay" For="@(() => _settings!.MaxRunsPerDay)" Label="Max runs per day" Min="1"
+                                     HelperText="Safety cap on AI analysis runs per day (cost guard)." />
+                    <MudNumericField @bind-Value="_settings.MinSecondsBetweenRuns" For="@(() => _settings!.MinSecondsBetweenRuns)" Label="Min seconds between runs" Min="0"
+                                     HelperText="Minimum gap between AI runs, so rapid triggers don't pile up." />
+                    <MudNumericField @bind-Value="_settings.MaxSnapshotAgeForTriggerSeconds" For="@(() => _settings!.MaxSnapshotAgeForTriggerSeconds)" Label="Max snapshot age for trigger (s)" Min="60"
+                                     HelperText="Ignore price snapshots older than this when evaluating triggers." />
+                    <MudNumericField @bind-Value="_settings.MinPriceFreshnessSeconds" For="@(() => _settings!.MinPriceFreshnessSeconds)" Label="Min price freshness (s)" Min="0"
+                                     HelperText="Refresh a price if the latest snapshot is older than this." />
+                </MudForm>
+                <MudButton OnClick="@(() => SaveSettings(_schedulerForm))" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
             </MudPaper>
         }
     </MudTabPanel>
@@ -74,31 +78,33 @@
         {
             <MudPaper Class="pa-4" Elevation="0">
                 <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">
-                    Which AI service powers the analyses. Google Gemini's free tier is the default â€”
+                    Which AI service powers the analyses. Google Gemini's free tier is the default —
                     it costs nothing (rate-limited per day). Changes apply to the next run, no restart needed.
                 </MudText>
-                <MudSelect T="string" Value="_settings.LlmProvider" ValueChanged="OnProviderChanged" Label="Provider">
-                    <MudSelectItem Value="@LlmProviders.Gemini">Google Gemini (free tier)</MudSelectItem>
-                    <MudSelectItem Value="@LlmProviders.Anthropic">Anthropic Claude (paid)</MudSelectItem>
-                    <MudSelectItem Value="@LlmProviders.Custom">Custom OpenAI-compatible (Groq / OpenRouter / Ollama)</MudSelectItem>
-                </MudSelect>
-                <MudTextField @bind-Value="_settings.LlmModel" Label="Primary model"
-                              HelperText="Used for manual runs, per-stock analysis and the daily recommendation." />
-                <MudTextField @bind-Value="_settings.LlmRoutineModel" Label="Routine model"
-                              HelperText="Cheaper/faster model for scheduled or trigger-fired runs and batch sentiment scoring." />
-                @if (_settings.LlmProvider == LlmProviders.Custom)
-                {
-                    <MudTextField @bind-Value="_settings.LlmCustomBaseUrl" Label="Base URL (OpenAI-compatible)"
-                                  Placeholder="https://api.groq.com/openai/v1/"
-                                  HelperText="Groq: https://api.groq.com/openai/v1/ Â· OpenRouter: https://openrouter.ai/api/v1/ Â· Ollama: http://localhost:11434/v1/" />
-                }
+                <MudForm @ref="_aiForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                    <MudSelect T="string" Value="_settings.LlmProvider" ValueChanged="OnProviderChanged" Label="Provider">
+                        <MudSelectItem Value="@LlmProviders.Gemini">Google Gemini (free tier)</MudSelectItem>
+                        <MudSelectItem Value="@LlmProviders.Anthropic">Anthropic Claude (paid)</MudSelectItem>
+                        <MudSelectItem Value="@LlmProviders.Custom">Custom OpenAI-compatible (Groq / OpenRouter / Ollama)</MudSelectItem>
+                    </MudSelect>
+                    <MudTextField @bind-Value="_settings.LlmModel" For="@(() => _settings!.LlmModel)" Label="Primary model"
+                                  HelperText="Used for manual runs, per-stock analysis and the daily recommendation." />
+                    <MudTextField @bind-Value="_settings.LlmRoutineModel" For="@(() => _settings!.LlmRoutineModel)" Label="Routine model"
+                                  HelperText="Cheaper/faster model for scheduled or trigger-fired runs and batch sentiment scoring." />
+                    @if (_settings.LlmProvider == LlmProviders.Custom)
+                    {
+                        <MudTextField @bind-Value="_settings.LlmCustomBaseUrl" For="@(() => _settings!.LlmCustomBaseUrl)" Label="Base URL (OpenAI-compatible)"
+                                      Placeholder="https://api.groq.com/openai/v1/"
+                                      HelperText="Groq: https://api.groq.com/openai/v1/ · OpenRouter: https://openrouter.ai/api/v1/ · Ollama: http://localhost:11434/v1/" />
+                    }
+                </MudForm>
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2">
                     API keys are read from config and never stored in SQLite:
-                    Gemini â†’ <code>Llm:GeminiApiKey</code> / <code>GEMINI_API_KEY</code> (free key at <code>aistudio.google.com</code>),
-                    Claude â†’ <code>Anthropic:ApiKey</code> / <code>ANTHROPIC_API_KEY</code>,
-                    custom â†’ <code>Llm:CustomApiKey</code> / <code>LLM_API_KEY</code>.
+                    Gemini → <code>Llm:GeminiApiKey</code> / <code>GEMINI_API_KEY</code> (free key at <code>aistudio.google.com</code>),
+                    Claude → <code>Anthropic:ApiKey</code> / <code>ANTHROPIC_API_KEY</code>,
+                    custom → <code>Llm:CustomApiKey</code> / <code>LLM_API_KEY</code>.
                 </MudAlert>
-                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
+                <MudButton OnClick="@(() => SaveSettings(_aiForm))" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
             </MudPaper>
         }
     </MudTabPanel>
@@ -113,16 +119,18 @@
             <MudPaper Class="pa-4" Elevation="0">
                 <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">
                     Relative importance of each factor in the screener's composite score. They don't
-                    need to add up to 100 â€” the score normalizes by their total. Set a factor to 0 to ignore it.
+                    need to add up to 100 — the score normalizes by their total. Set a factor to 0 to ignore it.
                 </MudText>
-                <MudNumericField @bind-Value="_settings.WeightGrowth" Label="Growth (revenue + EPS growth)" Min="0" Max="100" />
-                <MudNumericField @bind-Value="_settings.WeightValuation" Label="Valuation (P/E + P/FCF, lower is better)" Min="0" Max="100" />
-                <MudNumericField @bind-Value="_settings.WeightAnalyst" Label="Analyst (buy ratings + month-over-month trend)" Min="0" Max="100" />
-                <MudNumericField @bind-Value="_settings.WeightMomentum" Label="Momentum (13- and 26-week price return)" Min="0" Max="100" />
-                <MudNumericField @bind-Value="_settings.WeightQuality" Label="Quality (debt / equity, lower is better)" Min="0" Max="100" />
-                <MudNumericField @bind-Value="_settings.WeightInsider" Label="Insider (net insider buying)" Min="0" Max="100" />
-                <MudNumericField @bind-Value="_settings.WeightSentiment" Label="Sentiment (news + social media, recent)" Min="0" Max="100" />
-                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save weights</MudButton>
+                <MudForm @ref="_weightsForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                    <MudNumericField @bind-Value="_settings.WeightGrowth" For="@(() => _settings!.WeightGrowth)" Label="Growth (revenue + EPS growth)" Min="0" Max="100" />
+                    <MudNumericField @bind-Value="_settings.WeightValuation" For="@(() => _settings!.WeightValuation)" Label="Valuation (P/E + P/FCF, lower is better)" Min="0" Max="100" />
+                    <MudNumericField @bind-Value="_settings.WeightAnalyst" For="@(() => _settings!.WeightAnalyst)" Label="Analyst (buy ratings + month-over-month trend)" Min="0" Max="100" />
+                    <MudNumericField @bind-Value="_settings.WeightMomentum" For="@(() => _settings!.WeightMomentum)" Label="Momentum (13- and 26-week price return)" Min="0" Max="100" />
+                    <MudNumericField @bind-Value="_settings.WeightQuality" For="@(() => _settings!.WeightQuality)" Label="Quality (debt / equity, lower is better)" Min="0" Max="100" />
+                    <MudNumericField @bind-Value="_settings.WeightInsider" For="@(() => _settings!.WeightInsider)" Label="Insider (net insider buying)" Min="0" Max="100" />
+                    <MudNumericField @bind-Value="_settings.WeightSentiment" For="@(() => _settings!.WeightSentiment)" Label="Sentiment (news + social media, recent)" Min="0" Max="100" />
+                </MudForm>
+                <MudButton OnClick="@(() => SaveSettings(_weightsForm))" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save weights</MudButton>
             </MudPaper>
         }
     </MudTabPanel>
@@ -135,16 +143,18 @@
         else
         {
             <MudPaper Class="pa-4" Elevation="0">
-                <MudSwitch @bind-Value="_settings.EmailEnabled" Label="Email notifications enabled" Color="Color.Primary" />
-                <MudTextField @bind-Value="_settings.SmtpHost" Label="SMTP host" />
-                <MudNumericField @bind-Value="_settings.SmtpPort" Label="SMTP port" Min="1" Max="65535" />
-                <MudSwitch @bind-Value="_settings.SmtpEnableSsl" Label="Enable TLS" Color="Color.Primary" />
-                <MudTextField @bind-Value="_settings.SmtpFrom" Label="From address" />
-                <MudTextField @bind-Value="_settings.SmtpTo" Label="To address" />
+                <MudForm @ref="_emailForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                    <MudSwitch @bind-Value="_settings.EmailEnabled" Label="Email notifications enabled" Color="Color.Primary" />
+                    <MudTextField @bind-Value="_settings.SmtpHost" For="@(() => _settings!.SmtpHost)" Label="SMTP host" />
+                    <MudNumericField @bind-Value="_settings.SmtpPort" For="@(() => _settings!.SmtpPort)" Label="SMTP port" Min="1" Max="65535" />
+                    <MudSwitch @bind-Value="_settings.SmtpEnableSsl" Label="Enable TLS" Color="Color.Primary" />
+                    <MudTextField @bind-Value="_settings.SmtpFrom" For="@(() => _settings!.SmtpFrom)" Label="From address" />
+                    <MudTextField @bind-Value="_settings.SmtpTo" For="@(() => _settings!.SmtpTo)" Label="To address" />
+                </MudForm>
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2">
                     SMTP password is read from <code>Smtp:Password</code> via <code>dotnet user-secrets</code> or the <code>SMTP_PASSWORD</code> env var. It is never stored in SQLite.
                 </MudAlert>
-                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
+                <MudButton OnClick="@(() => SaveSettings(_emailForm))" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
             </MudPaper>
         }
     </MudTabPanel>
@@ -160,7 +170,7 @@
                 <MudExpansionPanel Text="Import holdings from CSV (e.g. Wealthsimple export)">
                     <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2">
                         Upload a CSV with at least a <b>ticker</b> column and a <b>quantity</b> column. Optional: average cost
-                        (or book cost), account, name, asset class â€” headers are matched flexibly. Rows are matched to existing
+                        (or book cost), account, name, asset class — headers are matched flexibly. Rows are matched to existing
                         holdings by ticker + account and updated; new ones are added. Existing positions not in the file are left as-is.
                     </MudText>
                     <MudFileUpload T="IBrowserFile" Accept=".csv" FilesChanged="OnImportFileSelected" MaximumFileCount="1">
@@ -174,18 +184,20 @@
                     <MudDivider Class="my-4" />
                     <MudText Typo="Typo.subtitle2">Auto-import (optional, ~daily)</MudText>
                     <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-2">
-                        Set a <b>CSV URL</b> â€” e.g. a published Google Sheet that Wealthica syncs your Wealthsimple holdings
-                        into â€” and/or a <b>file path</b> on the server. The worker re-imports them on its daily cycle.
-                        Leave blank for manual-only. (A public sheet URL is link-accessible â€” use an unguessable link.)
+                        Set a <b>CSV URL</b> — e.g. a published Google Sheet that Wealthica syncs your Wealthsimple holdings
+                        into — and/or a <b>file path</b> on the server. The worker re-imports them on its daily cycle.
+                        Leave blank for manual-only. (A public sheet URL is link-accessible — use an unguessable link.)
                     </MudText>
                     @if (_settings is not null)
                     {
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
-                            <MudTextField @bind-Value="_settings.HoldingsCsvUrl" Label="Holdings CSV URL" Placeholder="https://docs.google.com/.../export?format=csv" Class="flex-grow-1" />
-                            <MudButton OnClick="ImportFromUrl" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CloudDownload">Import now</MudButton>
-                        </MudStack>
-                        <MudTextField @bind-Value="_settings.HoldingsCsvPath" Label="Holdings CSV file path" Placeholder="/data/wealthsimple-holdings.csv" Class="mb-2" />
-                        <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Outlined">Save auto-import settings</MudButton>
+                        <MudForm @ref="_importForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                <MudTextField @bind-Value="_settings.HoldingsCsvUrl" For="@(() => _settings!.HoldingsCsvUrl)" Label="Holdings CSV URL" Placeholder="https://docs.google.com/.../export?format=csv" Class="flex-grow-1" />
+                                <MudButton OnClick="ImportFromUrl" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CloudDownload">Import now</MudButton>
+                            </MudStack>
+                            <MudTextField @bind-Value="_settings.HoldingsCsvPath" For="@(() => _settings!.HoldingsCsvPath)" Label="Holdings CSV file path" Placeholder="/data/wealthsimple-holdings.csv" Class="mb-2" />
+                        </MudForm>
+                        <MudButton OnClick="@(() => SaveSettings(_importForm))" Color="Color.Primary" Variant="Variant.Outlined">Save auto-import settings</MudButton>
                     }
                 </MudExpansionPanel>
             </MudExpansionPanels>
@@ -213,7 +225,7 @@
                     <MudTd DataLabel="Account">@context.AccountType</MudTd>
                     <MudTd DataLabel="Qty" Style="text-align:right">@context.Quantity</MudTd>
                     <MudTd DataLabel="Avg cost" Style="text-align:right">@context.AvgCost.ToString("C2")</MudTd>
-                    <MudTd DataLabel="Target %" Style="text-align:right">@(context.TargetAllocationPct?.ToString("0.0") ?? "â€”")</MudTd>
+                    <MudTd DataLabel="Target %" Style="text-align:right">@(context.TargetAllocationPct?.ToString("0.0") ?? "—")</MudTd>
                     <MudTd DataLabel="">
                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => _holdingDialog?.Open(context))" />
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteHolding(context))" />
@@ -232,6 +244,16 @@
     private RuntimeSettings? _settings;
     private List<Holding>? _holdings;
     private HoldingEditDialog? _holdingDialog;
+
+    // One MudForm per tab so each Save validates only its own fields.
+    private MudForm? _profileForm;
+    private MudForm? _schedulerForm;
+    private MudForm? _aiForm;
+    private MudForm? _weightsForm;
+    private MudForm? _emailForm;
+    private MudForm? _importForm;
+    private readonly ProfileValidator _profileValidator = new();
+    private readonly RuntimeSettingsValidator _settingsValidator = new();
 
     [Parameter] public string? Tab { get; set; }
     private int _activeIndex;
@@ -271,7 +293,7 @@
                 _settings.LlmModel = "claude-sonnet-4-6";
                 _settings.LlmRoutineModel = "claude-haiku-4-5";
                 break;
-            // Custom: leave the model fields alone â€” they depend entirely on the endpoint.
+            // Custom: leave the model fields alone — they depend entirely on the endpoint.
         }
     }
 
@@ -286,7 +308,7 @@
 
             var result = await HoldingsImport.ImportCsvAsync(await Tenant.GetTenantIdAsync(), content);
             if (result.Errors.Count > 0)
-                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated Â· {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
+                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
             else
                 Snackbar.Add($"Imported: {result.Added} added, {result.Updated} updated, {result.Skipped} skipped.",
                     result.AnyChanges ? Severity.Success : Severity.Info);
@@ -303,12 +325,13 @@
             Snackbar.Add("Enter a CSV URL first.", Severity.Warning);
             return;
         }
+        if (!await ValidateForm(_importForm)) return;
         try
         {
-            await SaveSettings(); // persist the URL/path so the daily worker uses them too
+            await SaveSettings(_importForm); // persist the URL/path so the daily worker uses them too
             var result = await HoldingsImport.ImportFromUrlAsync(await Tenant.GetTenantIdAsync(), _settings.HoldingsCsvUrl);
             if (result.Errors.Count > 0)
-                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated Â· {result.Errors[0]}", Severity.Warning);
+                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors[0]}", Severity.Warning);
             else
                 Snackbar.Add($"Imported from URL: {result.Added} added, {result.Updated} updated, {result.Skipped} skipped.",
                     result.AnyChanges ? Severity.Success : Severity.Info);
@@ -332,6 +355,7 @@
 
     private async Task SaveProfile()
     {
+        if (!await ValidateForm(_profileForm)) return;
         try
         {
             _profile = await ProfileService.UpdateAsync(_profile!);
@@ -340,9 +364,20 @@
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
     }
 
-    private async Task SaveSettings()
+    /// <summary>Validates the given tab's form (inline messages) and snackbars if invalid.</summary>
+    private async Task<bool> ValidateForm(MudForm? form)
+    {
+        if (form is null) return true;
+        await form.ValidateAsync();
+        if (form.IsValid) return true;
+        Snackbar.Add("Fix the highlighted fields first.", Severity.Warning);
+        return false;
+    }
+
+    private async Task SaveSettings(MudForm? form)
     {
         if (_settings is null) return;
+        if (!await ValidateForm(form)) return;
         try
         {
             await SettingsStore.UpdateAsync(row =>

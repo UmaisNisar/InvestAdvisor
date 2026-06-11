@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\InvestAdvisor.Core\InvestAdvisor.Core.csproj" />
     <ProjectReference Include="..\InvestAdvisor.Data\InvestAdvisor.Data.csproj" />
+    <ProjectReference Include="..\InvestAdvisor.Ui\InvestAdvisor.Ui.csproj" />
   </ItemGroup>
 
 </Project>

@@ -28,27 +28,30 @@
             </MudAutocomplete>
         }
 
-        <MudTextField @bind-Value="_editing.Ticker" Label="Ticker" Required="true" Immediate="true" OnKeyDown="OnKey" />
-        <MudTextField @bind-Value="_editing.Name" Label="Name" Immediate="true" OnKeyDown="OnKey" />
-        <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
-            @foreach (var ac in Enum.GetValues<AssetClass>()) { <MudSelectItem Value="ac">@ac</MudSelectItem> }
-        </MudSelect>
-        <MudSelect T="AccountType" @bind-Value="_editing.AccountType" Label="Account type">
-            @foreach (var at in Enum.GetValues<AccountType>()) { <MudSelectItem Value="at">@at</MudSelectItem> }
-        </MudSelect>
-        <MudSelect T="string" @bind-Value="_editing.Currency" Label="Currency"
-                   HelperText="Currency the price & cost are in. Portfolio totals are converted to USD.">
-            <MudSelectItem Value="@("USD")">USD — US dollar</MudSelectItem>
-            <MudSelectItem Value="@("CAD")">CAD — Canadian dollar</MudSelectItem>
-            <MudSelectItem Value="@("AUD")">AUD — Australian dollar</MudSelectItem>
-        </MudSelect>
-        <MudNumericField @bind-Value="_editing.Quantity" Label="Quantity" Min="0m" Immediate="true" OnKeyDown="OnKey"
-                         HelperText="Number of shares / units / coins you hold." />
-        <MudNumericField @bind-Value="_editing.AvgCost" Label="Average cost (per share/unit, USD)" Min="0m" Immediate="true" OnKeyDown="OnKey"
-                         HelperText="Your average purchase price — used for unrealized P/L." />
-        <MudNumericField T="decimal?" @bind-Value="_editing.TargetAllocationPct" Label="Target allocation %" Immediate="true" OnKeyDown="OnKey"
-                         HelperText="Optional: your goal weight for this position; drift is measured against it." />
-        <MudTextField @bind-Value="_editing.Notes" Label="Notes" Lines="2" />
+        <MudForm @ref="_form" Model="@_editing" Validation="@(_validator.ValidateValue)">
+            <MudTextField @bind-Value="_editing.Ticker" For="@(() => _editing.Ticker)" Label="Ticker" Required="true"
+                          RequiredError="Ticker is required." Immediate="true" OnKeyDown="OnKey" />
+            <MudTextField @bind-Value="_editing.Name" For="@(() => _editing.Name)" Label="Name" Immediate="true" OnKeyDown="OnKey" />
+            <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
+                @foreach (var ac in Enum.GetValues<AssetClass>()) { <MudSelectItem Value="ac">@ac</MudSelectItem> }
+            </MudSelect>
+            <MudSelect T="AccountType" @bind-Value="_editing.AccountType" Label="Account type">
+                @foreach (var at in Enum.GetValues<AccountType>()) { <MudSelectItem Value="at">@at</MudSelectItem> }
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_editing.Currency" For="@(() => _editing.Currency)" Label="Currency"
+                       HelperText="Currency the price & cost are in. Portfolio totals are converted to USD.">
+                <MudSelectItem Value="@("USD")">USD — US dollar</MudSelectItem>
+                <MudSelectItem Value="@("CAD")">CAD — Canadian dollar</MudSelectItem>
+                <MudSelectItem Value="@("AUD")">AUD — Australian dollar</MudSelectItem>
+            </MudSelect>
+            <MudNumericField @bind-Value="_editing.Quantity" For="@(() => _editing.Quantity)" Label="Quantity" Min="0m" Immediate="true" OnKeyDown="OnKey"
+                             HelperText="Number of shares / units / coins you hold." />
+            <MudNumericField @bind-Value="_editing.AvgCost" For="@(() => _editing.AvgCost)" Label="Average cost (per share/unit, USD)" Min="0m" Immediate="true" OnKeyDown="OnKey"
+                             HelperText="Your average purchase price — used for unrealized P/L." />
+            <MudNumericField T="decimal?" @bind-Value="_editing.TargetAllocationPct" For="@(() => _editing.TargetAllocationPct)" Label="Target allocation %" Immediate="true" OnKeyDown="OnKey"
+                             HelperText="Optional: your goal weight for this position; drift is measured against it." />
+            <MudTextField @bind-Value="_editing.Notes" For="@(() => _editing.Notes)" Label="Notes" Lines="2" />
+        </MudForm>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _visible = false)">Cancel</MudButton>
@@ -62,6 +65,8 @@
     private bool _visible;
     private Holding _editing = new();
     private string _searchText = string.Empty;
+    private MudForm? _form;
+    private readonly HoldingValidator _validator = new();
 
     /// <summary>Open the dialog to add a new holding (null) or edit an existing one (a copy is edited).</summary>
     public void Open(Holding? existing)
@@ -109,7 +114,16 @@
         // If they typed in the search box but didn't pick a match, use that text as the ticker.
         if (string.IsNullOrWhiteSpace(_editing.Ticker) && !string.IsNullOrWhiteSpace(_searchText))
             _editing.Ticker = _searchText;
-        if (string.IsNullOrWhiteSpace(_editing.Ticker)) { Snackbar.Add("Enter a ticker.", Severity.Warning); return; }
+
+        // Validate the model directly (it may have just been mutated above), and run the form's
+        // validation too so the offending fields show their inline messages.
+        var validation = await _validator.ValidateAsync(_editing);
+        if (!validation.IsValid)
+        {
+            if (_form is not null) await _form.ValidateAsync();
+            Snackbar.Add(validation.Errors[0].ErrorMessage, Severity.Warning);
+            return;
+        }
 
         _editing.Ticker = _editing.Ticker.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(_editing.Name)) _editing.Name = _editing.Ticker;
