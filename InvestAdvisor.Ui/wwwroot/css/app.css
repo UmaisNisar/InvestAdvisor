@@ -148,7 +148,8 @@ body {
 }
 
 .mud-nav-link.active {
-    background-color: rgba(0, 195, 208, .12);
+    /* Monochrome tint: a neutral fill derived from the label color so it adapts to both modes. */
+    background-color: color-mix(in srgb, var(--mud-palette-text-primary) 8%, transparent);
 }
 
 /* Tables: lighter header, no heavy rules. */
@@ -475,11 +476,12 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 }
 #components-reconnect-modal .reconnect-title { font-weight: 600; font-size: 15px; }
 #components-reconnect-modal .reconnect-sub { font-size: 13px; color: #8d8d93; margin-top: 2px; }
-#components-reconnect-modal .reconnect-sub a { color: #40c8e0; }
+/* The reconnect overlay is always a dark glass box, so its accents stay near-white. */
+#components-reconnect-modal .reconnect-sub a { color: #f2f2f7; }
 #components-reconnect-modal .reconnect-spinner {
     width: 22px; height: 22px; flex: none;
     border: 3px solid rgba(142, 142, 147, .3);
-    border-top-color: #40c8e0;
+    border-top-color: #f2f2f7;
     border-radius: 50%;
     animation: ia-spin .8s linear infinite;
 }
@@ -517,20 +519,24 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
     transition: opacity .35s ease;
 }
 #ia-splash.ia-hide { opacity: 0; pointer-events: none; }
+/* Monochrome spinner: near-black on the light splash, near-white on the dark one. */
 .ia-splash-spinner {
     width: 38px; height: 38px;
-    border: 3px solid rgba(0, 195, 208, .25);
-    border-top-color: #00c3d0;
+    border: 3px solid rgba(60, 60, 67, .18);
+    border-top-color: #1c1c1e;
     border-radius: 50%;
     animation: ia-spin .8s linear infinite;
 }
 .ia-splash-text { font-size: 14px; letter-spacing: .01em; }
 @media (prefers-color-scheme: dark) {
     #ia-splash { background: #000000; color: #8d8d93; }
+    .ia-splash-spinner { border-color: rgba(235, 235, 245, .2); border-top-color: #f2f2f7; }
 }
 /* Saved in-app theme wins over the OS scheme (e.g. light app on a dark-mode OS). */
 html.ia-theme-light #ia-splash { background: #f2f2f7; color: #636366; }
+html.ia-theme-light .ia-splash-spinner { border-color: rgba(60, 60, 67, .18); border-top-color: #1c1c1e; }
 html.ia-theme-dark #ia-splash { background: #000000; color: #8d8d93; }
+html.ia-theme-dark .ia-splash-spinner { border-color: rgba(235, 235, 245, .2); border-top-color: #f2f2f7; }
 
 /* ============================================================
    iOS-style controls
@@ -672,7 +678,7 @@ label.mud-input-label-inputcontrol:where(.mud-input-label-margindense):where(:no
     position: absolute;
     inset: 0;
     width: 40%;
-    background: linear-gradient(90deg, transparent, var(--mud-palette-primary, #00c3d0), transparent);
+    background: linear-gradient(90deg, transparent, var(--mud-palette-primary, #1c1c1e), transparent);
     animation: ia-loadbar-slide 1s ease-in-out infinite;
 }
 @keyframes ia-loadbar-slide {

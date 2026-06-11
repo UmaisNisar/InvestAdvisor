@@ -3,12 +3,12 @@ using MudBlazor;
 namespace InvestAdvisor.Ui.Theme;
 
 /// <summary>
-/// Central application theme. Follows Apple's iOS 26 (Liquid Glass era) color system:
-/// systemTeal as the single tint color (user preference — not the purple systemIndigo),
-/// the refreshed system colors for semantic states, and Apple's dynamic gray ramp for
-/// surfaces, labels and separators — with brighter color variants in dark mode, matching
-/// Apple's light/dark pairing. Defined once here so both hosts (Photino desktop + Blazor
-/// Server) share it.
+/// Central application theme. Follows Apple's iOS 26 (Liquid Glass era) color system with
+/// the monochrome tint Apple's own finance apps use (Stocks / Wallet): near-black controls
+/// in light mode that invert to near-white in dark mode, so the green/red market data is
+/// the only color on screen. Semantic states keep the refreshed system colors, and surfaces,
+/// labels and separators follow Apple's dynamic gray ramp. Defined once here so both hosts
+/// (Photino desktop + Blazor Server) share it.
 /// </summary>
 public static class AppTheme
 {
@@ -16,9 +16,9 @@ public static class AppTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#00C3D0",            // systemTeal (iOS 26)
+            Primary = "#1C1C1E",            // near-black tint (Stocks/Wallet monochrome)
             PrimaryContrastText = "#FFFFFF",
-            Secondary = "#6155F5",          // systemIndigo
+            Secondary = "#00C3D0",          // systemTeal
             Info = "#0088FF",               // systemBlue
             Success = "#34C759",            // systemGreen
             Warning = "#FF8D28",            // systemOrange
@@ -41,9 +41,9 @@ public static class AppTheme
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#40C8E0",            // systemTeal, dark/vibrant variant
-            PrimaryContrastText = "#FFFFFF",
-            Secondary = "#7D7AFF",          // systemIndigo (dark)
+            Primary = "#F2F2F7",            // near-white tint (monochrome inverts in dark mode)
+            PrimaryContrastText = "#000000",
+            Secondary = "#40C8E0",          // systemTeal (dark)
             Info = "#0A84FF",               // systemBlue (dark)
             Success = "#30D158",            // systemGreen (dark)
             Warning = "#FF9F0A",            // systemOrange (dark)
