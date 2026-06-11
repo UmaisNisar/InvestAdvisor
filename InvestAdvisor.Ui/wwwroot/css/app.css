@@ -677,3 +677,73 @@ label.mud-input-label-inputcontrol:where(.mud-input-label-margindense):where(:no
 
 /* Busy cursor while the loading bar is active, so the pointer signals work-in-progress too. */
 html.ia-busy, html.ia-busy * { cursor: progress !important; }
+
+/* ---------- Chart loading ---------- */
+/* ChartSkeleton.razor: a muted sparkline that draws itself in on a loop while real chart
+   data loads, plus a shimmer sweep — so chart slots never sit as a blank canvas. */
+.ia-chart-skeleton {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+.ia-chart-skeleton svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    animation: ia-chart-skel-cycle 2.6s ease-in-out infinite;
+}
+.ia-chart-skeleton-line {
+    fill: none;
+    stroke: color-mix(in srgb, var(--mud-palette-action-default, #919191) 45%, transparent);
+    stroke-width: 2.5;
+    vector-effect: non-scaling-stroke;
+    stroke-dasharray: 900;
+    stroke-dashoffset: 900;
+    animation: ia-chart-skel-draw 2.6s ease-in-out infinite;
+}
+.ia-chart-skeleton-area {
+    fill: url(#ia-chart-skeleton-fill);
+    opacity: 0;
+    animation: ia-chart-skel-area 2.6s ease-in-out infinite;
+}
+.ia-chart-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--mud-palette-text-primary, #fff) 5%, transparent) 50%, transparent 65%);
+    transform: translateX(-100%);
+    animation: ia-chart-skel-shimmer 2.6s linear infinite;
+}
+@keyframes ia-chart-skel-draw {
+    0%        { stroke-dashoffset: 900; }
+    60%, 100% { stroke-dashoffset: 0; }
+}
+@keyframes ia-chart-skel-area {
+    0%, 30%   { opacity: 0; }
+    65%, 82%  { opacity: 1; }
+    100%      { opacity: 0; }
+}
+/* Whole drawing fades at the end of each cycle so the dash-offset reset never blinks. */
+@keyframes ia-chart-skel-cycle {
+    0%, 82%   { opacity: 1; }
+    96%, 100% { opacity: 0; }
+}
+@keyframes ia-chart-skel-shimmer {
+    to { transform: translateX(100%); }
+}
+
+/* Real charts enter with a left-to-right reveal once their data lands, instead of a
+   hard pop-in. clip-path ends fully open so tooltips/interaction are unaffected. */
+.ia-chart-reveal {
+    animation: ia-chart-reveal .7s cubic-bezier(.4, 0, .2, 1) both;
+}
+@keyframes ia-chart-reveal {
+    from { opacity: 0; clip-path: inset(0 100% 0 0); }
+    to   { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ia-chart-skeleton svg, .ia-chart-skeleton-line, .ia-chart-skeleton-area,
+    .ia-chart-skeleton::after, .ia-chart-reveal { animation: none; }
+    .ia-chart-skeleton-line { stroke-dashoffset: 0; }
+    .ia-chart-skeleton-area { opacity: 1; }
+}
