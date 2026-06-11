@@ -528,6 +528,126 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
     #ia-splash { background: #000000; color: #8d8d93; }
 }
 
+/* ============================================================
+   iOS-style controls
+   De-materialize the stock MudBlazor controls so they match the
+   Liquid Glass theme: tabs become a segmented control, switches
+   become iOS toggles, text fields become rounded fills, alerts
+   become tinted callouts.
+   ============================================================ */
+
+/* ---------- Tabs → segmented control ---------- */
+/* The tab strip becomes a capsule track; the Material underline indicator
+   (.mud-tab-slider) is repurposed as the sliding "selected segment" pill. */
+.mud-tabs-tabbar {
+    background-color: color-mix(in srgb, var(--mud-palette-action-default) 14%, transparent);
+    border: none !important; /* neutralize the Outlined variant's borders */
+    border-radius: 999px;
+    padding: 4px;
+}
+.mud-tabs-tabbar .mud-tabs-tabbar-inner { min-height: 40px; }
+.mud-tab {
+    position: relative;
+    z-index: 1; /* label above the sliding pill */
+    min-height: 40px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    overflow: hidden; /* keep the ripple inside the segment */
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .9rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+    transition: color .2s ease, background-color .2s ease;
+}
+.mud-tab:hover { background-color: color-mix(in srgb, var(--mud-palette-action-default) 10%, transparent); }
+.mud-tab.mud-tab-active { color: var(--mud-palette-text-primary); font-weight: 600; }
+.mud-tab.mud-tab-active:hover { background-color: transparent; }
+.mud-tab-slider.mud-tab-slider-horizontal {
+    height: calc(100% - 8px);
+    top: 4px;
+    bottom: auto;
+    margin-left: 4px; /* slider offsets are measured from the first tab; compensate the track padding */
+    border-radius: 999px;
+    z-index: 0;
+    pointer-events: none;
+    /* White pill in light mode; the white admixture only shows in dark mode,
+       lifting the pill off the near-black surface (iOS dark selected segment). */
+    background: color-mix(in srgb, var(--mud-palette-surface) 72%, #FFFFFF) !important;
+    box-shadow: 0 2px 6px rgba(2, 6, 23, .12), 0 1px 1px rgba(2, 6, 23, .06);
+    transition: left .25s cubic-bezier(.4, 0, .2, 1), width .25s cubic-bezier(.4, 0, .2, 1);
+}
+@media (max-width: 600px) {
+    .mud-tab { padding: 6px 10px; font-size: .82rem; }
+}
+
+/* ---------- Switches → iOS toggles ---------- */
+/* Re-proportion the MD2 switch (floating thumb over a thin track) into the
+   iOS capsule: 51×31 track, 27px white thumb inset 2px. The 20px checked
+   travel matches MudBlazor's built-in translateX, so motion needs no override. */
+.mud-switch-span-medium.mud-switch-span { width: 55px; height: 35px; padding: 2px; }
+.mud-switch .mud-switch-span { margin-inline-end: 8px; } /* breathing room before the label */
+.mud-switch-base-medium.mud-switch-base { padding: 4px; }
+.mud-switch-span .mud-switch-track {
+    border-radius: 999px;
+    opacity: 1;
+    background-color: color-mix(in srgb, var(--mud-palette-action-default) 32%, transparent);
+}
+.mud-switch-base.mud-checked + .mud-switch-track { opacity: 1; } /* full-strength color when on */
+.mud-switch-base:hover { background-color: transparent; } /* no Material hover halo */
+.mud-switch-button .mud-switch-thumb-medium {
+    width: 27px;
+    height: 27px;
+    background-color: #FFFFFF !important; /* thumb stays white; the track carries the state color */
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .15), 0 1px 1px rgba(0, 0, 0, .16);
+}
+
+/* ---------- Text fields → rounded fills ---------- */
+/* The default (underline) variant becomes an iOS-style filled, rounded field:
+   no underline, a quiet gray fill, and a soft accent ring on focus. */
+.mud-input.mud-input-underline:not(.mud-input-filled) {
+    background-color: color-mix(in srgb, var(--mud-palette-action-default) 10%, transparent);
+    border-radius: 12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    transition: background-color .15s ease, box-shadow .15s ease;
+}
+.mud-input.mud-input-underline:not(.mud-input-filled):before,
+.mud-input.mud-input-underline:not(.mud-input-filled):after { display: none; }
+.mud-input.mud-input-underline:not(.mud-input-filled):focus-within {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mud-palette-primary) 30%, transparent);
+}
+.mud-input.mud-input-underline.mud-input-error:not(.mud-input-filled) {
+    box-shadow: 0 0 0 1.5px var(--mud-palette-error);
+}
+/* Resting (un-floated) labels start inside the padded box. :where() keeps the
+   specificity below MudBlazor's shrink/focus rules so labels still float up. */
+label.mud-input-label-inputcontrol:where(:not(.mud-input-label-filled)):where(:not(.mud-input-label-outlined)) {
+    transform: translate(12px, 24px) scale(1);
+}
+label.mud-input-label-inputcontrol:where(.mud-input-label-margindense):where(:not(.mud-input-label-filled)):where(:not(.mud-input-label-outlined)) {
+    transform: translate(12px, 21px) scale(1);
+}
+/* Helper text aligns with the field's inner text edge. */
+.mud-input-control-helper-container { padding-left: 12px; }
+/* Numeric spinners tuck inside the rounded corner instead of touching it. */
+.mud-input-control.mud-input-number-control .mud-input-numeric-spin { right: 4px; }
+
+/* ---------- Alerts → tinted callouts ---------- */
+/* Outlined alerts trade the hairline box for an iOS-style tinted fill,
+   derived from each severity's own text color. */
+.mud-alert[class*="mud-alert-outlined-"] {
+    border: none;
+    background-color: color-mix(in srgb, currentColor 9%, transparent);
+    padding: 10px 16px;
+}
+
+/* ---------- Small fittings ---------- */
+/* Capsule progress bars (allocation/factor bars, loading indicators). */
+.mud-progress-linear { border-radius: 999px; overflow: hidden; }
+/* Snackbars pick up the theme's continuous-curve radius. */
+.mud-snackbar { border-radius: 14px; }
+
 /* ---------- Top navigation loading bar ---------- */
 /* A thin indeterminate bar that pulses across the top on each route change. */
 .ia-loadbar {
