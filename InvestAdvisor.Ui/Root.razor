@@ -41,7 +41,10 @@
     {
         // The app is now interactive — drop the boot splash that covered the blank pre-circuit screen.
         if (firstRender)
+        {
             try { await JS.InvokeVoidAsync("iaSplash.hide"); } catch { /* JS not ready; splash self-clears on nav */ }
+            await MirrorThemeAsync();
+        }
     }
 
     /// <summary>Flip light/dark and persist the choice. Called from the app bar toggle in MainLayout.</summary>
@@ -51,5 +54,14 @@
         StateHasChanged();
         try { await SettingsStore.UpdateAsync(s => s.DarkMode = _isDarkMode); }
         catch { /* persistence is best-effort */ }
+        await MirrorThemeAsync();
+    }
+
+    // The theme preference lives in the server DB, which static HTML can't reach — mirror it into
+    // localStorage so the next load's boot splash (App.razor head script) matches the app theme.
+    private async Task MirrorThemeAsync()
+    {
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "ia-theme", _isDarkMode ? "dark" : "light"); }
+        catch { /* storage blocked; splash falls back to the OS scheme */ }
     }
 }
