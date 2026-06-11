@@ -71,6 +71,13 @@ public static class AppTheme
                 // Windows) so the app reads as native; Inter is the cross-platform fallback.
                 FontFamily = new[] { "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Inter", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif" },
             },
+            Button = new ButtonTypography
+            {
+                // Apple never shouts: sentence-case buttons, no Material tracking.
+                TextTransform = "none",
+                LetterSpacing = "0",
+                FontWeight = "600",
+            },
         },
         LayoutProperties = new LayoutProperties
         {
