@@ -1,8 +1,9 @@
 @* Host document for the Blazor Web App (interactive Server) model. Replaces the
    legacy Pages/_Host.cshtml + blazor.server.js setup, which .NET 10 no longer serves.
    The whole shared Root (MudBlazor providers + Router + theme) is rendered interactively. *@
+@inject InvestAdvisor.Core.Abstractions.IRuntimeSettingsStore SettingsStore
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="@_themeClass">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -23,14 +24,17 @@
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="@Assets["_content/InvestAdvisor.Ui/css/app.css"]" rel="stylesheet" />
 
-    @* Tint the boot splash with the saved in-app theme before first paint. The preference lives
-       in the server DB (unreachable from static HTML), so Root mirrors it into localStorage on
-       every load/toggle; without a saved value the splash falls back to prefers-color-scheme. *@
+    @* Belt-and-braces splash tint: the html class is normally stamped server-side from the
+       settings DB (see @code below) so even the very first visit matches the saved theme; the
+       localStorage mirror written by Root only fills in if that DB read failed. With neither,
+       the splash falls back to prefers-color-scheme. *@
     <script>
         try {
-            var iaTheme = localStorage.getItem('ia-theme');
-            if (iaTheme === 'light' || iaTheme === 'dark')
-                document.documentElement.classList.add('ia-theme-' + iaTheme);
+            var iaCls = document.documentElement.classList;
+            if (!iaCls.contains('ia-theme-light') && !iaCls.contains('ia-theme-dark')) {
+                var iaTheme = localStorage.getItem('ia-theme');
+                if (iaTheme === 'light' || iaTheme === 'dark') iaCls.add('ia-theme-' + iaTheme);
+            }
         } catch (e) { /* storage blocked; OS-scheme fallback applies */ }
     </script>
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
@@ -160,3 +164,17 @@
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 </body>
 </html>
+
+@code {
+    private string _themeClass = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // This host page is rendered server-side per request, so it can stamp the saved theme
+        // onto <html> directly from the settings DB — the boot splash is then correctly tinted
+        // on the very first paint, fresh browsers and first-ever visits included. The store is
+        // an in-memory-cached singleton row, so this is not a per-request DB hit in practice.
+        try { _themeClass = (await SettingsStore.GetAsync()).DarkMode ? "ia-theme-dark" : "ia-theme-light"; }
+        catch { /* leave unset: the localStorage mirror or the OS scheme takes over */ }
+    }
+}
