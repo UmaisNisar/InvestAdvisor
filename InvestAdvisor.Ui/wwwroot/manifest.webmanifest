@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "InvestAdvisor",
   "short_name": "InvestAdvisor",
   "description": "Your portfolio advisor and market screener.",
@@ -10,13 +10,13 @@
   "theme_color": "#000000",
   "icons": [
     {
-      "src": "_content/InvestAdvisor.Ui/favicon.svg",
+      "src": "_content/InvestAdvisor.Ui/favicon.svg?v=mono",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "_content/InvestAdvisor.Ui/apple-touch-icon.png",
+      "src": "_content/InvestAdvisor.Ui/apple-touch-icon.png?v=mono",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"

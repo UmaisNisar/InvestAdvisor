@@ -9,15 +9,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>InvestAdvisor</title>
     <base href="/" />
-    <link rel="icon" type="image/svg+xml" href="_content/InvestAdvisor.Ui/favicon.svg" />
+    @* @Assets fingerprints the URLs, so icon changes bust browser/CDN caches automatically
+       (favicons are cached notoriously hard otherwise). *@
+    <link rel="icon" type="image/svg+xml" href="@Assets["_content/InvestAdvisor.Ui/favicon.svg"]" />
 
     @* Installable PWA: launches full-screen from the home screen (no browser chrome). *@
-    <link rel="manifest" href="_content/InvestAdvisor.Ui/manifest.webmanifest" />
+    <link rel="manifest" href="@Assets["_content/InvestAdvisor.Ui/manifest.webmanifest"]" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="InvestAdvisor" />
-    <link rel="apple-touch-icon" sizes="180x180" href="_content/InvestAdvisor.Ui/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="@Assets["_content/InvestAdvisor.Ui/apple-touch-icon.png"]" />
     <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />

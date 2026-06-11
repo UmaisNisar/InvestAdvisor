@@ -24,7 +24,8 @@
                Width="240px" MiniWidth="64px" Elevation="0" Class="ia-rail">
         <div class="ia-rail-header">
             <MudLink Href="/" Underline="Underline.None" Class="ia-rail-brand">
-                <img src="_content/InvestAdvisor.Ui/favicon.svg" alt="" width="26" height="26" />
+                @* ?v= busts browser/CDN caches when the brand mark changes (bump on icon redesigns). *@
+                <img src="_content/InvestAdvisor.Ui/favicon.svg?v=mono" alt="" width="26" height="26" />
                 <span class="ia-rail-brand-text">InvestAdvisor</span>
             </MudLink>
             <MudIconButton Icon="@(_railOpen ? Icons.Material.Filled.ChevronLeft : Icons.Material.Filled.ChevronRight)"
@@ -52,7 +53,8 @@
                ClipMode="DrawerClipMode.Never" Width="260px" Elevation="6" Class="ia-mobile-nav">
         <div class="ia-rail-header">
             <MudLink Href="/" Underline="Underline.None" Class="ia-rail-brand">
-                <img src="_content/InvestAdvisor.Ui/favicon.svg" alt="" width="26" height="26" />
+                @* ?v= busts browser/CDN caches when the brand mark changes (bump on icon redesigns). *@
+                <img src="_content/InvestAdvisor.Ui/favicon.svg?v=mono" alt="" width="26" height="26" />
                 <span class="ia-rail-brand-text">InvestAdvisor</span>
             </MudLink>
         </div>
