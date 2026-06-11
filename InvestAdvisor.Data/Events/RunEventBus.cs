@@ -10,5 +10,7 @@ namespace InvestAdvisor.Data.Events;
 public sealed class RunEventBus : IRunEventBus
 {
     public event EventHandler<RunCompletedEvent>? RunCompleted;
+    public event EventHandler<PricesRefreshedEvent>? PricesRefreshed;
     public void Publish(RunCompletedEvent evt) => RunCompleted?.Invoke(this, evt);
+    public void Publish(PricesRefreshedEvent evt) => PricesRefreshed?.Invoke(this, evt);
 }
