@@ -3,6 +3,7 @@ using System;
 using InvestAdvisor.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvestAdvisor.Data.Migrations
 {
     [DbContext(typeof(InvestAdvisorDbContext))]
-    partial class InvestAdvisorDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260611104228_AddDisplayCurrency")]
+    partial class AddDisplayCurrency
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
@@ -510,25 +513,6 @@ namespace InvestAdvisor.Data.Migrations
                     b.Property<string>("HoldingsCsvUrl")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("LlmCustomBaseUrl")
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LlmModel")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LlmProvider")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LlmRoutineModel")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("MarketHoursOnly")
                         .HasColumnType("INTEGER");
 
@@ -606,9 +590,6 @@ namespace InvestAdvisor.Data.Migrations
                             DailyBudgetUsd = 2m,
                             DarkMode = false,
                             EmailEnabled = false,
-                            LlmModel = "gemini-2.5-flash",
-                            LlmProvider = "gemini",
-                            LlmRoutineModel = "gemini-2.5-flash-lite",
                             MarketHoursOnly = true,
                             MaxRunsPerDay = 12,
                             MaxSnapshotAgeForTriggerSeconds = 600,

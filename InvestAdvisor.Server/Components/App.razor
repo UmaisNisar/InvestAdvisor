@@ -75,6 +75,34 @@
             off: () => document.documentElement.classList.remove('ia-busy')
         };
 
+        // Animated count-up for the dashboard's hero number (Wealthsimple-style). Parses the
+        // element's current text as the start value so it tweens between renders, and degrades
+        // to the server-rendered static text when JS or rAF is unavailable.
+        window.iaCountUp = {
+            to: (el, value) => {
+                if (!el) return;
+                const fmt = v => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                // Mutate the existing text node's value rather than assigning textContent:
+                // textContent would replace the node, detaching the one Blazor's diff holds a
+                // reference to — its later patches (e.g. masking the value) would then hit a
+                // dead node and never show up.
+                const set = v => {
+                    const n = el.firstChild;
+                    if (n && n.nodeType === Node.TEXT_NODE) n.nodeValue = fmt(v);
+                    else el.textContent = fmt(v);
+                };
+                const start = parseFloat((el.textContent || '').replace(/[^0-9.\-]/g, ''));
+                if (!window.requestAnimationFrame || !isFinite(start) || start === value) { set(value); return; }
+                const t0 = performance.now(), dur = 650;
+                const step = t => {
+                    const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); // ease-out cubic
+                    set(start + (value - start) * e);
+                    if (p < 1) requestAnimationFrame(step);
+                };
+                requestAnimationFrame(step);
+            }
+        };
+
         // Mobile haptics. navigator.vibrate is Android/Chromium only (iOS Safari ignores it).
         // Honors a localStorage opt-out ('ia-haptics' = 'off'). Patterns are deliberately subtle.
         window.iaHaptics = {
