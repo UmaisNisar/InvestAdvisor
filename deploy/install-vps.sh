@@ -48,6 +48,9 @@ echo "==> Installing /etc/invest-advisor.env stub"
 if [[ ! -f /etc/invest-advisor.env ]]; then
   cat > /etc/invest-advisor.env <<'EOF'
 # Fill these in. systemd reads this file as the env for the service.
+# GEMINI_API_KEY powers the free default AI provider (free key at https://aistudio.google.com).
+GEMINI_API_KEY=
+# Optional: only needed if you switch the AI provider to Anthropic Claude (paid) in Settings.
 ANTHROPIC_API_KEY=
 FINNHUB_API_KEY=
 SMTP_PASSWORD=

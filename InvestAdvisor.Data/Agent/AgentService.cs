@@ -5,29 +5,26 @@ using InvestAdvisor.Core.Agent;
 using InvestAdvisor.Core.Entities;
 using InvestAdvisor.Core.Enums;
 using InvestAdvisor.Core.Models;
-using InvestAdvisor.Core.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace InvestAdvisor.Data.Agent;
 
 /// <summary>
 /// Orchestrates one agent run: load profile + known tickers, assemble the context,
-/// call Anthropic, validate hallucinated tickers, persist an <see cref="AdviceLog"/>,
+/// call the configured LLM, validate hallucinated tickers, persist an <see cref="AdviceLog"/>,
 /// and return its id. Failures still persist a row so they show up in the Advice Feed.
 /// </summary>
 public sealed class AgentService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
     IContextAssembler assembler,
-    IAnthropicClient anthropic,
+    ILlmClient llm,
     IPriceRefreshService priceRefresh,
     INewsRefreshService newsRefresh,
     ISystemClock clock,
-    IOptions<AnthropicOptions> anthropicOptions,
+    IRuntimeSettingsStore settingsStore,
     ILogger<AgentService>? logger = null) : IAgentService
 {
-    private readonly AnthropicOptions _opts = anthropicOptions.Value;
 
     private static readonly JsonSerializerOptions _camelIndented = new()
     {
@@ -74,7 +71,8 @@ public sealed class AgentService(
         var systemPrompt = !string.IsNullOrWhiteSpace(preload.profile.SystemPromptOverride)
             ? preload.profile.SystemPromptOverride!
             : (isCondition ? SystemPrompts.LeanTriggerDefault : SystemPrompts.Default);
-        var model = trigger.Kind == RunTriggerKind.Manual ? _opts.Model : _opts.RoutineModel;
+        var settings = await settingsStore.GetAsync(ct);
+        var model = trigger.Kind == RunTriggerKind.Manual ? settings.LlmModel : settings.LlmRoutineModel;
 
         // A manual "Run now" does not go through the worker's pre-tick refresh, so the
         // latest price snapshot can fall outside MinPriceFreshnessSeconds and the agent
@@ -118,7 +116,7 @@ public sealed class AgentService(
 
         try
         {
-            var result = await anthropic.AnalyzeAsync(systemPrompt, inputJson, model, ct);
+            var result = await llm.AnalyzeAsync(systemPrompt, inputJson, model, ct);
             sw.Stop();
 
             var validated = TickerHallucinationValidator.Validate(result.Analysis, preload.knownTickers);
@@ -142,7 +140,7 @@ public sealed class AgentService(
         catch (Exception ex)
         {
             sw.Stop();
-            logger?.LogError(ex, "Anthropic call or parsing failed.");
+            logger?.LogError(ex, "LLM call or parsing failed.");
             var raw = ex is AgentParseException ape
                 ? ape.ResponseBody
                 : ex.ToString();
@@ -178,7 +176,8 @@ public sealed class AgentService(
         try
         {
             // Replay is an explicit user action with an edited prompt — use the primary model.
-            var result = await anthropic.AnalyzeAsync(systemPrompt, source.StructuredInputJson, _opts.Model, ct);
+            var settings = await settingsStore.GetAsync(ct);
+            var result = await llm.AnalyzeAsync(systemPrompt, source.StructuredInputJson, settings.LlmModel, ct);
             sw.Stop();
             var validated = TickerHallucinationValidator.Validate(result.Analysis, knownTickers);
 

@@ -28,7 +28,7 @@
             _tooltip =
                 $"DB: {(s.DatabaseOk ? "ok" : "FAIL")}\n" +
                 $"Last Finnhub fetch: {(s.LastFinnhubFetchUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "never")}\n" +
-                $"Last Anthropic call: {(s.LastAnthropicCallUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "never")}\n" +
+                $"Last AI call: {(s.LastLlmCallUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "never")}\n" +
                 $"Total runs: {s.TotalAdviceLogs}";
         }
         catch (Exception ex)

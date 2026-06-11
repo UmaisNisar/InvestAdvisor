@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
 using InvestAdvisor.Core.Enums;
@@ -14,17 +14,17 @@ public class SentimentScoringServiceTests
 {
     private static readonly DateTime Now = new(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc);
 
-    private static (SentimentScoringService sut, IAnthropicClient anthropic, ICostService cost, IRuntimeSettingsStore store)
+    private static (SentimentScoringService sut, ILlmClient llm, ICostService cost, IRuntimeSettingsStore store)
         BuildSut(SqliteFixture db, bool paused = false, bool overBudget = false)
     {
-        var anthropic = Substitute.For<IAnthropicClient>();
+        var llm = Substitute.For<ILlmClient>();
         var store = Substitute.For<IRuntimeSettingsStore>();
         store.GetAsync(Arg.Any<CancellationToken>())
              .Returns(new ValueTask<RuntimeSettings>(new RuntimeSettings { AgentPaused = paused }));
         var cost = Substitute.For<ICostService>();
         cost.IsOverDailyBudgetAsync(Arg.Any<CancellationToken>()).Returns(overBudget);
-        var sut = new SentimentScoringService(db.Factory, anthropic, store, cost, new FakeSystemClock(Now));
-        return (sut, anthropic, cost, store);
+        var sut = new SentimentScoringService(db.Factory, llm, store, cost, new FakeSystemClock(Now));
+        return (sut, llm, cost, store);
     }
 
     private static NewsItem Unscored(string ticker, string url, DateTime? published = null) => new()
@@ -42,8 +42,8 @@ public class SentimentScoringServiceTests
             c.NewsItems.AddRange(Unscored("AAPL", "u1"), Unscored("TSLA", "u2"));
             c.SaveChanges();
         }
-        var (sut, anthropic, _, _) = BuildSut(db);
-        anthropic.ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+        var (sut, llm, _, _) = BuildSut(db);
+        llm.ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                  .Returns(new SentimentBatchResult(
                      new[] { new SentimentScore(0, 0.7m, "bullish"), new SentimentScore(1, -0.4m, "bearish") },
                      "{}", "claude-haiku-4-5", 20, 8, 100, false));
@@ -73,9 +73,9 @@ public class SentimentScoringServiceTests
             c.NewsItems.AddRange(Unscored("AAPL", "u1"), Unscored("TSLA", "u2"));
             c.SaveChanges();
         }
-        var (sut, anthropic, _, _) = BuildSut(db);
+        var (sut, llm, _, _) = BuildSut(db);
         // Model returns a score only for index 0.
-        anthropic.ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+        llm.ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                  .Returns(new SentimentBatchResult(
                      new[] { new SentimentScore(0, 0.5m, "bullish") },
                      "{}", "claude-haiku-4-5", 1, 1, 1, false));
@@ -94,12 +94,12 @@ public class SentimentScoringServiceTests
     {
         await using var db = new SqliteFixture();
         using (var c = db.CreateContext()) { c.NewsItems.Add(Unscored("AAPL", "u1")); c.SaveChanges(); }
-        var (sut, anthropic, _, _) = BuildSut(db, paused: true);
+        var (sut, llm, _, _) = BuildSut(db, paused: true);
 
         var scored = await sut.ScoreUnscoredAsync();
 
         scored.Should().Be(0);
-        await anthropic.DidNotReceive().ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        await llm.DidNotReceive().ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -107,12 +107,12 @@ public class SentimentScoringServiceTests
     {
         await using var db = new SqliteFixture();
         using (var c = db.CreateContext()) { c.NewsItems.Add(Unscored("AAPL", "u1")); c.SaveChanges(); }
-        var (sut, anthropic, _, _) = BuildSut(db, overBudget: true);
+        var (sut, llm, _, _) = BuildSut(db, overBudget: true);
 
         var scored = await sut.ScoreUnscoredAsync();
 
         scored.Should().Be(0);
-        await anthropic.DidNotReceive().ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+        await llm.DidNotReceive().ScoreSentimentAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

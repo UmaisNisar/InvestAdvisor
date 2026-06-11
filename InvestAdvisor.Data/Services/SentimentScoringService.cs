@@ -14,7 +14,7 @@ namespace InvestAdvisor.Data.Services;
 /// </summary>
 public sealed class SentimentScoringService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    IAnthropicClient anthropic,
+    ILlmClient llm,
     IRuntimeSettingsStore settingsStore,
     ICostService costService,
     ISystemClock clock,
@@ -65,7 +65,7 @@ public sealed class SentimentScoringService(
             var texts = batch.Select(ToScoringText).ToList();
 
             SentimentBatchResult result;
-            try { result = await anthropic.ScoreSentimentAsync(texts, ct); }
+            try { result = await llm.ScoreSentimentAsync(texts, ct: ct); }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {

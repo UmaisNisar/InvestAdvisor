@@ -40,6 +40,6 @@ public sealed record AdvicePage(IReadOnlyList<AdviceLogSummaryView> Items, int T
 public sealed record HealthStatus(
     bool DatabaseOk,
     DateTime? LastFinnhubFetchUtc,
-    DateTime? LastAnthropicCallUtc,
+    DateTime? LastLlmCallUtc,
     int TotalAdviceLogs,
     int TotalHoldings);

@@ -18,7 +18,7 @@ namespace InvestAdvisor.Data.Agent;
 public sealed class DailyRecommendationService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
     IScreenerScoringService scoring,
-    IAnthropicClient anthropic,
+    ILlmClient llm,
     IFxRateProvider fx,
     IMarketDataProvider market,
     ISystemClock clock,
@@ -84,7 +84,7 @@ public sealed class DailyRecommendationService(
         DailyRecommendationResult result;
         try
         {
-            result = await anthropic.RecommendAllocationAsync(SystemPrompts.DailyAllocationDefault, contextJson, ct);
+            result = await llm.RecommendAllocationAsync(SystemPrompts.DailyAllocationDefault, contextJson, ct: ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)

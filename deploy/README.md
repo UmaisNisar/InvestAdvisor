@@ -33,8 +33,8 @@ other step below is identical.
 
 - **Cloudflare Access is your gate, and it's mandatory.** In §5, set the Access policy to an **email
   allowlist** with your address + your 2–3 friends' emails. Without it, anyone with the URL can open
-  the app, **spend your Anthropic/Finnhub credits** (every "Run now" and the daily jobs are paid
-  Claude calls), and see your data.
+  the app, **burn your AI quota** (free-tier daily limits on Gemini; real money if you've switched to
+  Claude) and your Finnhub credits, and see your data.
 - **The app is single-user.** There is **one** shared portfolio / holdings / settings — everyone who
   logs in sees and edits the *same* data. Fine for testing the UX and the "where to invest" flow, but
   your friends can't each track their own portfolio yet (that's a multi-user feature for the real launch).
@@ -85,8 +85,9 @@ sudo nano /etc/invest-advisor.env
 Fill in:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=...      # free key from https://aistudio.google.com — powers the default AI provider
 FINNHUB_API_KEY=...
+ANTHROPIC_API_KEY=      # optional — only if you switch to Anthropic Claude (paid) in Settings
 SMTP_PASSWORD=          # optional — only if you turn on email alerts
 ```
 
@@ -166,7 +167,7 @@ the dashboard loads.
 |---|---|
 | Tail app logs | `ssh root@<vps-ip> journalctl -u invest-advisor -f` |
 | Restart app | `./deploy/ship.sh --restart-only` |
-| Rotate Anthropic / Finnhub key | `sudo nano /etc/invest-advisor.env` then `sudo systemctl restart invest-advisor` |
+| Rotate Gemini / Anthropic / Finnhub key | `sudo nano /etc/invest-advisor.env` then `sudo systemctl restart invest-advisor` |
 | Backup the SQLite DB | `scp root@<vps-ip>:/var/lib/invest-advisor/app.db ./backups/app-$(date +%F).db` |
 | Reset auth (Cloudflare Access) | Zero Trust → Access → Applications → edit policy |
 | Take it offline temporarily | `ssh root@<vps-ip> 'sudo systemctl stop invest-advisor'` |

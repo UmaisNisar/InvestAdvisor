@@ -28,6 +28,21 @@ public class RuntimeSettings
     /// <summary>UI preference: dark (night) mode. Persisted so the choice survives reloads.</summary>
     public bool DarkMode { get; set; }
 
+    // AI provider + models, switchable at runtime in Settings → AI Provider. Defaults to Google
+    // Gemini's free tier so a fresh install costs nothing. API keys stay in config (user-secrets /
+    // env vars), never in this table. Provider ids: "gemini" | "anthropic" | "custom" — see
+    // Core.Agent.LlmProviders.
+    public string LlmProvider { get; set; } = "gemini";
+
+    /// <summary>Primary model: manual runs, per-stock analysis, the daily recommendation.</summary>
+    public string LlmModel { get; set; } = "gemini-2.5-flash";
+
+    /// <summary>Cheaper/faster model for worker-triggered runs and batch sentiment scoring.</summary>
+    public string LlmRoutineModel { get; set; } = "gemini-2.5-flash-lite";
+
+    /// <summary>Base URL for the "custom" provider (OpenAI-compatible, e.g. Groq/OpenRouter/Ollama).</summary>
+    public string? LlmCustomBaseUrl { get; set; }
+
     // Screener composite-score factor weights (relative; the scorer normalizes by their sum,
     // so they need not add to 100). Editable in Settings.
     public int WeightValuation { get; set; } = 20;
