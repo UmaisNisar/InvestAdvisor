@@ -170,8 +170,9 @@
                 <MudExpansionPanel Text="Import holdings from CSV (e.g. Wealthsimple export)">
                     <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2">
                         Upload a CSV with at least a <b>ticker</b> column and a <b>quantity</b> column. Optional: average cost
-                        (or book cost), account, name, asset class — headers are matched flexibly. Rows are matched to existing
-                        holdings by ticker + account and updated; new ones are added. Existing positions not in the file are left as-is.
+                        (or book cost), account, name, asset class — headers are matched flexibly. The file becomes your
+                        portfolio: rows are matched by ticker + account and updated, new ones are added, and <b>holdings not
+                        in the file are removed</b>. (Auto-import below only adds/updates — it never removes.)
                     </MudText>
                     <MudFileUpload T="IBrowserFile" Accept=".csv" FilesChanged="OnImportFileSelected" MaximumFileCount="1">
                         <ActivatorContent>
@@ -306,11 +307,12 @@
             using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync();
 
-            var result = await HoldingsImport.ImportCsvAsync(await Tenant.GetTenantIdAsync(), content);
+            // Uploaded file = the full portfolio: holdings not in it are removed (replaceExisting).
+            var result = await HoldingsImport.ImportCsvAsync(await Tenant.GetTenantIdAsync(), content, replaceExisting: true);
             if (result.Errors.Count > 0)
-                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
+                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated / {result.Removed} removed · {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
             else
-                Snackbar.Add($"Imported: {result.Added} added, {result.Updated} updated, {result.Skipped} skipped.",
+                Snackbar.Add($"Imported: {result.Added} added, {result.Updated} updated, {result.Removed} removed, {result.Skipped} skipped.",
                     result.AnyChanges ? Severity.Success : Severity.Info);
 
             await ReloadAll();
