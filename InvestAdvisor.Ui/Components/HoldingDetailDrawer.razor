@@ -107,7 +107,7 @@
             <MudPaper Class="pa-2" Outlined="true" Style="min-height:380px">
                 @if (_loading)
                 {
-                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+                    <ChartSkeleton Height="360" />
                 }
                 else if (_history is null || _history.Candles.Count == 0)
                 {
@@ -118,7 +118,10 @@
                 }
                 else
                 {
-                    <ApexChart TItem="Candle" Height="360" Options="_options" @key="@($"{_loadedTicker}-{_range}-{_view}")">
+                    @* @key on the reveal wrapper recreates chart and animation together, so every
+                       ticker/range/view switch replays the left-to-right draw-in. *@
+                    <div class="ia-chart-reveal" @key="@($"{_loadedTicker}-{_range}-{_view}")">
+                    <ApexChart TItem="Candle" Height="360" Options="_options">
                         @if (_view == ChartView.Candles)
                         {
                             <ApexCandleSeries TItem="Candle"
@@ -140,6 +143,7 @@
                                              SeriesType="SeriesType.Area" />
                         }
                     </ApexChart>
+                    </div>
                     <MudText Typo="Typo.caption" Color="Color.Surface" Class="px-2">
                         @(_view == ChartView.Candles ? "Daily open/high/low/close" : "Daily closing price") in @_history.Currency · source: Yahoo Finance
                     </MudText>

@@ -1,0 +1,21 @@
+@* Chart-shaped loading placeholder: a muted sparkline that repeatedly draws itself in,
+   with a shimmer sweep — shown wherever a real chart's data is still loading, so the
+   slot never sits as a blank canvas. Styles live in app.css under "Chart loading". *@
+<div class="ia-chart-skeleton" style="height:@(Height)px" aria-hidden="true">
+    <svg viewBox="0 0 600 160" preserveAspectRatio="none">
+        <defs>
+            <linearGradient id="ia-chart-skeleton-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="rgba(140,140,155,0.22)" />
+                <stop offset="100%" stop-color="rgba(140,140,155,0)" />
+            </linearGradient>
+        </defs>
+        <path class="ia-chart-skeleton-area"
+              d="M0,122 C40,104 62,64 102,72 C142,80 158,112 198,98 C238,84 262,44 310,56 C358,68 378,92 420,82 C462,72 500,34 558,46 L600,42 L600,160 L0,160 Z" />
+        <path class="ia-chart-skeleton-line"
+              d="M0,122 C40,104 62,64 102,72 C142,80 158,112 198,98 C238,84 262,44 310,56 C358,68 378,92 420,82 C462,72 500,34 558,46 L600,42" />
+    </svg>
+</div>
+
+@code {
+    [Parameter] public int Height { get; set; } = 190;
+}
