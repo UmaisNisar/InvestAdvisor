@@ -96,12 +96,12 @@ else
                                 <span style="display:inline-block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">@context.Name</span>
                             </MudTooltip>
                         </MudTd>
-                        <MudTd DataLabel="Price" Style="text-align:right">@Money(context.Price, context.Currency)</MudTd>
-                        <MudTd DataLabel="@($"Market value ({_displayCurrency})")" Style="text-align:right">@DispMoney(context.MarketValueUsd)</MudTd>
-                        <MudTd DataLabel="P/L %" Style="@PnlStyle(context.UnrealizedPnlPct)">@(context.UnrealizedPnlPct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
-                        <MudTd DataLabel="Today %" Style="@PnlStyle(context.TodaysChangePct)">@(context.TodaysChangePct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
+                        <MudTd DataLabel="Price" Style="text-align:right"><AnimatedNumber Value="context.Price" Prefix="@CurPrefix(context.Currency)" /></MudTd>
+                        <MudTd DataLabel="@($"Market value ({_displayCurrency})")" Style="text-align:right"><AnimatedNumber Value="DispVal(context.MarketValueUsd)" Prefix="$" Decimals="0" /></MudTd>
+                        <MudTd DataLabel="P/L %" Style="@PnlStyle(context.UnrealizedPnlPct)"><AnimatedNumber Value="context.UnrealizedPnlPct" Signed="true" /></MudTd>
+                        <MudTd DataLabel="Today %" Style="@PnlStyle(context.TodaysChangePct)"><AnimatedNumber Value="context.TodaysChangePct" Signed="true" /></MudTd>
                         <MudTd DataLabel="@(AnyTarget ? "Alloc / target" : "Allocation %")">
-                            @(context.CurrentAllocationPct?.ToString("0.0") ?? "—")@(AnyTarget ? $" / {context.TargetAllocationPct?.ToString("0.0") ?? "—"}" : "")
+                            <AnimatedNumber Value="context.CurrentAllocationPct" Decimals="1" />@(AnyTarget ? $" / {context.TargetAllocationPct?.ToString("0.0") ?? "—"}" : "")
                         </MudTd>
                         @if (AnyTarget)
                         {
@@ -207,9 +207,12 @@ else
                 {
                     foreach (var kv in _snapshot.Allocation.ByAssetClass.OrderByDescending(k => k.Value))
                     {
-                        <MudText Typo="Typo.body2">@kv.Key</MudText>
-                        <MudProgressLinear Color="Color.Primary" Value="@((double)kv.Value)" Class="mb-2" />
-                        <MudText Typo="Typo.caption">@kv.Value.ToString("0.0")%</MudText>
+                        @* Keyed so a reorder moves blocks instead of tweening across asset classes. *@
+                        <div @key="kv.Key">
+                            <MudText Typo="Typo.body2">@kv.Key</MudText>
+                            <MudProgressLinear Color="Color.Primary" Value="@((double)kv.Value)" Class="mb-2" />
+                            <MudText Typo="Typo.caption"><AnimatedNumber Value="kv.Value" Decimals="1" Suffix="%" /></MudText>
+                        </div>
                     }
                 }
             </MudPaper>
@@ -229,11 +232,13 @@ else
                         <tbody>
                             @foreach (var m in _snapshot.TopMovers)
                             {
-                                <tr>
+                                @* Keyed by ticker so a reshuffle moves rows instead of tweening
+                                   one ticker's numbers into another's. *@
+                                <tr @key="m.Ticker">
                                     <td><code>@m.Ticker</code></td>
-                                    <td style="text-align:right">@m.Price.ToString("C2")</td>
+                                    <td style="text-align:right"><AnimatedNumber Value="m.Price" Prefix="$" /></td>
                                     <td style="text-align:right;color:@(m.PercentChange >= 0 ? "#2a7" : "#c33")">
-                                        @m.PercentChange.ToString("+0.00;-0.00;0.00")%
+                                        <AnimatedNumber Value="m.PercentChange" Signed="true" Suffix="%" />
                                     </td>
                                 </tr>
                             }
@@ -257,13 +262,17 @@ else
     // rates the snapshot already carries (no reload — the preference is persisted by the card).
     private void OnDisplayCurrencyChanged(string currency) => _displayCurrency = currency;
 
-    // USD-stored value shown in the chosen display currency (both CAD and USD render with "$").
-    private string DispMoney(decimal? usd)
+    // USD-stored value in the chosen display currency (both CAD and USD render with "$").
+    private decimal? DispVal(decimal? usd)
     {
-        if (usd is null || _snapshot is null) return "—";
+        if (usd is null || _snapshot is null) return null;
         var rate = _snapshot.RatesToUsd.TryGetValue(_displayCurrency, out var r) && r > 0m ? r : 1m;
-        return "$" + (usd.Value / rate).ToString("N0");
+        return usd.Value / rate;
     }
+
+    // Currency symbol for native-currency prices (the value itself stays in that currency).
+    private static string CurPrefix(string currency) =>
+        currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" };
 
     private bool _adviceDrawerOpen;
     private long? _selectedAdviceId;
@@ -329,10 +338,6 @@ else
 
     private static string Truncate(string s, int max) =>
         string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max].TrimEnd() + "…";
-
-    // Native-currency price (e.g. "C$120.00"); market-value/totals are converted to USD elsewhere.
-    private static string Money(decimal? v, string currency) =>
-        v is null ? "—" : (currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" }) + v.Value.ToString("N2");
 
     // Green for gains, red for losses; right-aligned. Null (unpriced) stays neutral.
     private static string PnlStyle(decimal? v) =>

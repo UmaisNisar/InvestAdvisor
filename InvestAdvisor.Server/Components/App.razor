@@ -75,13 +75,20 @@
             off: () => document.documentElement.classList.remove('ia-busy')
         };
 
-        // Animated count-up for the dashboard's hero number (Wealthsimple-style). Parses the
-        // element's current text as the start value so it tweens between renders, and degrades
-        // to the server-rendered static text when JS or rAF is unavailable.
+        // Animated count-up (Wealthsimple-style), used by the hero number and AnimatedNumber.
+        // Parses the element's current text as the start value so it tweens between renders,
+        // and degrades to the server-rendered static text when JS or rAF is unavailable.
         window.iaCountUp = {
-            to: (el, value) => {
+            // Generic tween: formats per opts { prefix, suffix, decimals, signed }.
+            // signed = always show a leading + on positives (P/L-style figures).
+            tween: (el, value, opts) => {
                 if (!el) return;
-                const fmt = v => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                opts = opts || {};
+                const d = Number.isInteger(opts.decimals) ? opts.decimals : 2;
+                const fmt = v => (v < 0 ? '-' : (opts.signed ? '+' : ''))
+                    + (opts.prefix || '')
+                    + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
+                    + (opts.suffix || '');
                 // Mutate the existing text node's value rather than assigning textContent:
                 // textContent would replace the node, detaching the one Blazor's diff holds a
                 // reference to — its later patches (e.g. masking the value) would then hit a
@@ -91,16 +98,23 @@
                     if (n && n.nodeType === Node.TEXT_NODE) n.nodeValue = fmt(v);
                     else el.textContent = fmt(v);
                 };
+                // Generation counter cancels a still-running tween when a newer value arrives,
+                // so rapid refreshes don't leave two rAF loops fighting over the text.
+                const gen = (el._iaGen = (el._iaGen || 0) + 1);
                 const start = parseFloat((el.textContent || '').replace(/[^0-9.\-]/g, ''));
-                if (!window.requestAnimationFrame || !isFinite(start) || start === value) { set(value); return; }
+                if (!window.requestAnimationFrame || !isFinite(start) || start === value
+                    || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) { set(value); return; }
                 const t0 = performance.now(), dur = 650;
                 const step = t => {
+                    if (el._iaGen !== gen) return;
                     const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); // ease-out cubic
                     set(start + (value - start) * e);
                     if (p < 1) requestAnimationFrame(step);
                 };
                 requestAnimationFrame(step);
-            }
+            },
+            // Hero-compatible wrapper (dashboard portfolio value).
+            to: (el, value) => window.iaCountUp.tween(el, value, { prefix: '$', decimals: 2 })
         };
 
         // Mobile haptics. navigator.vibrate is Android/Chromium only (iOS Safari ignores it).

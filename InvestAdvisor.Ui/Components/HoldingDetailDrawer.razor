@@ -34,14 +34,14 @@
                 <MudStack Row="true" Spacing="6" Style="flex-wrap:wrap">
                     <div>
                         <MudText Typo="Typo.caption" Color="Color.Surface">Price</MudText>
-                        <MudText Typo="Typo.h6">@Money(Holding.Price, Holding.Currency)</MudText>
+                        <MudText Typo="Typo.h6"><AnimatedNumber Value="Holding.Price" Prefix="@CurPrefix(Holding.Currency)" /></MudText>
                     </div>
                     <div>
                         <MudTooltip Text="Change since yesterday's close.">
                             <MudText Typo="Typo.caption" Color="Color.Surface">Today</MudText>
                         </MudTooltip>
                         <MudText Typo="Typo.h6" Style="@PnlColor(Holding.TodaysChangePct)">
-                            @(Holding.TodaysChangePct?.ToString("+0.00;-0.00;0.00") ?? "—")%
+                            <AnimatedNumber Value="Holding.TodaysChangePct" Signed="true" Suffix="%" />
                         </MudText>
                     </div>
                     <div>
@@ -49,18 +49,18 @@
                             <MudText Typo="Typo.caption" Color="Color.Surface">Unrealized P/L</MudText>
                         </MudTooltip>
                         <MudText Typo="Typo.h6" Style="@PnlColor(Holding.UnrealizedPnlPct)">
-                            @(Holding.UnrealizedPnlPct?.ToString("+0.00;-0.00;0.00") ?? "—")%
+                            <AnimatedNumber Value="Holding.UnrealizedPnlPct" Signed="true" Suffix="%" />
                         </MudText>
                     </div>
                     <div>
                         <MudText Typo="Typo.caption" Color="Color.Surface">Market value</MudText>
-                        <MudText Typo="Typo.h6">@(Holding.MarketValueUsd?.ToString("C0") ?? "—")</MudText>
+                        <MudText Typo="Typo.h6"><AnimatedNumber Value="Holding.MarketValueUsd" Prefix="$" Decimals="0" /></MudText>
                     </div>
                     <div>
                         <MudTooltip Text="This holding's share of your whole portfolio.">
                             <MudText Typo="Typo.caption" Color="Color.Surface">Allocation</MudText>
                         </MudTooltip>
-                        <MudText Typo="Typo.h6">@(Holding.CurrentAllocationPct?.ToString("0.0") ?? "—")%</MudText>
+                        <MudText Typo="Typo.h6"><AnimatedNumber Value="Holding.CurrentAllocationPct" Decimals="1" Suffix="%" /></MudText>
                     </div>
                 </MudStack>
             </MudPaper>
@@ -287,9 +287,9 @@
     private static decimal Round(decimal v) =>
         Math.Round(v, Math.Abs(v) >= 1m ? 2 : 4, MidpointRounding.AwayFromZero);
 
-    // Native-currency price (e.g. "C$120.00"), matching the dashboard's formatting.
-    private static string Money(decimal? v, string currency) =>
-        v is null ? "—" : (currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" }) + v.Value.ToString("N2");
+    // Currency symbol for the native-currency price (e.g. "C$"), matching the dashboard's formatting.
+    private static string CurPrefix(string currency) =>
+        currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" };
 
     private static string PnlColor(decimal? v) =>
         v is null ? string.Empty : v >= 0 ? "color:#66bb6a" : "color:#ef5350";

@@ -34,7 +34,15 @@
                     <MudIcon Icon="@(pc.Chg >= 0 ? Icons.Material.Filled.ArrowUpward : Icons.Material.Filled.ArrowDownward)"
                              Size="Size.Small" Style="@ChangeColor(pc.Chg)" />
                     <MudText Typo="Typo.body2" Style="@ChangeColor(pc.Chg)">
-                        @(_masked ? Masked : pc.Chg.ToString("+$#,##0.00;-$#,##0.00;$0.00")) (@pc.Pct.ToString("+0.00;-0.00;0.00")%) @PeriodLabel
+                        @if (_masked)
+                        {
+                            @Masked
+                        }
+                        else
+                        {
+                            <AnimatedNumber Value="pc.Chg" Prefix="$" Signed="true" />
+                        }
+                        (<AnimatedNumber Value="pc.Pct" Signed="true" Suffix="%" />) @PeriodLabel
                     </MudText>
                 }
                 else
@@ -113,23 +121,46 @@
                 <MudText Typo="Typo.caption" Color="Color.Surface">Unrealized P/L</MudText>
             </MudTooltip>
             <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.UnrealizedPnlUsd)">
-                @(_masked ? Masked : Disp(Snapshot.Totals.UnrealizedPnlUsd).ToString("+$#,##0.00;-$#,##0.00;$0.00"))
-                <span style="font-weight:400">(@Snapshot.Totals.UnrealizedPnlPct.ToString("+0.00;-0.00;0.00")%)</span>
+                @if (_masked)
+                {
+                    @Masked
+                }
+                else
+                {
+                    <AnimatedNumber Value="Disp(Snapshot.Totals.UnrealizedPnlUsd)" Prefix="$" Signed="true" />
+                }
+                <span style="font-weight:400">&nbsp;(<AnimatedNumber Value="Snapshot.Totals.UnrealizedPnlPct" Signed="true" Suffix="%" />)</span>
             </MudText>
         </div>
         <div>
             <MudTooltip Text="What you paid for everything you hold, at today's FX rate.">
                 <MudText Typo="Typo.caption" Color="Color.Surface">Cost basis</MudText>
             </MudTooltip>
-            <MudText Typo="Typo.h6">@(_masked ? Masked : Money(Disp(Snapshot.Totals.CostBasisUsd)))</MudText>
+            <MudText Typo="Typo.h6">
+                @if (_masked)
+                {
+                    @Masked
+                }
+                else
+                {
+                    <AnimatedNumber Value="Disp(Snapshot.Totals.CostBasisUsd)" Prefix="$" />
+                }
+            </MudText>
         </div>
         <div>
             <MudTooltip Text="Change since the previous close.">
                 <MudText Typo="Typo.caption" Color="Color.Surface">Today</MudText>
             </MudTooltip>
             <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.TodaysChangeUsd)">
-                @(_masked ? Masked : Disp(Snapshot.Totals.TodaysChangeUsd).ToString("+$#,##0.00;-$#,##0.00;$0.00"))
-                <span style="font-weight:400">(@Snapshot.Totals.TodaysChangePct.ToString("+0.00;-0.00;0.00")%)</span>
+                @if (_masked)
+                {
+                    @Masked
+                }
+                else
+                {
+                    <AnimatedNumber Value="Disp(Snapshot.Totals.TodaysChangeUsd)" Prefix="$" Signed="true" />
+                }
+                <span style="font-weight:400">&nbsp;(<AnimatedNumber Value="Snapshot.Totals.TodaysChangePct" Signed="true" Suffix="%" />)</span>
             </MudText>
         </div>
     </MudStack>
