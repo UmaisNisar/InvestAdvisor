@@ -4,10 +4,11 @@ namespace InvestAdvisor.Ui.Theme;
 
 /// <summary>
 /// Central application theme. Follows Apple's iOS 26 (Liquid Glass era) color system:
-/// systemIndigo as the single tint color, the refreshed system colors for semantic
-/// states, and Apple's dynamic gray ramp for surfaces, labels and separators — with
-/// brighter color variants in dark mode, matching Apple's light/dark pairing. Defined
-/// once here so both hosts (Photino desktop + Blazor Server) share it.
+/// systemTeal as the single tint color (user preference — not the purple systemIndigo),
+/// the refreshed system colors for semantic states, and Apple's dynamic gray ramp for
+/// surfaces, labels and separators — with brighter color variants in dark mode, matching
+/// Apple's light/dark pairing. Defined once here so both hosts (Photino desktop + Blazor
+/// Server) share it.
 /// </summary>
 public static class AppTheme
 {
@@ -15,9 +16,9 @@ public static class AppTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#6155F5",            // systemIndigo (iOS 26)
+            Primary = "#00C3D0",            // systemTeal (iOS 26)
             PrimaryContrastText = "#FFFFFF",
-            Secondary = "#00C3D0",          // systemTeal
+            Secondary = "#6155F5",          // systemIndigo
             Info = "#0088FF",               // systemBlue
             Success = "#34C759",            // systemGreen
             Warning = "#FF8D28",            // systemOrange
@@ -40,9 +41,9 @@ public static class AppTheme
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#7D7AFF",            // systemIndigo, dark/vibrant variant
+            Primary = "#40C8E0",            // systemTeal, dark/vibrant variant
             PrimaryContrastText = "#FFFFFF",
-            Secondary = "#40C8E0",          // systemTeal (dark)
+            Secondary = "#7D7AFF",          // systemIndigo (dark)
             Info = "#0A84FF",               // systemBlue (dark)
             Success = "#30D158",            // systemGreen (dark)
             Warning = "#FF9F0A",            // systemOrange (dark)
