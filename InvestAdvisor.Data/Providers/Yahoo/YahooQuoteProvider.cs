@@ -59,13 +59,16 @@ public sealed class YahooQuoteProvider(
     }
 
     /// <summary>
-    /// Daily OHLCV bars from the same chart endpoint as <see cref="GetQuoteAsync"/>; only the
-    /// range/interval differ. Bars Yahoo emits as null (holidays, halts) are dropped.
+    /// OHLCV bars from the same chart endpoint as <see cref="GetQuoteAsync"/>; only the
+    /// range/interval differ (intraday bars for 1D/1W, daily otherwise). Bars Yahoo emits as
+    /// null (holidays, halts) are dropped.
     /// </summary>
     public async Task<PriceHistory?> GetHistoryAsync(string ticker, AssetClass assetClass, HistoryRange range, CancellationToken ct = default)
     {
         var (yRange, yInterval) = range switch
         {
+            HistoryRange.OneDay => ("1d", "5m"),
+            HistoryRange.OneWeek => ("5d", "60m"),
             HistoryRange.OneMonth => ("1mo", "1d"),
             HistoryRange.ThreeMonths => ("3mo", "1d"),
             HistoryRange.SixMonths => ("6mo", "1d"),

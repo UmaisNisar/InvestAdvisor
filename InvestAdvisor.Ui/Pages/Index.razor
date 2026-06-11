@@ -28,16 +28,10 @@
     <MudGrid>
         <MudItem xs="12" md="9">
             <MudPaper Class="pa-4 mb-4" Elevation="1">
-                <MudStack Row="true" Spacing="6" Style="flex-wrap:wrap">
-                    @for (var i = 0; i < 2; i++)
-                    {
-                        <div style="min-width:160px">
-                            <MudSkeleton Animation="Animation.Wave" Width="60%" Height="18px" />
-                            <MudSkeleton Animation="Animation.Wave" Width="80%" Height="40px" />
-                            <MudSkeleton Animation="Animation.Wave" Width="50%" Height="14px" />
-                        </div>
-                    }
-                </MudStack>
+                <MudSkeleton Animation="Animation.Wave" Width="120px" Height="18px" />
+                <MudSkeleton Animation="Animation.Wave" Width="280px" Height="52px" />
+                <MudSkeleton Animation="Animation.Wave" Width="180px" Height="16px" Class="mb-2" />
+                <MudSkeleton Animation="Animation.Wave" Width="100%" Height="190px" />
             </MudPaper>
             <MudPaper Class="pa-4" Elevation="1">
                 <MudSkeleton Animation="Animation.Wave" Width="35%" Height="26px" Class="mb-3" />
@@ -65,31 +59,7 @@ else
     <MudGrid>
         @* ───────────── Left: your portfolio (the hero) ───────────── *@
         <MudItem xs="12" md="9">
-            <MudPaper Class="pa-4 mb-4" Elevation="1">
-                <MudStack Row="true" Spacing="6" AlignItems="AlignItems.Start" Style="flex-wrap:wrap">
-                    <div>
-                        <MudTooltip Text="Total market value of all holdings, converted to USD at today's FX rate.">
-                            <MudText Typo="Typo.subtitle2" Color="Color.Surface">Market value (USD)</MudText>
-                        </MudTooltip>
-                        <MudText Typo="Typo.h4">@_snapshot.Totals.MarketValueUsd.ToString("C0")</MudText>
-                        <MudText Typo="Typo.caption" Color="@(_snapshot.Totals.TodaysChangeUsd >= 0 ? Color.Success : Color.Error)">
-                            Today: @_snapshot.Totals.TodaysChangeUsd.ToString("+#,##0.00;-#,##0.00;0.00") (@_snapshot.Totals.TodaysChangePct.ToString("+0.00;-0.00;0.00")%)
-                        </MudText>
-                    </div>
-                    <MudDivider Vertical="true" FlexItem="true" />
-                    <div>
-                        <MudTooltip Text="Paper gain/loss vs. what you paid (cost basis). 'Unrealized' = you still hold it; nothing is sold.">
-                            <MudText Typo="Typo.subtitle2">Unrealized P/L</MudText>
-                        </MudTooltip>
-                        <MudText Typo="Typo.h4" Color="@(_snapshot.Totals.UnrealizedPnlUsd >= 0 ? Color.Success : Color.Error)">
-                            @_snapshot.Totals.UnrealizedPnlUsd.ToString("+$#,##0.00;-$#,##0.00;$0.00")
-                        </MudText>
-                        <MudText Typo="Typo.caption">
-                            @_snapshot.Totals.UnrealizedPnlPct.ToString("+0.00;-0.00;0.00")% on @_snapshot.Totals.CostBasisUsd.ToString("C0") cost
-                        </MudText>
-                    </div>
-                </MudStack>
-            </MudPaper>
+            <PortfolioValueCard Snapshot="_snapshot" DisplayCurrencyChanged="OnDisplayCurrencyChanged" />
 
             <MudPaper Class="pa-4" Elevation="1">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
@@ -103,7 +73,7 @@ else
                         <MudTh><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)x.Ticker)">Ticker</MudTableSortLabel></MudTh>
                         <MudTh>Name</MudTh>
                         <MudTh Style="text-align:right"><MudTooltip Text="Latest price in the holding's native currency (C$ = CAD, A$ = AUD).">Price</MudTooltip></MudTh>
-                        <MudTh Style="text-align:right"><MudTableSortLabel T="HoldingView" InitialDirection="SortDirection.Descending" SortBy="@(x => (object)(x.MarketValueUsd ?? 0m))"><MudTooltip Text="Each holding's value converted to USD at today's FX rate (the Price stays in its native currency).">Market value (USD)</MudTooltip></MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel T="HoldingView" InitialDirection="SortDirection.Descending" SortBy="@(x => (object)(x.MarketValueUsd ?? 0m))"><MudTooltip Text="@($"Each holding's value converted to {_displayCurrency} at today's FX rate (the Price stays in its native currency).")">Market value (@_displayCurrency)</MudTooltip></MudTableSortLabel></MudTh>
                         <MudTh Style="text-align:right"><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)(x.UnrealizedPnlPct ?? decimal.MinValue))"><MudTooltip Text="Unrealized gain/loss % vs. your average cost.">P/L %</MudTooltip></MudTableSortLabel></MudTh>
                         <MudTh Style="text-align:right"><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)(x.TodaysChangePct ?? decimal.MinValue))"><MudTooltip Text="Price change since the previous close.">Today %</MudTooltip></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)(x.CurrentAllocationPct ?? 0m))"><MudTooltip Text="@(AnyTarget ? "Current share of your portfolio vs. your target weight." : "Current share of your portfolio.")">@(AnyTarget ? "Alloc / target" : "Allocation %")</MudTooltip></MudTableSortLabel></MudTh>
@@ -116,9 +86,9 @@ else
                     <RowTemplate>
                         <MudTd DataLabel="Ticker">
                             <code>@context.Ticker</code>
-                            @if (context.Currency != "USD")
+                            @if (context.Currency != _displayCurrency)
                             {
-                                <MudTooltip Text="@($"Priced in {context.Currency}; value converted to USD for totals.")"><MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ml-1">@context.Currency</MudChip></MudTooltip>
+                                <MudTooltip Text="@($"Priced in {context.Currency}; value converted to {_displayCurrency} for totals.")"><MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ml-1">@context.Currency</MudChip></MudTooltip>
                             }
                         </MudTd>
                         <MudTd DataLabel="Name">
@@ -127,7 +97,7 @@ else
                             </MudTooltip>
                         </MudTd>
                         <MudTd DataLabel="Price" Style="text-align:right">@Money(context.Price, context.Currency)</MudTd>
-                        <MudTd DataLabel="Market value (USD)" Style="text-align:right">@(context.MarketValueUsd?.ToString("C0") ?? "—")</MudTd>
+                        <MudTd DataLabel="@($"Market value ({_displayCurrency})")" Style="text-align:right">@DispMoney(context.MarketValueUsd)</MudTd>
                         <MudTd DataLabel="P/L %" Style="@PnlStyle(context.UnrealizedPnlPct)">@(context.UnrealizedPnlPct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
                         <MudTd DataLabel="Today %" Style="@PnlStyle(context.TodaysChangePct)">@(context.TodaysChangePct?.ToString("+0.00;-0.00;0.00") ?? "—")</MudTd>
                         <MudTd DataLabel="@(AnyTarget ? "Alloc / target" : "Allocation %")">
@@ -281,6 +251,19 @@ else
 
 @code {
     private DashboardSnapshot? _snapshot;
+    private string _displayCurrency = "USD";
+
+    // The hero card owns the toggle; the holdings table re-denominates instantly off the same
+    // rates the snapshot already carries (no reload — the preference is persisted by the card).
+    private void OnDisplayCurrencyChanged(string currency) => _displayCurrency = currency;
+
+    // USD-stored value shown in the chosen display currency (both CAD and USD render with "$").
+    private string DispMoney(decimal? usd)
+    {
+        if (usd is null || _snapshot is null) return "—";
+        var rate = _snapshot.RatesToUsd.TryGetValue(_displayCurrency, out var r) && r > 0m ? r : 1m;
+        return "$" + (usd.Value / rate).ToString("N0");
+    }
 
     private bool _adviceDrawerOpen;
     private long? _selectedAdviceId;
@@ -378,6 +361,7 @@ else
         try
         {
             _snapshot = await Queries.GetDashboardAsync();
+            _displayCurrency = _snapshot.DisplayCurrency;
             _holdings = (await HoldingsSvc.ListAsync()).ToList();
         }
         catch (Exception ex) { Snackbar.Add($"Dashboard load failed: {ex.Message}", Severity.Error); }
