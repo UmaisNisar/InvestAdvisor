@@ -85,12 +85,24 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMarketDataProvider>(sp => sp.GetRequiredService<Providers.CompositeMarketDataProvider>());
         services.AddScoped<IPriceHistoryProvider>(sp => sp.GetRequiredService<Providers.CompositeMarketDataProvider>());
 
-        services.AddHttpClient<INewsProvider, FinnhubNewsProvider>((sp, http) =>
+        // News sources. Each concrete provider gets its own typed HttpClient; both are exposed as
+        // INewsProvider so NewsRefreshService resolves them as an ordered set: Finnhub first,
+        // Yahoo second — the first provider with coverage wins per ticker, so Yahoo only answers
+        // for the (non-US) tickers Finnhub's free tier returns nothing for.
+        services.AddHttpClient<FinnhubNewsProvider>((sp, http) =>
         {
             var opts = sp.GetRequiredService<IOptions<FinnhubOptions>>().Value;
             http.BaseAddress = new Uri(opts.BaseUrl.Replace("/api/v1", string.Empty));
             http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
         });
+        services.AddHttpClient<Providers.Yahoo.YahooNewsProvider>(http =>
+        {
+            http.BaseAddress = new Uri("https://feeds.finance.yahoo.com");
+            http.Timeout = TimeSpan.FromSeconds(12);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (InvestAdvisor)");
+        });
+        services.AddScoped<INewsProvider>(sp => sp.GetRequiredService<FinnhubNewsProvider>());
+        services.AddScoped<INewsProvider>(sp => sp.GetRequiredService<Providers.Yahoo.YahooNewsProvider>());
 
         services.AddHttpClient<IScreenerDataProvider, FinnhubScreenerProvider>((sp, http) =>
         {

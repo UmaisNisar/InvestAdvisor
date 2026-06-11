@@ -6,9 +6,14 @@ using Microsoft.Extensions.Logging;
 
 namespace InvestAdvisor.Data.Services;
 
+/// <summary>
+/// Refreshes ticker + market news into <c>NewsItems</c>. Providers are tried in registration
+/// order per ticker and the first one with coverage wins — Finnhub answers US names, Yahoo
+/// picks up the non-US exchanges Finnhub's free tier returns nothing for.
+/// </summary>
 public sealed class NewsRefreshService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    INewsProvider provider,
+    IEnumerable<INewsProvider> providers,
     ISystemClock clock,
     ILogger<NewsRefreshService>? logger = null) : INewsRefreshService
 {
@@ -17,6 +22,9 @@ public sealed class NewsRefreshService(
 
     public async Task<int> RefreshAsync(IEnumerable<TickerSpec> tickers, CancellationToken ct = default)
     {
+        var providerList = providers.ToList();
+        if (providerList.Count == 0) return 0;
+
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         var lastFetch = await db.NewsItems.AsNoTracking()
@@ -49,24 +57,38 @@ public sealed class NewsRefreshService(
             .ToArray();
         foreach (var spec in perTickerCalls)
         {
-            IReadOnlyList<NewsHeadline> headlines;
-            try { headlines = await provider.GetTickerNewsAsync(spec.Ticker, ct); }
-            catch (Exception ex)
+            // First provider with coverage wins — no duplicate API spend on tickers the
+            // primary already answers, while gaps fall through to the next provider.
+            foreach (var provider in providerList)
             {
-                logger?.LogWarning(ex, "News refresh failed for {Ticker}; continuing.", spec.Ticker);
-                continue;
+                IReadOnlyList<NewsHeadline> headlines;
+                try { headlines = await provider.GetTickerNewsAsync(spec.Ticker, ct); }
+                catch (Exception ex)
+                {
+                    logger?.LogWarning(ex, "News refresh failed for {Ticker} via {Provider}; trying next.",
+                        spec.Ticker, provider.GetType().Name);
+                    continue;
+                }
+                if (headlines.Count == 0) continue;
+                written += PersistNew(db, headlines, spec.Ticker, existing);
+                break;
             }
-            written += PersistNew(db, headlines, spec.Ticker, existing);
         }
 
-        try
+        foreach (var provider in providerList)
         {
-            var market = await provider.GetMarketNewsAsync(ct);
-            written += PersistNew(db, market, fallbackTicker: null, existing);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Market news refresh failed; continuing.");
+            try
+            {
+                var market = await provider.GetMarketNewsAsync(ct);
+                if (market.Count == 0) continue;
+                written += PersistNew(db, market, fallbackTicker: null, existing);
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Market news refresh failed via {Provider}; trying next.",
+                    provider.GetType().Name);
+            }
         }
 
         if (written > 0) await db.SaveChangesAsync(ct);
