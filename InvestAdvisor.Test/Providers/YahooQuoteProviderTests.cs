@@ -53,8 +53,42 @@ public class YahooQuoteProviderTests
     }
 
     [Fact]
-    public async Task Daily_change_falls_back_to_chartPreviousClose_when_previousClose_absent()
+    public async Task Daily_change_derives_prior_session_close_from_bars_when_previousClose_absent()
     {
+        // Yahoo omits previousClose from chart meta for interval=1d (it only appears on intraday
+        // intervals), so the daily change must come from the bar series: the last close from a
+        // session before the current one (regularMarketTime's trading day). Real MU.TO shape:
+        // current session 39.40, prior session 41.21 → -4.39%, NOT (39.40-47.67)/47.67 = -17.35%
+        // off chartPreviousClose (~a week ago).
+        var sut = BuildSut("""
+            { "chart": { "result": [ {
+                "meta": {
+                    "regularMarketPrice": 39.40,
+                    "chartPreviousClose": 47.67,
+                    "regularMarketTime": 1781121592,
+                    "gmtoffset": -14400,
+                    "currency": "CAD"
+                },
+                "timestamp": [1780925400, 1781011800, 1781098200],
+                "indicators": { "quote": [ {
+                    "close": [41.89, 41.21, 39.40]
+                } ] }
+            } ] } }
+            """);
+
+        var quote = await sut.GetQuoteAsync("MU.TO", AssetClass.Equity);
+
+        quote.Should().NotBeNull();
+        quote!.Price.Should().Be(39.40m);
+        quote.PreviousClose.Should().Be(41.21m);
+        quote.PercentChange.Should().BeApproximately(-4.3922m, 0.001m);
+    }
+
+    [Fact]
+    public async Task Daily_change_falls_back_to_chartPreviousClose_when_previousClose_and_bars_absent()
+    {
+        // Last resort: no previousClose in meta and no usable bar series. chartPreviousClose is a
+        // ~5-day-old close so the figure is wrong-ish, but it beats reporting no change at all.
         var sut = BuildSut("""
             { "chart": { "result": [ { "meta": {
                 "regularMarketPrice": 100.0,

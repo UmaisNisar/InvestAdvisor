@@ -43,19 +43,43 @@ public sealed class YahooQuoteProvider(
         try { body = await http.GetFromJsonAsync<YahooChartResponse>(url, ct); }
         catch (Exception ex) { logger?.LogWarning(ex, "Yahoo chart failed for {Ticker}.", ticker); return null; }
 
-        var meta = body?.Chart?.Result?.FirstOrDefault()?.Meta;
+        var result = body?.Chart?.Result?.FirstOrDefault();
+        var meta = result?.Meta;
         if (meta?.RegularMarketPrice is not { } price || price <= 0m)
         {
             logger?.LogInformation("Yahoo returned no price for {Ticker}.", ticker);
             return null;
         }
 
-        // Use previousClose (the actual prior-session close) for the daily change. chartPreviousClose
-        // is the close *before the requested range* — with range=5d that's ~a week ago, which would
-        // turn this into a 5-day return rather than today's change.
-        var prev = meta.PreviousClose ?? meta.ChartPreviousClose ?? price;
+        // The daily change needs the actual prior-session close. Yahoo only puts previousClose in
+        // chart meta for intraday intervals — with interval=1d it's absent, and chartPreviousClose
+        // is the close *before the requested range* (~a week ago with range=5d), which would turn
+        // this into a 5-day return. So derive the prior session's close from the daily bars.
+        var prev = meta.PreviousClose ?? DerivePreviousClose(result!) ?? meta.ChartPreviousClose ?? price;
         var pct = prev == 0m ? 0m : (price - prev) / prev * 100m;
         return new Quote(ticker.ToUpperInvariant(), assetClass, price, prev, pct, clock.UtcNow);
+    }
+
+    /// <summary>Last daily close from a session before the current one (the day of
+    /// regularMarketTime, in exchange-local time). The current session's own bar must be skipped:
+    /// after the close it equals the live price, which would make the change 0%.</summary>
+    private static decimal? DerivePreviousClose(YahooResult result)
+    {
+        var timestamps = result.Timestamp;
+        var closes = result.Indicators?.Quote?.FirstOrDefault()?.Close;
+        if (result.Meta?.RegularMarketTime is not { } marketTime || timestamps is null || closes is null)
+            return null;
+
+        var offset = TimeSpan.FromSeconds(result.Meta.GmtOffset ?? 0);
+        var currentDay = DateTimeOffset.FromUnixTimeSeconds(marketTime).ToOffset(offset).Date;
+        decimal? prev = null;
+        for (var i = 0; i < Math.Min(timestamps.Length, closes.Length); i++)
+        {
+            if (DateTimeOffset.FromUnixTimeSeconds(timestamps[i]).ToOffset(offset).Date >= currentDay)
+                break;
+            if (closes[i] is { } c && c > 0m) prev = c;
+        }
+        return prev;
     }
 
     /// <summary>
@@ -118,5 +142,7 @@ public sealed class YahooQuoteProvider(
         [property: JsonPropertyName("regularMarketPrice")] decimal? RegularMarketPrice,
         [property: JsonPropertyName("chartPreviousClose")] decimal? ChartPreviousClose,
         [property: JsonPropertyName("previousClose")] decimal? PreviousClose,
+        [property: JsonPropertyName("regularMarketTime")] long? RegularMarketTime,
+        [property: JsonPropertyName("gmtoffset")] int? GmtOffset,
         [property: JsonPropertyName("currency")] string? Currency);
 }
