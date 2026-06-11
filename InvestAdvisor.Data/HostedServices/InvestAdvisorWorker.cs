@@ -95,7 +95,11 @@ public sealed class InvestAdvisorWorker(
 
         if (allTickers.Count > 0)
         {
-            try { await priceRefresh.RefreshAsync(allTickers.ToArray(), ct); }
+            try
+            {
+                await priceRefresh.RefreshAsync(allTickers.ToArray(), ct);
+                bus.Publish(new PricesRefreshedEvent(allTickers.Select(t => t.Ticker).ToArray(), clock.UtcNow));
+            }
             catch (Exception ex) { logger.LogWarning(ex, "Price refresh failed."); }
 
             try { await newsRefresh.RefreshAsync(allTickers.ToArray(), ct); }
