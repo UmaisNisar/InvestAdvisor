@@ -1,0 +1,57 @@
+@using System.Globalization
+@inject IJSRuntime JS
+
+@* A number that counts up/down to its new value instead of snapping, using the same
+   iaCountUp tween as the dashboard hero. Razor renders the value once and then keeps
+   emitting that frozen string, so Blazor's diff never rewrites the text node the JS
+   tween is animating. Null transitions can't tween, so they rewrite the text statically. *@
+<span @ref="_el">@_text</span>
+
+@code {
+    [Parameter] public decimal? Value { get; set; }
+    [Parameter] public int Decimals { get; set; } = 2;
+    [Parameter] public string Prefix { get; set; } = "";
+    [Parameter] public string Suffix { get; set; } = "";
+    /// <summary>Always show a leading sign (+/-), for P/L-style change figures.</summary>
+    [Parameter] public bool Signed { get; set; }
+    [Parameter] public string NullText { get; set; } = "—";
+
+    private ElementReference _el;
+    private string _text = "";
+    private decimal? _shown;     // value the frozen markup (or the last finished tween) represents
+    private decimal? _tweenedTo; // last value handed to the JS tween
+
+    protected override void OnParametersSet()
+    {
+        if (Value is null || _shown is null)
+        {
+            _text = Value is { } v ? Format(v) : NullText;
+            _shown = Value;
+            _tweenedTo = Value; // static rewrite — nothing to animate from/to
+        }
+        // else: leave _text frozen; OnAfterRenderAsync tweens the live text to the new Value.
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Value is { } v && v != _tweenedTo)
+        {
+            _tweenedTo = v;
+            _shown = v;
+            try
+            {
+                await JS.InvokeVoidAsync("iaCountUp.tween", _el, (double)v,
+                    new { prefix = Prefix, suffix = Suffix, decimals = Decimals, signed = Signed });
+            }
+            catch { /* JS helper unavailable; the text stays at the previous value */ }
+        }
+    }
+
+    // Mirrors the JS formatter (sign + prefix + grouped absolute + suffix) so the static
+    // first render and the tween's output are indistinguishable.
+    private string Format(decimal v)
+    {
+        var sign = v < 0 ? "-" : Signed ? "+" : "";
+        return sign + Prefix + Math.Abs(v).ToString("N" + Decimals, CultureInfo.InvariantCulture) + Suffix;
+    }
+}
