@@ -295,6 +295,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         Bus.RunCompleted += OnRunCompleted;
+        Bus.PricesRefreshed += OnPricesRefreshed;
         await Reload();
         await LoadRecommendation();
         try { _cadenceHours = (await Profiles.GetAsync()).RebalanceCadenceHours; } catch { /* keep default */ }
@@ -434,5 +435,18 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() => Bus.RunCompleted -= OnRunCompleted;
+    // Fires every worker tick after fresh price snapshots land; reloads only the
+    // price-driven snapshot (the daily recommendation panel is untouched).
+    private async void OnPricesRefreshed(object? sender, PricesRefreshedEvent e)
+    {
+        if (_snapshot?.Holdings.Any(h => e.Tickers.Contains(h.Ticker, StringComparer.OrdinalIgnoreCase)) != true) return;
+        await InvokeAsync(Reload);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Bus.RunCompleted -= OnRunCompleted;
+        Bus.PricesRefreshed -= OnPricesRefreshed;
+    }
 }
