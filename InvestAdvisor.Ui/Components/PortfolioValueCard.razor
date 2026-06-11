@@ -1,0 +1,329 @@
+@using ApexCharts
+@* ApexCharts also defines `Color`/`Size`; aliases keep MudBlazor's the default in this file. *@
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IPortfolioQueries Queries
+@inject IProfileService Profiles
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Style="flex-wrap:wrap;gap:8px">
+        <div>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="0">
+                <MudTooltip Text="@($"Total market value of all holdings, converted to {_currency} at today's FX rate.")">
+                    <MudText Typo="Typo.subtitle2" Color="Color.Surface">Portfolio value</MudText>
+                </MudTooltip>
+                <MudTooltip Text="@(_masked ? "Show balances" : "Hide balances (e.g. for screen sharing)")">
+                    <MudIconButton Icon="@(_masked ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                   Size="Size.Small" OnClick="ToggleMask" />
+                </MudTooltip>
+            </MudStack>
+            <MudStack Row="true" AlignItems="AlignItems.Baseline" Spacing="2">
+                <MudText Typo="Typo.h3" Style="font-weight:700;letter-spacing:-0.5px">
+                    @* Razor deliberately renders a value frozen at init/unmask (_heroText): keeping
+                       the razor output constant across re-renders means Blazor's diff never rewrites
+                       the span, so the iaCountUp tween that updates it from JS isn't clobbered. *@
+                    <span @ref="_valueEl">@(_masked ? Masked : _heroText)</span>
+                </MudText>
+                <MudText Typo="Typo.subtitle1" Color="Color.Surface">@_currency</MudText>
+            </MudStack>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-1">
+                @if (PeriodChange is { } pc)
+                {
+                    <MudIcon Icon="@(pc.Chg >= 0 ? Icons.Material.Filled.ArrowUpward : Icons.Material.Filled.ArrowDownward)"
+                             Size="Size.Small" Style="@ChangeColor(pc.Chg)" />
+                    <MudText Typo="Typo.body2" Style="@ChangeColor(pc.Chg)">
+                        @(_masked ? Masked : pc.Chg.ToString("+$#,##0.00;-$#,##0.00;$0.00")) (@pc.Pct.ToString("+0.00;-0.00;0.00")%) @PeriodLabel
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Surface">No change data yet @PeriodLabel</MudText>
+                }
+            </MudStack>
+        </div>
+        @if (CurrencyOptions.Length > 1)
+        {
+            <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                @foreach (var c in CurrencyOptions)
+                {
+                    <MudButton Color="@(c == _currency ? Color.Primary : Color.Default)"
+                               Variant="@(c == _currency ? Variant.Filled : Variant.Outlined)"
+                               OnClick="@(() => SetCurrency(c))">@c</MudButton>
+                }
+            </MudButtonGroup>
+        }
+    </MudStack>
+
+    @* ── Value-over-time line (sparkline: no axes, Wealthsimple-style) ── *@
+    <div style="min-height:200px" class="mt-2">
+        @if (_chartLoading)
+        {
+            <MudSkeleton Animation="Animation.Wave" Width="100%" Height="190px" />
+        }
+        else if (_chartPoints is not { Count: >= 2 })
+        {
+            <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Style="height:190px">
+                <MudText Typo="Typo.body2" Color="Color.Surface">Not enough price history to draw this range yet.</MudText>
+            </MudStack>
+        }
+        else
+        {
+            <ApexChart TItem="ChartPoint" Height="190" Options="_options" @key="_chartVersion">
+                <ApexPointSeries TItem="ChartPoint"
+                                 Items="_chartPoints"
+                                 Name="Portfolio value"
+                                 XValue="@(p => p.Time)"
+                                 YValue="@(p => p.Value)"
+                                 SeriesType="SeriesType.Area" />
+            </ApexChart>
+        }
+    </div>
+
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="flex-wrap:wrap;gap:8px" Class="mt-1">
+        <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+            @foreach (var (range, label) in Ranges)
+            {
+                <MudButton Color="@(range == _range ? Color.Primary : Color.Default)"
+                           Style="@(range == _range ? "font-weight:700" : "")"
+                           OnClick="@(() => SetRange(range))">@label</MudButton>
+            }
+        </MudButtonGroup>
+        <MudTooltip Text="The line replays today's holdings (share counts and FX held constant) against historical prices — deposits and trades inside the window aren't modeled.">
+            <MudText Typo="Typo.caption" Color="Color.Surface" Style="cursor:help">
+                @(_history is { MissingTickers.Count: > 0 } h ? $"Excludes {string.Join(", ", h.MissingTickers)} (no history)" : "Based on current holdings")
+            </MudText>
+        </MudTooltip>
+    </MudStack>
+
+    <MudDivider Class="my-3" />
+    <MudStack Row="true" Spacing="6" Style="flex-wrap:wrap">
+        <div>
+            <MudTooltip Text="Paper gain/loss vs. what you paid (cost basis). 'Unrealized' = you still hold it; nothing is sold.">
+                <MudText Typo="Typo.caption" Color="Color.Surface">Unrealized P/L</MudText>
+            </MudTooltip>
+            <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.UnrealizedPnlUsd)">
+                @(_masked ? Masked : Disp(Snapshot.Totals.UnrealizedPnlUsd).ToString("+$#,##0.00;-$#,##0.00;$0.00"))
+                <span style="font-weight:400">(@Snapshot.Totals.UnrealizedPnlPct.ToString("+0.00;-0.00;0.00")%)</span>
+            </MudText>
+        </div>
+        <div>
+            <MudTooltip Text="What you paid for everything you hold, at today's FX rate.">
+                <MudText Typo="Typo.caption" Color="Color.Surface">Cost basis</MudText>
+            </MudTooltip>
+            <MudText Typo="Typo.h6">@(_masked ? Masked : Money(Disp(Snapshot.Totals.CostBasisUsd)))</MudText>
+        </div>
+        <div>
+            <MudTooltip Text="Change since the previous close.">
+                <MudText Typo="Typo.caption" Color="Color.Surface">Today</MudText>
+            </MudTooltip>
+            <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.TodaysChangeUsd)">
+                @(_masked ? Masked : Disp(Snapshot.Totals.TodaysChangeUsd).ToString("+$#,##0.00;-$#,##0.00;$0.00"))
+                <span style="font-weight:400">(@Snapshot.Totals.TodaysChangePct.ToString("+0.00;-0.00;0.00")%)</span>
+            </MudText>
+        </div>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter] public DashboardSnapshot Snapshot { get; set; } = default!;
+    /// <summary>Raised after the user switches display currency, so the page can re-denominate too.</summary>
+    [Parameter] public EventCallback<string> DisplayCurrencyChanged { get; set; }
+
+    private const string Masked = "$••••••";
+
+    private static readonly (HistoryRange Range, string Label)[] Ranges =
+    {
+        (HistoryRange.OneDay, "1D"),
+        (HistoryRange.OneWeek, "1W"),
+        (HistoryRange.OneMonth, "1M"),
+        (HistoryRange.ThreeMonths, "3M"),
+        (HistoryRange.SixMonths, "6M"),
+        (HistoryRange.OneYear, "1Y"),
+    };
+
+    private sealed record ChartPoint(DateTime Time, decimal Value);
+
+    private string _currency = "USD";
+    private bool _masked;
+    private bool _maskLoaded;
+    private HistoryRange _range = HistoryRange.OneDay;
+    private PortfolioValueHistory? _history;
+    private List<ChartPoint>? _chartPoints;     // _history converted into the display currency
+    private bool _chartLoading = true;
+    private int _chartVersion;                  // bumped to force ApexChart to recreate
+    private ApexChartOptions<ChartPoint> _options = new();
+    private ElementReference _valueEl;
+    private decimal? _animatedTo;               // last value handed to the JS count-up
+    private string _heroText = "";              // span text at init/unmask; JS animates it after
+
+    private decimal Rate => Snapshot.RatesToUsd.TryGetValue(_currency, out var r) && r > 0m ? r : 1m;
+    private decimal Disp(decimal usd) => usd / Rate;
+    private decimal HeroValue => Math.Round(Disp(Snapshot.Totals.MarketValueUsd), 2);
+
+    // USD first, then the rest (holding currencies + saved preference) alphabetically.
+    private string[] CurrencyOptions => Snapshot.RatesToUsd.Keys
+        .OrderBy(c => c == "USD" ? 0 : 1).ThenBy(c => c, StringComparer.Ordinal).ToArray();
+
+    private static string Money(decimal v) => "$" + v.ToString("N2");
+    private static string ChangeColor(decimal v) => v >= 0 ? "color:#66bb6a" : "color:#ef5350";
+
+    private string PeriodLabel => _range switch
+    {
+        HistoryRange.OneDay => "past day",
+        HistoryRange.OneWeek => "past week",
+        HistoryRange.OneMonth => "past month",
+        HistoryRange.ThreeMonths => "past 3 months",
+        HistoryRange.SixMonths => "past 6 months",
+        _ => "past year",
+    };
+
+    // 1D uses the live totals (vs. previous close — same number as the rest of the app);
+    // longer ranges are read off the reconstructed line (first → last point).
+    private (decimal Chg, decimal Pct)? PeriodChange
+    {
+        get
+        {
+            if (_range == HistoryRange.OneDay)
+                return (Disp(Snapshot.Totals.TodaysChangeUsd), Snapshot.Totals.TodaysChangePct);
+            if (_chartPoints is not { Count: >= 2 } pts) return null;
+            var first = pts[0].Value;
+            var chg = pts[^1].Value - first;
+            return first == 0m ? null : (chg, chg / first * 100m);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currency = Snapshot.DisplayCurrency;
+        _heroText = Money(HeroValue);
+        await LoadChart();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_maskLoaded)
+        {
+            _maskLoaded = true;
+            try
+            {
+                if (await JS.InvokeAsync<string?>("localStorage.getItem", "ia-mask") == "on")
+                {
+                    _masked = true;
+                    StateHasChanged();
+                    return;
+                }
+            }
+            catch { /* localStorage unavailable; stay unmasked */ }
+        }
+        // Tween the hero number whenever the underlying value changed (initial load, refresh,
+        // currency switch, unmask). The span already holds the final value as static text, so
+        // this is purely cosmetic and safe to skip if the JS isn't there.
+        if (!_masked && HeroValue != _animatedTo)
+        {
+            _animatedTo = HeroValue;
+            try { await JS.InvokeVoidAsync("iaCountUp.to", _valueEl, (double)HeroValue); }
+            catch { /* count-up helper missing (e.g. older host page); static text is fine */ }
+        }
+    }
+
+    private async Task ToggleMask()
+    {
+        _masked = !_masked;
+        if (!_masked)
+        {
+            _heroText = Money(HeroValue);       // fresh static text; JS picks up from here
+            _animatedTo = null;
+        }
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "ia-mask", _masked ? "on" : "off"); }
+        catch { /* preference just won't persist */ }
+    }
+
+    private async Task SetRange(HistoryRange range)
+    {
+        if (range == _range && _history is not null) return;
+        _range = range;
+        await LoadChart();
+    }
+
+    private async Task SetCurrency(string currency)
+    {
+        if (currency == _currency) return;
+        _currency = currency;
+        RebuildChartPoints();                   // same USD series, new denomination — no refetch
+        await DisplayCurrencyChanged.InvokeAsync(currency);
+        try
+        {
+            var profile = await Profiles.GetAsync();
+            profile.DisplayCurrency = currency;
+            await Profiles.UpdateAsync(profile);
+        }
+        catch (Exception ex) { Snackbar.Add($"Couldn't save currency preference: {ex.Message}", Severity.Warning); }
+    }
+
+    private async Task LoadChart()
+    {
+        _chartLoading = true;
+        try
+        {
+            _history = await Queries.GetValueHistoryAsync(_range);
+        }
+        catch (Exception ex)
+        {
+            _history = null;
+            Snackbar.Add($"Couldn't load portfolio history: {ex.Message}", Severity.Error);
+        }
+        RebuildChartPoints();
+        _chartLoading = false;
+    }
+
+    private void RebuildChartPoints()
+    {
+        var intraday = _range is HistoryRange.OneDay or HistoryRange.OneWeek;
+        _chartPoints = _history?.Points
+            // ApexCharts renders datetimes as UTC, so for intraday bars shift to server-local wall
+            // time and relabel it UTC — the tooltip then shows the user's clock, not 14:30 UTC.
+            // (Single-user self-hosted app: server-local == user-local.)
+            .Select(p => new ChartPoint(
+                intraday ? DateTime.SpecifyKind(p.TimeUtc.ToLocalTime(), DateTimeKind.Utc) : p.TimeUtc,
+                Math.Round(p.ValueUsd / Rate, 2)))
+            .ToList();
+        BuildOptions(intraday);
+        _chartVersion++;
+    }
+
+    private void BuildOptions(bool intraday)
+    {
+        var up = PeriodChange is not { Chg: < 0m };
+        _options = new ApexChartOptions<ChartPoint>
+        {
+            // Sparkline mode: no axes/grid, just the line — the hero number is the y-axis.
+            Chart = new Chart
+            {
+                Sparkline = new ChartSparkline { Enabled = true },
+                Animations = new Animations { Enabled = false },
+                Toolbar = new Toolbar { Show = false },
+            },
+            Colors = new List<string> { up ? "#66bb6a" : "#ef5350" },
+            Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 },
+            Markers = new Markers { Size = 0 },
+            Xaxis = new XAxis { Type = XAxisType.Datetime },
+            Tooltip = new Tooltip
+            {
+                Theme = Mode.Dark,
+                X = new TooltipX { Format = intraday ? "MMM dd, HH:mm" : "MMM dd, yyyy" },
+            },
+            // Dashed baseline at the window's starting value (the Wealthsimple reference line).
+            Annotations = _chartPoints is { Count: >= 2 } pts
+                ? new Annotations
+                {
+                    Yaxis = new List<AnnotationsYAxis>
+                    {
+                        new() { Y = (double)pts[0].Value, BorderColor = "#9e9e9e", StrokeDashArray = 4, Opacity = 0.4 },
+                    },
+                }
+                : null,
+        };
+    }
+}

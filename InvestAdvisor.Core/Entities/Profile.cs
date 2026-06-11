@@ -13,6 +13,8 @@ public class Profile
     public decimal DriftPctThreshold { get; set; } = 5m;
     public decimal SingleDayMovePctThreshold { get; set; } = 7m;
     public int RebalanceCadenceHours { get; set; } = 24;
+    /// <summary>ISO currency the dashboard displays totals in (per-holding prices stay native).</summary>
+    public string DisplayCurrency { get; set; } = "USD";
     public string? SystemPromptOverride { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

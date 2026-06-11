@@ -11,6 +11,7 @@ namespace InvestAdvisor.Data.Queries;
 public sealed class PortfolioQueries(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
     IFxRateProvider fx,
+    IPriceHistoryProvider history,
     ITenantContext tenant) : IPortfolioQueries
 {
     private static readonly JsonSerializerOptions _camel = new()
@@ -35,7 +36,13 @@ public sealed class PortfolioQueries(
         foreach (var s in allSnaps)
             if (!latestSnaps.ContainsKey(s.Ticker)) latestSnaps[s.Ticker] = s;
 
-        var rates = await BuildRatesAsync(holdings, ct);
+        // The display currency is a per-tenant preference; default USD when no profile row exists.
+        var displayCurrency = Cur(await db.Profiles.AsNoTracking()
+            .Where(p => p.TenantId == tid)
+            .Select(p => p.DisplayCurrency)
+            .FirstOrDefaultAsync(ct));
+
+        var rates = await BuildRatesAsync(holdings, displayCurrency, ct);
         var views = BuildHoldingViews(holdings, latestSnaps, rates, out var totalMv);
         var totals = ComputeTotals(holdings, latestSnaps, rates);
         var allocation = BuildAllocation(holdings, views, totalMv);
@@ -62,7 +69,60 @@ public sealed class PortfolioQueries(
                 DeserializeOrEmpty<PositionCall>(latestAdvice.ParsedPositionsJson));
         }
 
-        return new DashboardSnapshot(totals, views, allocation, movers, latest);
+        return new DashboardSnapshot(totals, views, allocation, movers, latest, rates, displayCurrency);
+    }
+
+    public async Task<PortfolioValueHistory> GetValueHistoryAsync(HistoryRange range, CancellationToken ct = default)
+    {
+        var tid = await tenant.GetTenantIdAsync(ct);
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var holdings = await db.Holdings.AsNoTracking().Where(h => h.TenantId == tid).ToListAsync(ct);
+
+        // The same ticker can sit in several accounts; the chart only needs total shares per ticker.
+        var positions = holdings
+            .GroupBy(h => h.Ticker, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (Ticker: g.Key, g.First().AssetClass, Quantity: g.Sum(h => h.Quantity)))
+            .ToArray();
+
+        var fetches = positions
+            .Select(async p => (p.Ticker, p.Quantity, History: await history.GetHistoryAsync(p.Ticker, p.AssetClass, range, ct)))
+            .ToArray();
+        await Task.WhenAll(fetches);
+
+        var intraday = range is HistoryRange.OneDay or HistoryRange.OneWeek;
+        var missing = new List<string>();
+        var series = new List<(decimal Qty, decimal RateToUsd, IReadOnlyList<(DateTime Time, decimal Close)> Bars)>();
+        var rates = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 1m };
+        foreach (var f in fetches)
+        {
+            var (ticker, qty, h) = f.Result;
+            if (h is null || h.Candles.Count == 0) { missing.Add(ticker); continue; }
+            var cur = Cur(h.Currency);
+            if (!rates.ContainsKey(cur)) rates[cur] = await fx.GetRateToUsdAsync(cur, ct);
+            // Daily bars: collapse to the session date so exchanges with different open times
+            // (e.g. Toronto vs. New York) land on the same point instead of stair-stepping.
+            series.Add((qty, rates[cur],
+                h.Candles.Select(c => (intraday ? c.Time : c.Time.Date, c.Close)).ToArray()));
+        }
+        if (series.Count == 0) return new PortfolioValueHistory(Array.Empty<PortfolioValuePoint>(), missing);
+
+        // Merge onto a shared timeline, forward-filling each ticker's last close across the other
+        // tickers' timestamps. Before a series starts (new listing mid-window) its first close is
+        // backfilled flat so the portfolio line doesn't jump when the series begins.
+        var timeline = series.SelectMany(s => s.Bars.Select(b => b.Time)).Distinct().OrderBy(t => t).ToArray();
+        var totals = new decimal[timeline.Length];
+        foreach (var (qty, rate, bars) in series)
+        {
+            var i = 0;
+            var close = bars[0].Close;
+            for (var t = 0; t < timeline.Length; t++)
+            {
+                while (i < bars.Count && bars[i].Time <= timeline[t]) close = bars[i++].Close;
+                totals[t] += qty * close * rate;
+            }
+        }
+        var points = timeline.Select((t, idx) => new PortfolioValuePoint(t, totals[idx])).ToArray();
+        return new PortfolioValueHistory(points, missing);
     }
 
     public async Task<AdvicePage> GetAdvicePageAsync(int skip, int take, CancellationToken ct = default)
@@ -161,10 +221,13 @@ public sealed class PortfolioQueries(
         catch { return 0; }
     }
 
-    private async Task<Dictionary<string, decimal>> BuildRatesAsync(IReadOnlyList<Holding> holdings, CancellationToken ct)
+    private async Task<Dictionary<string, decimal>> BuildRatesAsync(
+        IReadOnlyList<Holding> holdings, string displayCurrency, CancellationToken ct)
     {
         var rates = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 1m };
-        foreach (var c in holdings.Select(h => Cur(h.Currency)).Distinct(StringComparer.OrdinalIgnoreCase))
+        // Holding currencies convert values to USD; the display currency must be present too so
+        // the UI can re-denominate USD totals even when no holding is priced in it.
+        foreach (var c in holdings.Select(h => Cur(h.Currency)).Append(displayCurrency).Distinct(StringComparer.OrdinalIgnoreCase))
             if (!rates.ContainsKey(c)) rates[c] = await fx.GetRateToUsdAsync(c, ct);
         return rates;
     }

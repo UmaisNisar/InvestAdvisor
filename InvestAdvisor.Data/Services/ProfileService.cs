@@ -23,6 +23,9 @@ public sealed class ProfileService(
             throw new ArgumentException("SingleDayMovePctThreshold must be 0..100.");
         if (updated.RebalanceCadenceHours < 1)
             throw new ArgumentException("RebalanceCadenceHours must be ≥ 1.");
+        var displayCurrency = (updated.DisplayCurrency ?? "USD").Trim().ToUpperInvariant();
+        if (displayCurrency.Length != 3 || !displayCurrency.All(char.IsAsciiLetterUpper))
+            throw new ArgumentException("DisplayCurrency must be a 3-letter ISO code.");
 
         var tid = await tenant.GetTenantIdAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -33,6 +36,7 @@ public sealed class ProfileService(
         row.DriftPctThreshold = updated.DriftPctThreshold;
         row.SingleDayMovePctThreshold = updated.SingleDayMovePctThreshold;
         row.RebalanceCadenceHours = updated.RebalanceCadenceHours;
+        row.DisplayCurrency = displayCurrency;
         row.SystemPromptOverride = string.IsNullOrWhiteSpace(updated.SystemPromptOverride)
             ? null : updated.SystemPromptOverride.Trim();
         row.UpdatedAtUtc = DateTime.UtcNow;
