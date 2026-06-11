@@ -12,6 +12,10 @@ public sealed class RuntimeSettingsConfiguration : IEntityTypeConfiguration<Runt
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.TimeZoneId).HasMaxLength(64).IsRequired();
+        b.Property(x => x.LlmProvider).HasMaxLength(32).IsRequired();
+        b.Property(x => x.LlmModel).HasMaxLength(128).IsRequired();
+        b.Property(x => x.LlmRoutineModel).HasMaxLength(128).IsRequired();
+        b.Property(x => x.LlmCustomBaseUrl).HasMaxLength(512);
         b.Property(x => x.SmtpHost).HasMaxLength(255);
         b.Property(x => x.SmtpFrom).HasMaxLength(255);
         b.Property(x => x.SmtpTo).HasMaxLength(255);
@@ -28,6 +32,9 @@ public sealed class RuntimeSettingsConfiguration : IEntityTypeConfiguration<Runt
             DailyBudgetUsd = 2m,
             MaxSnapshotAgeForTriggerSeconds = 600,
             MinPriceFreshnessSeconds = 60,
+            LlmProvider = "gemini",
+            LlmModel = "gemini-2.5-flash",
+            LlmRoutineModel = "gemini-2.5-flash-lite",
             WeightValuation = 20,
             WeightGrowth = 25,
             WeightQuality = 10,

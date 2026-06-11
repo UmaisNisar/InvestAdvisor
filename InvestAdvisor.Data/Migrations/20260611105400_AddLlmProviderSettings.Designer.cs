@@ -3,6 +3,7 @@ using System;
 using InvestAdvisor.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvestAdvisor.Data.Migrations
 {
     [DbContext(typeof(InvestAdvisorDbContext))]
-    partial class InvestAdvisorDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260611105400_AddLlmProviderSettings")]
+    partial class AddLlmProviderSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
@@ -442,10 +445,6 @@ namespace InvestAdvisor.Data.Migrations
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("DisplayCurrency")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
 
                     b.Property<decimal>("DriftPctThreshold")
                         .HasPrecision(8, 4)

@@ -1,4 +1,4 @@
-@page "/settings"
+﻿@page "/settings"
 @page "/settings/{Tab}"
 @inject IProfileService ProfileService
 @inject IRuntimeSettingsStore SettingsStore
@@ -65,6 +65,44 @@
         }
     </MudTabPanel>
 
+    <MudTabPanel Text="AI Provider">
+        @if (_settings is null)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">
+                    Which AI service powers the analyses. Google Gemini's free tier is the default â€”
+                    it costs nothing (rate-limited per day). Changes apply to the next run, no restart needed.
+                </MudText>
+                <MudSelect T="string" Value="_settings.LlmProvider" ValueChanged="OnProviderChanged" Label="Provider">
+                    <MudSelectItem Value="@LlmProviders.Gemini">Google Gemini (free tier)</MudSelectItem>
+                    <MudSelectItem Value="@LlmProviders.Anthropic">Anthropic Claude (paid)</MudSelectItem>
+                    <MudSelectItem Value="@LlmProviders.Custom">Custom OpenAI-compatible (Groq / OpenRouter / Ollama)</MudSelectItem>
+                </MudSelect>
+                <MudTextField @bind-Value="_settings.LlmModel" Label="Primary model"
+                              HelperText="Used for manual runs, per-stock analysis and the daily recommendation." />
+                <MudTextField @bind-Value="_settings.LlmRoutineModel" Label="Routine model"
+                              HelperText="Cheaper/faster model for scheduled or trigger-fired runs and batch sentiment scoring." />
+                @if (_settings.LlmProvider == LlmProviders.Custom)
+                {
+                    <MudTextField @bind-Value="_settings.LlmCustomBaseUrl" Label="Base URL (OpenAI-compatible)"
+                                  Placeholder="https://api.groq.com/openai/v1/"
+                                  HelperText="Groq: https://api.groq.com/openai/v1/ Â· OpenRouter: https://openrouter.ai/api/v1/ Â· Ollama: http://localhost:11434/v1/" />
+                }
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2">
+                    API keys are read from config and never stored in SQLite:
+                    Gemini â†’ <code>Llm:GeminiApiKey</code> / <code>GEMINI_API_KEY</code> (free key at <code>aistudio.google.com</code>),
+                    Claude â†’ <code>Anthropic:ApiKey</code> / <code>ANTHROPIC_API_KEY</code>,
+                    custom â†’ <code>Llm:CustomApiKey</code> / <code>LLM_API_KEY</code>.
+                </MudAlert>
+                <MudButton OnClick="SaveSettings" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">Save</MudButton>
+            </MudPaper>
+        }
+    </MudTabPanel>
+
     <MudTabPanel Text="Screener weights">
         @if (_settings is null)
         {
@@ -75,7 +113,7 @@
             <MudPaper Class="pa-4" Elevation="0">
                 <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">
                     Relative importance of each factor in the screener's composite score. They don't
-                    need to add up to 100 — the score normalizes by their total. Set a factor to 0 to ignore it.
+                    need to add up to 100 â€” the score normalizes by their total. Set a factor to 0 to ignore it.
                 </MudText>
                 <MudNumericField @bind-Value="_settings.WeightGrowth" Label="Growth (revenue + EPS growth)" Min="0" Max="100" />
                 <MudNumericField @bind-Value="_settings.WeightValuation" Label="Valuation (P/E + P/FCF, lower is better)" Min="0" Max="100" />
@@ -122,7 +160,7 @@
                 <MudExpansionPanel Text="Import holdings from CSV (e.g. Wealthsimple export)">
                     <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2">
                         Upload a CSV with at least a <b>ticker</b> column and a <b>quantity</b> column. Optional: average cost
-                        (or book cost), account, name, asset class — headers are matched flexibly. Rows are matched to existing
+                        (or book cost), account, name, asset class â€” headers are matched flexibly. Rows are matched to existing
                         holdings by ticker + account and updated; new ones are added. Existing positions not in the file are left as-is.
                     </MudText>
                     <MudFileUpload T="IBrowserFile" Accept=".csv" FilesChanged="OnImportFileSelected" MaximumFileCount="1">
@@ -136,9 +174,9 @@
                     <MudDivider Class="my-4" />
                     <MudText Typo="Typo.subtitle2">Auto-import (optional, ~daily)</MudText>
                     <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-2">
-                        Set a <b>CSV URL</b> — e.g. a published Google Sheet that Wealthica syncs your Wealthsimple holdings
-                        into — and/or a <b>file path</b> on the server. The worker re-imports them on its daily cycle.
-                        Leave blank for manual-only. (A public sheet URL is link-accessible — use an unguessable link.)
+                        Set a <b>CSV URL</b> â€” e.g. a published Google Sheet that Wealthica syncs your Wealthsimple holdings
+                        into â€” and/or a <b>file path</b> on the server. The worker re-imports them on its daily cycle.
+                        Leave blank for manual-only. (A public sheet URL is link-accessible â€” use an unguessable link.)
                     </MudText>
                     @if (_settings is not null)
                     {
@@ -175,7 +213,7 @@
                     <MudTd DataLabel="Account">@context.AccountType</MudTd>
                     <MudTd DataLabel="Qty" Style="text-align:right">@context.Quantity</MudTd>
                     <MudTd DataLabel="Avg cost" Style="text-align:right">@context.AvgCost.ToString("C2")</MudTd>
-                    <MudTd DataLabel="Target %" Style="text-align:right">@(context.TargetAllocationPct?.ToString("0.0") ?? "—")</MudTd>
+                    <MudTd DataLabel="Target %" Style="text-align:right">@(context.TargetAllocationPct?.ToString("0.0") ?? "â€”")</MudTd>
                     <MudTd DataLabel="">
                         <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => _holdingDialog?.Open(context))" />
                         <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteHolding(context))" />
@@ -199,7 +237,7 @@
     private int _activeIndex;
 
     // URL slug per tab, in panel order, so each tab is deep-linkable (e.g. /settings/holdings).
-    private static readonly string[] TabSlugs = { "profile", "triggers", "weights", "email", "holdings" };
+    private static readonly string[] TabSlugs = { "profile", "triggers", "ai", "weights", "email", "holdings" };
 
     protected override async Task OnInitializedAsync() => await ReloadAll();
 
@@ -217,6 +255,26 @@
             Nav.NavigateTo($"/settings/{TabSlugs[index]}", replace: true);
     }
 
+    private void OnProviderChanged(string provider)
+    {
+        if (_settings is null) return;
+        _settings.LlmProvider = provider;
+        // Fill sensible model presets so a provider switch works out of the box; the fields stay
+        // editable for anyone who wants a specific model.
+        switch (provider)
+        {
+            case LlmProviders.Gemini:
+                _settings.LlmModel = "gemini-2.5-flash";
+                _settings.LlmRoutineModel = "gemini-2.5-flash-lite";
+                break;
+            case LlmProviders.Anthropic:
+                _settings.LlmModel = "claude-sonnet-4-6";
+                _settings.LlmRoutineModel = "claude-haiku-4-5";
+                break;
+            // Custom: leave the model fields alone â€” they depend entirely on the endpoint.
+        }
+    }
+
     private async Task OnImportFileSelected(IBrowserFile? file)
     {
         if (file is null) return;
@@ -228,7 +286,7 @@
 
             var result = await HoldingsImport.ImportCsvAsync(await Tenant.GetTenantIdAsync(), content);
             if (result.Errors.Count > 0)
-                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
+                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated Â· {result.Errors.Count} row error(s): {result.Errors[0]}", Severity.Warning);
             else
                 Snackbar.Add($"Imported: {result.Added} added, {result.Updated} updated, {result.Skipped} skipped.",
                     result.AnyChanges ? Severity.Success : Severity.Info);
@@ -250,7 +308,7 @@
             await SaveSettings(); // persist the URL/path so the daily worker uses them too
             var result = await HoldingsImport.ImportFromUrlAsync(await Tenant.GetTenantIdAsync(), _settings.HoldingsCsvUrl);
             if (result.Errors.Count > 0)
-                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated · {result.Errors[0]}", Severity.Warning);
+                Snackbar.Add($"Imported {result.Added} added / {result.Updated} updated Â· {result.Errors[0]}", Severity.Warning);
             else
                 Snackbar.Add($"Imported from URL: {result.Added} added, {result.Updated} updated, {result.Skipped} skipped.",
                     result.AnyChanges ? Severity.Success : Severity.Info);
@@ -296,6 +354,10 @@
                 row.MinSecondsBetweenRuns = _settings.MinSecondsBetweenRuns;
                 row.AgentPaused = _settings.AgentPaused;
                 row.DailyBudgetUsd = _settings.DailyBudgetUsd;
+                row.LlmProvider = _settings.LlmProvider;
+                row.LlmModel = _settings.LlmModel;
+                row.LlmRoutineModel = _settings.LlmRoutineModel;
+                row.LlmCustomBaseUrl = _settings.LlmCustomBaseUrl;
                 row.MaxSnapshotAgeForTriggerSeconds = _settings.MaxSnapshotAgeForTriggerSeconds;
                 row.MinPriceFreshnessSeconds = _settings.MinPriceFreshnessSeconds;
                 row.WeightValuation = _settings.WeightValuation;
@@ -345,6 +407,10 @@
         MinSecondsBetweenRuns = r.MinSecondsBetweenRuns,
         AgentPaused = r.AgentPaused,
         DailyBudgetUsd = r.DailyBudgetUsd,
+        LlmProvider = r.LlmProvider,
+        LlmModel = r.LlmModel,
+        LlmRoutineModel = r.LlmRoutineModel,
+        LlmCustomBaseUrl = r.LlmCustomBaseUrl,
         MaxSnapshotAgeForTriggerSeconds = r.MaxSnapshotAgeForTriggerSeconds,
         MinPriceFreshnessSeconds = r.MinPriceFreshnessSeconds,
         WeightValuation = r.WeightValuation,

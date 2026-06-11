@@ -1,9 +1,12 @@
 namespace InvestAdvisor.Core.Agent;
 
 /// <summary>
-/// Anthropic list pricing (USD per 1M tokens), keyed by model-id prefix. Used to turn the
+/// LLM list pricing (USD per 1M tokens), keyed by model-id prefix. Used to turn the
 /// InputTokens/OutputTokens already persisted on each run into a dollar estimate, so the daily
-/// budget guard and the cost panel agree on the same number. Unknown ids fall back to Sonnet rates.
+/// budget guard and the cost panel agree on the same number. Only Anthropic models cost money:
+/// unknown <c>claude-*</c> ids fall back to Sonnet rates (a safe over-estimate); everything else
+/// (Gemini free tier, Groq/OpenRouter free models, Ollama) is treated as $0 so the daily budget
+/// guard never blocks free usage.
 /// </summary>
 public static class ModelPricing
 {
@@ -26,6 +29,8 @@ public static class ModelPricing
         foreach (var (prefix, inP, outP) in Table)
             if (m.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 return (inP, outP);
-        return (3m, 15m); // default to Sonnet rates for an unrecognized id
+        return m.StartsWith("claude", StringComparison.OrdinalIgnoreCase)
+            ? (3m, 15m)  // unrecognized claude id — assume Sonnet rates
+            : (0m, 0m);  // non-Anthropic providers are free tiers / self-hosted
     }
 }

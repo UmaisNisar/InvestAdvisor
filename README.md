@@ -10,7 +10,7 @@ any trades yourself elsewhere** — nothing here places orders or talks to a bro
 
 ## What it does
 
-- **Portfolio analysis with per-holding calls.** On a trigger (or on demand), one Anthropic call
+- **Portfolio analysis with per-holding calls.** On a trigger (or on demand), one LLM call
   reviews the whole portfolio and emits, for *every* holding, a stance — **Add / Hold / Trim / Sell** —
   with a **conviction** (high / med / low) and a one-line, data-grounded reason, plus attention flags,
   drift-from-target alerts, and neutral considerations. The dashboard surfaces the strongest calls first.
@@ -34,7 +34,9 @@ any trades yourself elsewhere** — nothing here places orders or talks to a bro
 - **Blazor Server** (`InvestAdvisor.Server`) + **MudBlazor** — the recommended host; reachable from any browser
 - **EF Core + SQLite** — single file at `LocalApplicationData/InvestAdvisor/app.db`, migrated on startup
 - **Background workers** (`IHostedService`) — price/news refresh, screener sync, daily recommendation, CSV auto-import
-- **LLM:** Anthropic Messages API (`claude-sonnet-4-6`), structured output via forced tool use
+- **LLM:** switchable in **Settings → AI Provider** — Google Gemini **free tier** by default
+  (`gemini-2.5-flash` via Gemini's OpenAI-compatible endpoint), Anthropic Claude (paid), or any
+  OpenAI-compatible endpoint (Groq / OpenRouter / Ollama); structured output via forced tool use
 - **Data:** Finnhub · Yahoo Finance · CoinGecko · Frankfurter (FX)
 
 > There is also a **Photino desktop host** (`InvestAdvisor.App`) that shares the same UI, but it is
@@ -51,7 +53,7 @@ InvestAdvisor/
 ├── InvestAdvisor.App/     # Photino desktop host (shares the UI; broken on .NET 10)
 ├── InvestAdvisor.Ui/      # Razor Class Library — Pages, Components, Shared, app.css
 ├── InvestAdvisor.Core/    # Domain, agent contracts, abstractions, options (no infra deps)
-├── InvestAdvisor.Data/    # EF Core, providers (Anthropic/Finnhub/Yahoo/CoinGecko/Fx), services, queries, workers, DI
+├── InvestAdvisor.Data/    # EF Core, providers (Gemini+OpenAI-compat/Anthropic/Finnhub/Yahoo/CoinGecko/Fx), services, queries, workers, DI
 ├── InvestAdvisor.Test/    # xUnit tests
 ├── deploy/                # systemd unit, install-vps.sh, ship.sh + ship.ps1, deploy README (Oracle/Hetzner)
 ├── global.json
@@ -71,12 +73,15 @@ InvestAdvisor/
 3. Set your API keys (kept out of the repo via user-secrets):
    ```bash
    dotnet user-secrets init --project InvestAdvisor.Server
-   dotnet user-secrets set "Anthropic:ApiKey" "<your-anthropic-key>" --project InvestAdvisor.Server
+   dotnet user-secrets set "Llm:GeminiApiKey" "<your-gemini-key>"    --project InvestAdvisor.Server
    dotnet user-secrets set "Finnhub:ApiKey"   "<your-finnhub-key>"   --project InvestAdvisor.Server
+   # optional, only if you switch the AI provider to Anthropic Claude (paid) in Settings:
+   dotnet user-secrets set "Anthropic:ApiKey" "<your-anthropic-key>" --project InvestAdvisor.Server
    # optional, only for email alerts:
    dotnet user-secrets set "Smtp:Password"    "<your-smtp-password>"  --project InvestAdvisor.Server
    ```
-   The env vars `ANTHROPIC_API_KEY`, `FINNHUB_API_KEY`, `SMTP_PASSWORD` work as overrides.
+   The Gemini key is **free** — create one at [aistudio.google.com](https://aistudio.google.com), no billing needed.
+   The env vars `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `FINNHUB_API_KEY`, `SMTP_PASSWORD` work as overrides.
    (Yahoo, CoinGecko, and Frankfurter need **no keys**.)
 4. Run the Blazor Server host:
    ```bash
@@ -110,15 +115,16 @@ The `InvestAdvisor.Server` host runs on a small Linux box behind a **Cloudflare 
 # Once, on the box:
 sudo bash deploy/install-vps.sh
 sudo cloudflared service install <YOUR_TUNNEL_TOKEN>
-sudo nano /etc/invest-advisor.env   # Anthropic + Finnhub keys
+sudo nano /etc/invest-advisor.env   # Gemini + Finnhub keys (Anthropic optional)
 
 # From your machine, on each change:
 cp deploy/.env.example deploy/.env   # set SSH_HOST; RID=linux-arm64 for Oracle ARM
 ./deploy/ship.ps1                    # or ./deploy/ship.sh — builds, ships, restarts
 ```
 
-The login gate is **mandatory** here: the app has no built-in auth and every analysis is a paid Claude
-call, so Cloudflare Access (email allowlist) is what stops strangers from spending your API credits.
+The login gate is **mandatory** here: the app has no built-in auth, and every analysis spends your
+LLM quota (free-tier daily limits on Gemini, real money on Claude), so Cloudflare Access (email
+allowlist) is what stops strangers from burning it.
 
 ## Architecture
 
@@ -131,7 +137,7 @@ both the UI and the infrastructure depend on, but which depends on nothing itsel
 ```
 
 - **`Core`** — entities, enums, DTOs, and the interfaces (`IHoldingsService`, `IPortfolioQueries`,
-  `IAnthropicClient`, `IMarketDataProvider`, `IFxRateProvider`, …) plus the LLM tool schemas.
+  `ILlmClient`, `IMarketDataProvider`, `IFxRateProvider`, …) plus the LLM tool schemas.
 - **`Data`** — implementations: EF Core, the external providers, the read-model **queries** (separate from
   the write **services** — a light CQRS split), the background workers, and the DI composition root.
 - **`Ui`** — Blazor pages/components that inject `Core` interfaces and never touch `Data` directly.
@@ -143,7 +149,8 @@ Notes worth knowing:
 - **Pricing is routed, not single-source.** `CompositeMarketDataProvider` sends crypto → CoinGecko,
   non-US (`.`-suffixed) tickers → Yahoo, everything else → Finnhub (Yahoo fallback) — because no single
   free tier covers US + international + crypto.
-- **Structured output is forced** via Anthropic tool use: each request includes the `emit_analysis` tool
+- **Structured output is forced** via tool use (Anthropic `tool_choice` / OpenAI-style forced
+  function calling): each request includes the `emit_analysis` tool
   ([`EmitAnalysisToolSchema.cs`](InvestAdvisor.Core/Agent/EmitAnalysisToolSchema.cs)) — which now carries
   the per-holding `positions[]` — with `tool_choice` set to it. A JSON fallback flags any non-tool reply.
 - **Trigger priority** is deliberate and tested: `Manual > PriceTarget > BigMove > Drift > Scheduled`

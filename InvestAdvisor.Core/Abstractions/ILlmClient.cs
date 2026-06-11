@@ -2,17 +2,22 @@ using InvestAdvisor.Core.Models;
 
 namespace InvestAdvisor.Core.Abstractions;
 
-public interface IAnthropicClient
+/// <summary>
+/// Provider-neutral LLM client. The DI-registered implementation routes each call to the
+/// provider selected at runtime in Settings (Gemini free tier by default, Anthropic Claude,
+/// or any custom OpenAI-compatible endpoint such as Groq/OpenRouter/Ollama).
+/// </summary>
+public interface ILlmClient
 {
     /// <summary>
-    /// Sends one analysis request to the Anthropic Messages API and returns the parsed result
-    /// alongside the raw response body for AdviceLog persistence.
+    /// Sends one portfolio-analysis request and returns the parsed result alongside the raw
+    /// response body for AdviceLog persistence.
     /// </summary>
     /// <param name="model">
     /// Optional model-id override (e.g. a cheaper routine model). Falls back to the configured
     /// primary model when null/blank.
     /// </param>
-    Task<AnthropicAnalysisResult> AnalyzeAsync(
+    Task<LlmAnalysisResult> AnalyzeAsync(
         string systemPrompt,
         string runContextJson,
         string? model = null,
@@ -25,6 +30,7 @@ public interface IAnthropicClient
     Task<StockAnalysisResult> AnalyzeStockAsync(
         string systemPrompt,
         string stockContextJson,
+        string? model = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -35,6 +41,7 @@ public interface IAnthropicClient
     Task<DailyRecommendationResult> RecommendAllocationAsync(
         string systemPrompt,
         string candidatesContextJson,
+        string? model = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -44,6 +51,7 @@ public interface IAnthropicClient
     /// </summary>
     Task<SentimentBatchResult> ScoreSentimentAsync(
         IReadOnlyList<string> items,
+        string? model = null,
         CancellationToken ct = default);
 }
 
@@ -89,7 +97,7 @@ public sealed record StockAnalysisResult(
     int LatencyMs,
     bool ParseFallbackUsed);
 
-public sealed record AnthropicAnalysisResult(
+public sealed record LlmAnalysisResult(
     AgentAnalysis Analysis,
     string RawResponseBody,
     string Model,

@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInvestAdvisor(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<AnthropicOptions>(configuration.GetSection(AnthropicOptions.SectionName));
+        services.Configure<LlmOptions>(configuration.GetSection(LlmOptions.SectionName));
         services.Configure<FinnhubOptions>(configuration.GetSection(FinnhubOptions.SectionName));
         services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
         services.Configure<TriggerOptions>(configuration.GetSection(TriggerOptions.SectionName));
@@ -52,7 +53,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CryptoSymbolRouter>();
         services.AddSingleton<ISmtpClient, MailKitSmtpClient>();
 
-        services.AddHttpClient<IAnthropicClient, AnthropicClient>((sp, http) =>
+        // LLM providers: both concrete clients are always registered; LlmClientRouter picks one per
+        // call from RuntimeSettings (Settings → AI Provider), so switching needs no restart.
+        services.AddHttpClient<AnthropicClient>((sp, http) =>
         {
             var opts = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
             http.BaseAddress = new Uri(opts.BaseUrl);
@@ -65,6 +68,13 @@ public static class ServiceCollectionExtensions
             }
             http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
         });
+        // No BaseAddress/auth here — the endpoint (Gemini vs custom) is resolved per request.
+        services.AddHttpClient<Providers.OpenAiCompat.OpenAiCompatibleClient>((sp, http) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
+            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+        });
+        services.AddScoped<ILlmClient, Providers.LlmClientRouter>();
 
         // US equities/ETFs (Finnhub) + non-US listings (Yahoo) + crypto (CoinGecko) behind one
         // IMarketDataProvider that routes to the right source.
@@ -180,13 +190,16 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds friendly env-var aliases (ANTHROPIC_API_KEY, FINNHUB_API_KEY, SMTP_PASSWORD)
-    /// so Linux deployments don't need a section-style env-var convention.
+    /// Adds friendly env-var aliases (GEMINI_API_KEY, ANTHROPIC_API_KEY, FINNHUB_API_KEY,
+    /// SMTP_PASSWORD, …) so Linux deployments don't need a section-style env-var convention.
     /// </summary>
     public static IConfigurationBuilder AddInvestAdvisorEnvAliases(this IConfigurationBuilder configBuilder)
     {
         var dict = new Dictionary<string, string?>();
         Map(dict, "ANTHROPIC_API_KEY", $"{AnthropicOptions.SectionName}:ApiKey");
+        Map(dict, "GEMINI_API_KEY", $"{LlmOptions.SectionName}:GeminiApiKey");
+        Map(dict, "LLM_API_KEY", $"{LlmOptions.SectionName}:CustomApiKey");
+        Map(dict, "LLM_BASE_URL", $"{LlmOptions.SectionName}:CustomBaseUrl");
         Map(dict, "FINNHUB_API_KEY", $"{FinnhubOptions.SectionName}:ApiKey");
         Map(dict, "SMTP_PASSWORD", $"{SmtpOptions.SectionName}:Password");
         Map(dict, "STOCKTWITS_ACCESS_TOKEN", $"{StockTwitsOptions.SectionName}:AccessToken");

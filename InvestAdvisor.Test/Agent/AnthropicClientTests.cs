@@ -3,6 +3,7 @@ using FluentAssertions;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Enums;
 using InvestAdvisor.Core.Options;
+using InvestAdvisor.Data.Providers;
 using InvestAdvisor.Data.Providers.Anthropic;
 using InvestAdvisor.Test.TestHelpers;
 using Microsoft.Extensions.Options;
@@ -173,7 +174,7 @@ public class AnthropicClientTests
     [InlineData("escaped \"{\\\"k\\\":1}\" {\"real\":1}", "{\"real\":1}")]
     public void ExtractFirstJsonObject_handles_strings_and_nesting(string input, string? expected)
     {
-        var result = AnthropicClient.ExtractFirstJsonObject(input);
+        var result = LlmResponseParsing.ExtractFirstJsonObject(input);
         result.Should().Be(expected);
     }
 

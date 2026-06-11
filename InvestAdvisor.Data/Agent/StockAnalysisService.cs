@@ -15,7 +15,7 @@ namespace InvestAdvisor.Data.Agent;
 public sealed class StockAnalysisService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
     IScreenerScoringService scoring,
-    IAnthropicClient anthropic,
+    ILlmClient llm,
     ISystemClock clock,
     ILogger<StockAnalysisService>? logger = null) : IStockAnalysisService
 {
@@ -74,7 +74,7 @@ public sealed class StockAnalysisService(
                     s.Snapshot,
                 }, _ctxJson);
 
-                var result = await anthropic.AnalyzeStockAsync(SystemPrompts.StockAnalysisDefault, contextJson, ct);
+                var result = await llm.AnalyzeStockAsync(SystemPrompts.StockAnalysisDefault, contextJson, ct: ct);
 
                 await using var db = await dbFactory.CreateDbContextAsync(ct);
                 db.StockAnalyses.Add(new StockAnalysis
