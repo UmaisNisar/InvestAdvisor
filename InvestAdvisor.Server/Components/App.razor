@@ -22,6 +22,17 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="@Assets["_content/InvestAdvisor.Ui/css/app.css"]" rel="stylesheet" />
+
+    @* Tint the boot splash with the saved in-app theme before first paint. The preference lives
+       in the server DB (unreachable from static HTML), so Root mirrors it into localStorage on
+       every load/toggle; without a saved value the splash falls back to prefers-color-scheme. *@
+    <script>
+        try {
+            var iaTheme = localStorage.getItem('ia-theme');
+            if (iaTheme === 'light' || iaTheme === 'dark')
+                document.documentElement.classList.add('ia-theme-' + iaTheme);
+        } catch (e) { /* storage blocked; OS-scheme fallback applies */ }
+    </script>
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 </head>
 <body>

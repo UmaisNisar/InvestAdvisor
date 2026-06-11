@@ -499,8 +499,9 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 
 /* ---------- Boot splash ---------- */
 /* Shown as static HTML before the interactive circuit connects (no prerender = blank app area
-   otherwise). Root.razor removes it on first render. prefers-color-scheme keeps it from flashing
-   white in dark mode during the brief pre-theme window. */
+   otherwise). Root.razor removes it on first render. The app's saved theme is mirrored into
+   localStorage and applied as an html.ia-theme-* class before first paint (script in App.razor);
+   prefers-color-scheme is only the fallback for a first-ever visit with nothing saved yet. */
 #ia-splash {
     position: fixed;
     inset: 0;
@@ -527,6 +528,9 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 @media (prefers-color-scheme: dark) {
     #ia-splash { background: #000000; color: #8d8d93; }
 }
+/* Saved in-app theme wins over the OS scheme (e.g. light app on a dark-mode OS). */
+html.ia-theme-light #ia-splash { background: #f2f2f7; color: #636366; }
+html.ia-theme-dark #ia-splash { background: #000000; color: #8d8d93; }
 
 /* ============================================================
    iOS-style controls
