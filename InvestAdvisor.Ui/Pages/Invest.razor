@@ -1,11 +1,13 @@
 @page "/invest"
 @inject IScreenerQueries Screener
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1">
+@* flex-wrap + nowrap on the link: on phones the title wraps while the link stays whole,
+   instead of the link breaking into "Full" / "screener →". *@
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
     <MudTooltip Text="One AI call each day reviews the top-ranked candidates across stocks, ETFs and crypto and picks a focused shortlist, tailored to your profile. Research leads — not advice.">
         <MudText Typo="Typo.h4">Where to invest today</MudText>
     </MudTooltip>
-    <MudButton Href="/screener" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TrendingUp">Full screener →</MudButton>
+    <MudButton Href="/screener" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TrendingUp" Style="white-space:nowrap">Full screener →</MudButton>
 </MudStack>
 
 @if (!_loaded)
