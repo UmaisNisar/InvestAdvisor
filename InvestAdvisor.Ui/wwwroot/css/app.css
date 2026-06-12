@@ -242,6 +242,86 @@ body {
     .mud-dialog { margin: 12px; }
 }
 
+/* ---------- Holdings: table on wide screens, compact list on phones ---------- */
+/* The MudTable stays for ≥600px (sortable columns, inline actions). Below that the
+   dashboard renders .ia-holdings-list instead: one two-line row per holding with a
+   daily-change capsule, iOS Stocks style. Tap opens the detail drawer. */
+.ia-holdings-list { display: none; }
+@media (max-width: 599.95px) {
+    .ia-holdings-table { display: none; }
+    .ia-holdings-list { display: block; }
+}
+.ia-holding-row {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 2px;
+    border: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--mud-palette-lines-default) 60%, transparent);
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: transform .08s ease;
+}
+.ia-holding-row:last-child { border-bottom: none; }
+.ia-holding-row:active { transform: scale(.985); }
+.ia-holding-id { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ia-holding-ticker {
+    font-weight: 600;
+    font-size: .95rem;
+    color: var(--mud-palette-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ia-holding-cur {
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    color: var(--mud-palette-text-secondary);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 5px;
+    padding: 0 4px;
+}
+.ia-holding-name {
+    font-size: .78rem;
+    color: var(--mud-palette-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 52vw;
+}
+.ia-holding-nums { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+.ia-holding-price {
+    font-weight: 600;
+    font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--mud-palette-text-primary);
+}
+/* The change capsule carries the day's color (green/red/neutral), like iOS Stocks. */
+.ia-holding-chg {
+    min-width: 72px;
+    text-align: center;
+    border-radius: 7px;
+    padding: 1px 7px;
+    font-size: .8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #FFFFFF;
+}
+.ia-chg-up { background-color: var(--mud-palette-success); }
+.ia-chg-down { background-color: var(--mud-palette-error); }
+.ia-chg-flat { background-color: color-mix(in srgb, var(--mud-palette-action-default) 38%, transparent); }
+
+/* Portfolio range chips: fill the row evenly on phones so "1Y" doesn't clip off-screen. */
+@media (max-width: 599.95px) {
+    .ia-range-group { display: flex; width: 100%; }
+    .ia-range-group .mud-button-root { flex: 1 1 0; min-width: 0; padding: 4px 0; }
+}
+
 /* ============================================================
    Native-app feel (touch / iOS)
    ============================================================ */

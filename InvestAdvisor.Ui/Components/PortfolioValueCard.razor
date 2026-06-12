@@ -99,7 +99,7 @@
     </div>
 
     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Style="flex-wrap:wrap;gap:8px" Class="mt-1">
-        <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+        <MudButtonGroup Size="Size.Small" Variant="Variant.Text" Class="ia-range-group">
             @foreach (var (range, label) in Ranges)
             {
                 <MudButton Color="@(range == _range ? Color.Primary : Color.Default)"

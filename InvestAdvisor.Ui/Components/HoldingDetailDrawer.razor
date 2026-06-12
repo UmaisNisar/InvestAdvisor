@@ -26,7 +26,21 @@
                     </MudStack>
                     <MudText Typo="Typo.body2" Color="Color.Surface">@Holding.Name</MudText>
                 </div>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+                <MudStack Row="true" Spacing="0" AlignItems="AlignItems.Center">
+                    @if (OnEdit.HasDelegate)
+                    {
+                        <MudTooltip Text="Edit this holding">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="EditAsync" />
+                        </MudTooltip>
+                    }
+                    @if (OnDelete.HasDelegate)
+                    {
+                        <MudTooltip Text="Delete this holding">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="DeleteAsync" />
+                        </MudTooltip>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" OnClick="Close" />
+                </MudStack>
             </MudStack>
 
             @* ── Key metrics ── *@
@@ -163,6 +177,24 @@
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public HoldingView? Holding { get; set; }
+    // Optional manage actions; the buttons render only when the host wires them. The drawer
+    // closes first so the edit dialog / delete confirm isn't stacked on the overlay.
+    [Parameter] public EventCallback<HoldingView> OnEdit { get; set; }
+    [Parameter] public EventCallback<HoldingView> OnDelete { get; set; }
+
+    private async Task EditAsync()
+    {
+        var h = Holding;
+        await Close();
+        if (h is not null) await OnEdit.InvokeAsync(h);
+    }
+
+    private async Task DeleteAsync()
+    {
+        var h = Holding;
+        await Close();
+        if (h is not null) await OnDelete.InvokeAsync(h);
+    }
 
     private enum ChartView { Line, Candles }
 

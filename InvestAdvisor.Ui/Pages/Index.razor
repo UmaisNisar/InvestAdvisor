@@ -67,7 +67,9 @@ else
                     <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small"
                                OnClick="@(() => _holdingDialog?.Open(null))">Add holding</MudButton>
                 </MudStack>
-                <MudTable T="HoldingView" Items="_snapshot.Holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.Sm" Class="mt-2"
+                @* Phones get the compact list below; 600px+ keeps the full sortable table
+                   (Breakpoint.None so MudTable never falls back to its tall stacked layout). *@
+                <MudTable T="HoldingView" Items="_snapshot.Holdings" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.None" Class="mt-2 ia-holdings-table"
                           OnRowClick="OpenDetails" RowStyle="cursor:pointer">
                     <HeaderContent>
                         <MudTh><MudTableSortLabel T="HoldingView" SortBy="@(x => (object)x.Ticker)">Ticker</MudTableSortLabel></MudTh>
@@ -119,6 +121,40 @@ else
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
+
+                @* Compact phone list (iOS Stocks style): ticker + name on the left, price with a
+                   daily-change capsule on the right. Tap opens the detail drawer, which carries
+                   the rest of the table's columns plus edit/delete. *@
+                <div class="ia-holdings-list mt-1">
+                    @foreach (var h in _snapshot.Holdings.OrderByDescending(x => x.MarketValueUsd ?? 0m))
+                    {
+                        <button type="button" class="ia-holding-row" @onclick="@(() => OpenDetailsFor(h))">
+                            <div class="ia-holding-id">
+                                <span class="ia-holding-ticker">
+                                    <code>@h.Ticker</code>
+                                    @if (h.Currency != _displayCurrency)
+                                    {
+                                        <span class="ia-holding-cur">@h.Currency</span>
+                                    }
+                                </span>
+                                <span class="ia-holding-name">@h.Name</span>
+                            </div>
+                            <div class="ia-holding-nums">
+                                <span class="ia-holding-price"><AnimatedNumber Value="h.Price" Prefix="@CurPrefix(h.Currency)" /></span>
+                                <span class="ia-holding-chg @ChgClass(h.TodaysChangePct)">
+                                    @if (h.TodaysChangePct is null)
+                                    {
+                                        <text>—</text>
+                                    }
+                                    else
+                                    {
+                                        <AnimatedNumber Value="h.TodaysChangePct" Signed="true" Suffix="%" />
+                                    }
+                                </span>
+                            </div>
+                        </button>
+                    }
+                </div>
                 <MudButton Href="/settings/holdings" Variant="Variant.Text" Class="mt-2">Import from CSV / manage →</MudButton>
             </MudPaper>
         </MudItem>
@@ -251,7 +287,7 @@ else
 }
 
 <AdviceDetailDrawer @bind-Open="_adviceDrawerOpen" AdviceLogId="_selectedAdviceId" />
-<HoldingDetailDrawer @bind-Open="_detailDrawerOpen" Holding="_detailHolding" />
+<HoldingDetailDrawer @bind-Open="_detailDrawerOpen" Holding="_detailHolding" OnEdit="EditHolding" OnDelete="DeleteHolding" />
 <HoldingEditDialog @ref="_holdingDialog" OnSaved="OnHoldingsChanged" />
 
 @code {
@@ -284,9 +320,22 @@ else
     private void OpenDetails(TableRowClickEventArgs<HoldingView> args)
     {
         if (args.Item is null) return;
-        _detailHolding = args.Item;
+        OpenDetailsFor(args.Item);
+    }
+
+    private void OpenDetailsFor(HoldingView h)
+    {
+        _detailHolding = h;
         _detailDrawerOpen = true;
     }
+
+    // Daily-change capsule tint for the compact phone list.
+    private static string ChgClass(decimal? pct) => pct switch
+    {
+        null => "ia-chg-flat",
+        >= 0 => "ia-chg-up",
+        _ => "ia-chg-down",
+    };
 
     private void OpenLatestAdvice()
     {
