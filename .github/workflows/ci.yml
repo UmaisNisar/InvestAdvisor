@@ -17,11 +17,34 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Build the Server + Test heads explicitly (covers Core/Data/Ui). The MAUI desktop
+      # head can't build on Linux, so it gets its own windows job below.
       - name: Restore
-        run: dotnet restore InvestAdvisor.slnx
+        run: |
+          dotnet restore InvestAdvisor.Server/InvestAdvisor.Server.csproj
+          dotnet restore InvestAdvisor.Test/InvestAdvisor.Test.csproj
 
       - name: Build
-        run: dotnet build InvestAdvisor.slnx -c Release --no-restore
+        run: |
+          dotnet build InvestAdvisor.Server/InvestAdvisor.Server.csproj -c Release --no-restore
+          dotnet build InvestAdvisor.Test/InvestAdvisor.Test.csproj -c Release --no-restore
 
       - name: Test
-        run: dotnet test InvestAdvisor.slnx -c Release --no-build --verbosity normal
+        run: dotnet test InvestAdvisor.Test/InvestAdvisor.Test.csproj -c Release --no-build --verbosity normal
+
+  # Compile check for the MAUI Blazor Hybrid desktop head (Windows-only target).
+  build-maui:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-windows
+
+      - name: Build
+        run: dotnet build InvestAdvisor.Maui/InvestAdvisor.Maui.csproj -c Release
