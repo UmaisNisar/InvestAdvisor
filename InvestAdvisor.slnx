@@ -1,7 +1,7 @@
 <Solution>
-  <Project Path="InvestAdvisor.App/InvestAdvisor.App.csproj" />
   <Project Path="InvestAdvisor.Core/InvestAdvisor.Core.csproj" />
   <Project Path="InvestAdvisor.Data/InvestAdvisor.Data.csproj" />
+  <Project Path="InvestAdvisor.Maui/InvestAdvisor.Maui.csproj" />
   <Project Path="InvestAdvisor.Server/InvestAdvisor.Server.csproj" />
   <Project Path="InvestAdvisor.Test/InvestAdvisor.Test.csproj" />
   <Project Path="InvestAdvisor.Ui/InvestAdvisor.Ui.csproj" />

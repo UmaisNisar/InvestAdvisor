@@ -39,8 +39,9 @@ any trades yourself elsewhere** — nothing here places orders or talks to a bro
   OpenAI-compatible endpoint (Groq / OpenRouter / Ollama); structured output via forced tool use
 - **Data:** Finnhub · Yahoo Finance · CoinGecko · Frankfurter (FX)
 
-> There is also a **Photino desktop host** (`InvestAdvisor.App`) that shares the same UI, but it is
-> **currently broken on .NET 10** — run the **Blazor Server** host instead (instructions below).
+> There is also a **MAUI Blazor Hybrid desktop host** (`InvestAdvisor.Maui`, Windows now, Mac
+> Catalyst-ready) that shares the same UI and runs the full engine locally as a single-user app.
+> Build it with the `maui-windows` workload installed: `dotnet build InvestAdvisor.Maui`.
 
 Both hosts share the same Razor pages (`InvestAdvisor.Ui` RCL) and identical DI wiring
 (`Data.Composition.ServiceCollectionExtensions.AddInvestAdvisor`).
@@ -50,7 +51,7 @@ Both hosts share the same Razor pages (`InvestAdvisor.Ui` RCL) and identical DI 
 ```
 InvestAdvisor/
 ├── InvestAdvisor.Server/  # Blazor Server host (run this; also the Linux/Oracle deployable)
-├── InvestAdvisor.App/     # Photino desktop host (shares the UI; broken on .NET 10)
+├── InvestAdvisor.Maui/    # MAUI Blazor Hybrid desktop host (Windows; Mac Catalyst-ready; iOS/Android later)
 ├── InvestAdvisor.Ui/      # Razor Class Library — Pages, Components, Shared, app.css
 ├── InvestAdvisor.Core/    # Domain, agent contracts, abstractions, options (no infra deps)
 ├── InvestAdvisor.Data/    # EF Core, providers (Gemini+OpenAI-compat/Anthropic/Finnhub/Yahoo/CoinGecko/Fx), services, queries, workers, DI
