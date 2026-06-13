@@ -9,16 +9,28 @@
 @inject IDailyRecommendationService Recommender
 @inject IHoldingsService HoldingsSvc
 @inject ITenantContext Tenant
+@inject IJSRuntime JS
 @implements IDisposable
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
     <MudText Typo="Typo.h4">Dashboard</MudText>
-    <MudTooltip Text="Runs both modules now: (1) re-analyzes your holdings, and (2) regenerates today's 'where to invest' picks. Uses fresh data and makes AI calls.">
-        <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled"
-                   OnClick="RunNow" Disabled="_running">
-            @(_running ? "Running…" : "Run now")
-        </MudButton>
-    </MudTooltip>
+    @if (_running)
+    {
+        @* Two-phase progress so a long market-data stall doesn't just look frozen, plus a way out. *@
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+            <MudText Typo="Typo.body2" Color="Color.Surface">@_runPhase</MudText>
+            <MudButton StartIcon="@Icons.Material.Filled.Close" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small"
+                       OnClick="CancelRun" Disabled="_canceling">@(_canceling ? "Canceling…" : "Cancel")</MudButton>
+        </MudStack>
+    }
+    else
+    {
+        <MudTooltip Text="Runs both modules now: (1) re-analyzes your holdings, and (2) regenerates today's 'where to invest' picks. Uses fresh data and makes AI calls.">
+            <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled"
+                       OnClick="RunNow">Run now</MudButton>
+        </MudTooltip>
+    }
 </MudStack>
 
 @if (_snapshot is null)
@@ -359,6 +371,29 @@ else
         try { _cadenceHours = (await Profiles.GetAsync()).RebalanceCadenceHours; } catch { /* keep default */ }
     }
 
+    private DotNetObjectReference<Index>? _selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Opt this page into the global pull-to-refresh gesture (phones; no-op on desktop).
+        try
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("iaPullRefresh.register", _selfRef);
+        }
+        catch { /* JS not ready / prerender — refresh stays manual */ }
+    }
+
+    /// <summary>Invoked by the pull-to-refresh gesture: reloads the snapshot and today's picks.</summary>
+    [JSInvokable]
+    public async Task OnPullRefresh()
+    {
+        await Reload();
+        await LoadRecommendation();
+        StateHasChanged();
+    }
+
     private static string Ago(DateTime utc)
     {
         var d = DateTime.UtcNow - utc;
@@ -461,26 +496,56 @@ else
     }
 
     private bool _running;
+    private bool _canceling;
+    private string _runPhase = "";
+    private CancellationTokenSource? _runCts;
 
     private async Task RunNow()
     {
         if (_running) return;
         _running = true;
+        _canceling = false;
+        _runCts = new CancellationTokenSource();
+        var ct = _runCts.Token;
         try
         {
-            Snackbar.Add("Running both modules — holdings analysis + where to invest…", Severity.Info);
             var tid = await Tenant.GetTenantIdAsync();
-            await Agent.RunNowAsync(tid, "Dashboard Run now");  // 1) holdings analysis
-            await Recommender.GenerateAsync(tid, force: true);  // 2) what to invest in
+
+            _runPhase = "Analyzing your holdings…";
+            StateHasChanged();
+            await Agent.RunNowAsync(tid, "Dashboard Run now", ct);  // 1) holdings analysis
+
+            _runPhase = "Finding where to invest…";
+            StateHasChanged();
+            await Recommender.GenerateAsync(tid, force: true, ct: ct);  // 2) what to invest in
+
             Snackbar.Add("Done — holdings advice and today's picks updated.", Severity.Success);
             await Reload();
             await LoadRecommendation();
+        }
+        catch (OperationCanceledException)
+        {
+            Snackbar.Add("Run canceled.", Severity.Info);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Run failed: {ex.Message}", Severity.Error);
         }
-        finally { _running = false; }
+        finally
+        {
+            _running = false;
+            _canceling = false;
+            _runPhase = "";
+            _runCts?.Dispose();
+            _runCts = null;
+        }
+    }
+
+    private void CancelRun()
+    {
+        if (!_running || _canceling) return;
+        _canceling = true;
+        _runCts?.Cancel();
     }
 
     private async void OnRunCompleted(object? sender, RunCompletedEvent e)
@@ -502,5 +567,13 @@ else
     {
         Bus.RunCompleted -= OnRunCompleted;
         Bus.PricesRefreshed -= OnPricesRefreshed;
+        _runCts?.Cancel();
+        _runCts?.Dispose();
+        if (_selfRef is not null)
+        {
+            // Best-effort: stop the gesture firing into a disposed component.
+            try { _ = JS.InvokeVoidAsync("iaPullRefresh.unregister", _selfRef); } catch { }
+            _selfRef.Dispose();
+        }
     }
 }

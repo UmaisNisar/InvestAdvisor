@@ -11,8 +11,16 @@
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
 @inject NavigationManager Nav
+@implements IDisposable
 
-<MudText Typo="Typo.h4" GutterBottom="true">Settings</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+    <MudText Typo="Typo.h4">Settings</MudText>
+    @if (IsDirty)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                 Icon="@Icons.Material.Filled.EditNote">Unsaved changes</MudChip>
+    }
+</MudStack>
 
 <MudTabs Position="Position.Top" ActivePanelIndex="_activeIndex" ActivePanelIndexChanged="OnTabChanged">
     <MudTabPanel Text="Profile">
@@ -262,6 +270,29 @@
                 <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small"
                            OnClick="@(() => _realizedDialog?.Open(null))">Add sale</MudButton>
             </MudStack>
+            @if (_realizedLots is { Count: > 0 })
+            {
+                @* Totals across all currencies use the USD-converted figure so they line up
+                   with the rest of the dashboard; the per-row table keeps native amounts. *@
+                <MudPaper Class="pa-3 mb-3" Elevation="0" Outlined="true">
+                    <MudStack Row="true" Justify="Justify.SpaceAround" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <div style="text-align:center">
+                            <MudText Typo="Typo.caption" Color="Color.Surface">All-time realized P/L</MudText>
+                            <MudText Typo="Typo.h6" Style="@RealizedTotalStyle">@RealizedMoney(RealizedTotalUsd)</MudText>
+                        </div>
+                        <MudDivider Vertical="true" FlexItem="true" />
+                        <div style="text-align:center">
+                            <MudText Typo="Typo.caption" Color="Color.Surface">@DateTime.UtcNow.Year realized P/L</MudText>
+                            <MudText Typo="Typo.h6" Style="@RealizedYtdStyle">@RealizedMoney(RealizedYtdUsd)</MudText>
+                        </div>
+                        <MudDivider Vertical="true" FlexItem="true" />
+                        <div style="text-align:center">
+                            <MudText Typo="Typo.caption" Color="Color.Surface">Sales recorded</MudText>
+                            <MudText Typo="Typo.h6">@_realizedLots.Count</MudText>
+                        </div>
+                    </MudStack>
+                </MudPaper>
+            }
             @if (_realizedLots is null || _realizedLots.Count == 0)
             {
                 <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-4">
@@ -323,13 +354,57 @@
     private readonly ProfileValidator _profileValidator = new();
     private readonly RuntimeSettingsValidator _settingsValidator = new();
 
+    // ───────── Realized-gains totals (USD so multi-currency lots aggregate cleanly) ─────────
+    private decimal RealizedTotalUsd => _realizedLots?.Sum(l => l.RealizedPnlUsd) ?? 0m;
+    private decimal RealizedYtdUsd =>
+        _realizedLots?.Where(l => l.RealizedAtUtc.Year == DateTime.UtcNow.Year).Sum(l => l.RealizedPnlUsd) ?? 0m;
+    private static string RealizedMoney(decimal usd) => (usd >= 0 ? "+" : "") + usd.ToString("C2") + " USD";
+    private static string PnlColorStyle(decimal v) =>
+        $"font-weight:600;color:{(v >= 0 ? "var(--mud-palette-success)" : "var(--mud-palette-error)")}";
+    private string RealizedTotalStyle => PnlColorStyle(RealizedTotalUsd);
+    private string RealizedYtdStyle => PnlColorStyle(RealizedYtdUsd);
+
+    // ───────── Unsaved-changes tracking ─────────
+    // Baselines are JSON snapshots taken at load / after each successful save; the page is
+    // "dirty" while either the settings or profile form diverges from its baseline.
+    private string? _settingsBaseline;
+    private string? _profileBaseline;
+    private IDisposable? _navGuard;
+
+    private static string Snapshot(object? o) => o is null ? "" : System.Text.Json.JsonSerializer.Serialize(o);
+    private bool IsDirty =>
+        (_settings is not null && Snapshot(_settings) != _settingsBaseline) ||
+        (_profile is not null && Snapshot(_profile) != _profileBaseline);
+
     [Parameter] public string? Tab { get; set; }
     private int _activeIndex;
 
     // URL slug per tab, in panel order, so each tab is deep-linkable (e.g. /settings/holdings).
     private static readonly string[] TabSlugs = { "profile", "triggers", "ai", "weights", "email", "holdings" };
 
-    protected override async Task OnInitializedAsync() => await ReloadAll();
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAll();
+        // Warn before navigating away with unsaved edits. In-page tab switches (which navigate
+        // to /settings/<slug> for deep-linking) are exempted inside the handler.
+        _navGuard = Nav.RegisterLocationChangingHandler(OnLocationChanging);
+    }
+
+    private async ValueTask OnLocationChanging(LocationChangingContext ctx)
+    {
+        // Don't prompt on the deep-link tab navigations that stay on this page.
+        var target = ctx.TargetLocation;
+        if (target.Contains("/settings", StringComparison.OrdinalIgnoreCase)) return;
+        if (!IsDirty) return;
+
+        var leave = await Dialogs.ShowMessageBoxAsync(
+            "Discard unsaved changes?",
+            "You've edited settings but haven't saved. Leave this page and lose those changes?",
+            yesText: "Leave", cancelText: "Stay");
+        if (leave != true) ctx.PreventNavigation();
+    }
+
+    public void Dispose() => _navGuard?.Dispose();
 
     protected override void OnParametersSet()
     {
@@ -462,6 +537,9 @@
             _settings = Clone(settings);
             _holdings = (await HoldingsService.ListAsync()).ToList();
             _realizedLots = await PortfolioQueries.GetRealizedLotsAsync();
+            // Reset the dirty baselines to the freshly loaded state.
+            _settingsBaseline = Snapshot(_settings);
+            _profileBaseline = Snapshot(_profile);
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
     }
@@ -472,6 +550,7 @@
         try
         {
             _profile = await ProfileService.UpdateAsync(_profile!);
+            _profileBaseline = Snapshot(_profile);
             Snackbar.Add("Profile saved.", Severity.Success);
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
@@ -524,6 +603,7 @@
                 row.HoldingsCsvPath = _settings.HoldingsCsvPath;
                 row.HoldingsCsvUrl = _settings.HoldingsCsvUrl;
             });
+            _settingsBaseline = Snapshot(_settings);
             Snackbar.Add("Settings saved.", Severity.Success);
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }

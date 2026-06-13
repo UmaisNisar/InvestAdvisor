@@ -13,6 +13,7 @@
     <MudAppBar Color="Color.Default" Elevation="0" Class="d-flex d-md-none">
         <MudText Typo="Typo.h6" Style="font-weight:600;letter-spacing:-.01em;">InvestAdvisor</MudText>
         <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Outlined.Search" Color="Color.Inherit" OnClick="OpenSearch" Title="Search (⌘/Ctrl K)" Class="mr-1" />
         <MudIconButton Icon="@(RootComponent?.IsDarkMode == true ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
                        Color="Color.Inherit" OnClick="ToggleTheme" Title="Toggle light/dark" Class="mr-2" />
         <ConnectionStatusPill />
@@ -28,9 +29,13 @@
                 <img src="_content/InvestAdvisor.Ui/favicon.svg?v=mono" alt="" width="26" height="26" />
                 <span class="ia-rail-brand-text">InvestAdvisor</span>
             </MudLink>
-            <MudIconButton Icon="@(_railOpen ? Icons.Material.Filled.ChevronLeft : Icons.Material.Filled.ChevronRight)"
-                           Size="Size.Small" OnClick="ToggleRail"
-                           Title="@(_railOpen ? "Collapse menu" : "Expand menu")" Class="ia-rail-pin" />
+            <MudStack Row="true" Spacing="0" AlignItems="AlignItems.Center">
+                <MudIconButton Icon="@Icons.Material.Outlined.Search" Size="Size.Small" OnClick="OpenSearch"
+                               Title="Search (⌘/Ctrl K)" />
+                <MudIconButton Icon="@(_railOpen ? Icons.Material.Filled.ChevronLeft : Icons.Material.Filled.ChevronRight)"
+                               Size="Size.Small" OnClick="ToggleRail"
+                               Title="@(_railOpen ? "Collapse menu" : "Expand menu")" Class="ia-rail-pin" />
+            </MudStack>
         </div>
 
         <NavMenu />
@@ -70,6 +75,10 @@
     <BottomNav OnMore="OpenMobileNav" />
 </MudLayout>
 
+@* App-wide command palette + the Add-holding dialog it hands ticker picks to. *@
+<GlobalSearch @ref="_search" OnAddTicker="OpenAddHolding" />
+<HoldingEditDialog @ref="_holdingDialog" />
+
 @code {
     // Desktop rail: true = full, false = mini. Starts collapsed; expanded from the saved
     // preference after first render (desktop only).
@@ -82,6 +91,32 @@
 
     private void OpenMobileNav() => _mobileNavOpen = true;
     private void CloseMobileNav() => _mobileNavOpen = false;
+
+    private GlobalSearch? _search;
+    private HoldingEditDialog? _holdingDialog;
+    private DotNetObjectReference<MainLayout>? _hotkeyRef;
+
+    private void OpenSearch() => _search?.Open();
+
+    /// <summary>Invoked by the Ctrl/Cmd+K hotkey (wired in App.razor's iaHotkeys).</summary>
+    [JSInvokable]
+    public Task OpenSearchFromHotkey()
+    {
+        _search?.Open();
+        return Task.CompletedTask;
+    }
+
+    // A ticker picked in the palette opens the shared Add-holding dialog, pre-filled.
+    private void OpenAddHolding(TickerSearchResult t) => _holdingDialog?.Open(new Holding
+    {
+        Ticker = t.Symbol,
+        Name = t.Name,
+        AssetClass = t.AssetClass,
+        AccountType = AccountType.Taxable,
+        Currency = t.Symbol.EndsWith(".TO", StringComparison.OrdinalIgnoreCase) || t.Symbol.EndsWith(".V", StringComparison.OrdinalIgnoreCase)
+            ? "CAD"
+            : t.Symbol.EndsWith(".AX", StringComparison.OrdinalIgnoreCase) ? "AUD" : "USD",
+    });
 
     protected override void OnInitialized()
     {
@@ -99,6 +134,10 @@
         if (!firstRender) return;
         try
         {
+            // Wire the Ctrl/Cmd+K search hotkey to this layout.
+            _hotkeyRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("iaHotkeys.register", _hotkeyRef);
+
             // Only auto-expand on desktop; phones use the bottom bar + "More" overlay.
             if (await JS.InvokeAsync<bool>("iaRail.isDesktop"))
             {
@@ -130,5 +169,10 @@
     public void Dispose()
     {
         Bus.RunCompleted -= OnRunCompleted;
+        if (_hotkeyRef is not null)
+        {
+            try { _ = JS.InvokeVoidAsync("iaHotkeys.unregister"); } catch { }
+            _hotkeyRef.Dispose();
+        }
     }
 }
