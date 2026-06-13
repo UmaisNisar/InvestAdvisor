@@ -9,6 +9,7 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<Profile> Profiles => Set<Profile>();
     public DbSet<RuntimeSettings> RuntimeSettings => Set<RuntimeSettings>();
     public DbSet<Holding> Holdings => Set<Holding>();
+    public DbSet<RealizedLot> RealizedLots => Set<RealizedLot>();
     public DbSet<WatchlistItem> WatchlistItems => Set<WatchlistItem>();
     public DbSet<PriceSnapshot> PriceSnapshots => Set<PriceSnapshot>();
     public DbSet<NewsItem> NewsItems => Set<NewsItem>();

@@ -42,9 +42,10 @@ public sealed class PortfolioQueries(
             .Select(p => p.DisplayCurrency)
             .FirstOrDefaultAsync(ct));
 
-        var rates = await BuildRatesAsync(holdings, displayCurrency, ct);
+        var realized = await db.RealizedLots.AsNoTracking().Where(r => r.TenantId == tid).ToListAsync(ct);
+        var rates = await BuildRatesAsync(holdings.Select(h => h.Currency).Concat(realized.Select(r => r.Currency)), displayCurrency, ct);
         var views = BuildHoldingViews(holdings, latestSnaps, rates, out var totalMv);
-        var totals = ComputeTotals(holdings, latestSnaps, rates);
+        var totals = ComputeTotals(holdings, latestSnaps, rates, SumRealizedUsd(realized, rates));
         var allocation = BuildAllocation(holdings, views, totalMv);
         var movers = latestSnaps.Values
             .OrderByDescending(s => Math.Abs(s.PercentChange))
@@ -123,6 +124,28 @@ public sealed class PortfolioQueries(
         }
         var points = timeline.Select((t, idx) => new PortfolioValuePoint(t, totals[idx])).ToArray();
         return new PortfolioValueHistory(points, missing);
+    }
+
+    public async Task<IReadOnlyList<RealizedLotView>> GetRealizedLotsAsync(CancellationToken ct = default)
+    {
+        var tid = await tenant.GetTenantIdAsync(ct);
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var lots = await db.RealizedLots.AsNoTracking()
+            .Where(r => r.TenantId == tid)
+            .OrderByDescending(r => r.RealizedAtUtc)
+            .ToListAsync(ct);
+
+        var rates = await BuildRatesAsync(lots.Select(l => l.Currency), "USD", ct);
+        return lots.Select(l =>
+        {
+            var pnl = l.Proceeds - l.CostBasis;
+            var rate = rates.TryGetValue(Cur(l.Currency), out var r) ? r : 1m;
+            return new RealizedLotView(
+                l.Id, l.Ticker, l.Name, l.AssetClass.ToString(), l.AccountType.ToString(),
+                l.Quantity, l.Proceeds, l.CostBasis, pnl, pnl * rate,
+                l.CostBasis == 0m ? 0m : (pnl / l.CostBasis) * 100m,
+                Cur(l.Currency), l.RealizedAtUtc, l.ManualEntry);
+        }).ToList();
     }
 
     public async Task<AdvicePage> GetAdvicePageAsync(int skip, int take, CancellationToken ct = default)
@@ -222,14 +245,26 @@ public sealed class PortfolioQueries(
     }
 
     private async Task<Dictionary<string, decimal>> BuildRatesAsync(
-        IReadOnlyList<Holding> holdings, string displayCurrency, CancellationToken ct)
+        IEnumerable<string> currencies, string displayCurrency, CancellationToken ct)
     {
         var rates = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 1m };
-        // Holding currencies convert values to USD; the display currency must be present too so
-        // the UI can re-denominate USD totals even when no holding is priced in it.
-        foreach (var c in holdings.Select(h => Cur(h.Currency)).Append(displayCurrency).Distinct(StringComparer.OrdinalIgnoreCase))
+        // Holding (and realized-lot) currencies convert values to USD; the display currency must be
+        // present too so the UI can re-denominate USD totals even when nothing is priced in it.
+        foreach (var c in currencies.Select(Cur).Append(displayCurrency).Distinct(StringComparer.OrdinalIgnoreCase))
             if (!rates.ContainsKey(c)) rates[c] = await fx.GetRateToUsdAsync(c, ct);
         return rates;
+    }
+
+    /// <summary>Total realized P&amp;L (Proceeds − CostBasis) across closed lots, converted to USD with current FX.</summary>
+    private static decimal SumRealizedUsd(IEnumerable<RealizedLot> lots, IReadOnlyDictionary<string, decimal> rates)
+    {
+        decimal sum = 0m;
+        foreach (var l in lots)
+        {
+            var rate = rates.TryGetValue(Cur(l.Currency), out var r) ? r : 1m;
+            sum += (l.Proceeds - l.CostBasis) * rate;
+        }
+        return sum;
     }
 
     private static string Cur(string? c) => string.IsNullOrWhiteSpace(c) ? "USD" : c.Trim().ToUpperInvariant();
@@ -276,7 +311,8 @@ public sealed class PortfolioQueries(
     private static PortfolioTotals ComputeTotals(
         IReadOnlyList<Holding> holdings,
         IReadOnlyDictionary<string, PriceSnapshot> snapshots,
-        IReadOnlyDictionary<string, decimal> rates)
+        IReadOnlyDictionary<string, decimal> rates,
+        decimal realizedPnlUsd)
     {
         decimal mv = 0, cost = 0, prev = 0;
         foreach (var h in holdings)
@@ -294,7 +330,8 @@ public sealed class PortfolioQueries(
             mv, cost, pnl,
             cost == 0 ? 0 : (pnl / cost) * 100m,
             mv - prev,
-            prev == 0 ? 0 : ((mv - prev) / prev) * 100m);
+            prev == 0 ? 0 : ((mv - prev) / prev) * 100m,
+            realizedPnlUsd);
     }
 
     private static AllocationView BuildAllocation(

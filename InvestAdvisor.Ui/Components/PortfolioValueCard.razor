@@ -163,6 +163,24 @@
                 <span style="font-weight:400">&nbsp;(<AnimatedNumber Value="Snapshot.Totals.TodaysChangePct" Signed="true" Suffix="%" />)</span>
             </MudText>
         </div>
+        @if (Snapshot.Totals.RealizedPnlUsd != 0m)
+        {
+            <div>
+                <MudTooltip Text="Locked-in gain/loss from positions you've sold (from your Activity import). Stays on the books after the holding is gone.">
+                    <MudText Typo="Typo.caption" Color="Color.Surface">Realized P/L</MudText>
+                </MudTooltip>
+                <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.RealizedPnlUsd)">
+                    @if (_masked)
+                    {
+                        @Masked
+                    }
+                    else
+                    {
+                        <AnimatedNumber Value="Disp(Snapshot.Totals.RealizedPnlUsd)" Prefix="$" Signed="true" />
+                    }
+                </MudText>
+            </div>
+        }
     </MudStack>
 </MudPaper>
 

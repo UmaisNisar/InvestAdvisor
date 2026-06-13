@@ -1,0 +1,88 @@
+@inject IRealizedLotsService RealizedLots
+@inject ISnackbar Snackbar
+@using InvestAdvisor.Core.Entities
+
+@* Add/edit a realized (sold) lot by hand — for correcting an imported sale or entering an older one. *@
+<MudDialog @bind-Visible="_visible" Options="@(new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true })">
+    <TitleContent>@(_editing.Id == 0 ? "Add realized sale" : $"Edit {_editing.Ticker} sale")</TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" Model="@_editing">
+            <MudTextField @bind-Value="_editing.Ticker" Label="Ticker" Required="true" RequiredError="Ticker is required." Immediate="true" />
+            <MudTextField @bind-Value="_editing.Name" Label="Name" Immediate="true" />
+            <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
+                @foreach (var ac in Enum.GetValues<AssetClass>()) { <MudSelectItem Value="ac">@ac</MudSelectItem> }
+            </MudSelect>
+            <MudSelect T="AccountType" @bind-Value="_editing.AccountType" Label="Account type">
+                @foreach (var at in Enum.GetValues<AccountType>()) { <MudSelectItem Value="at">@at</MudSelectItem> }
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_editing.Currency" Label="Currency"
+                       HelperText="Currency the proceeds & cost are in. Realized P/L is converted to USD for totals.">
+                <MudSelectItem Value="@("USD")">USD — US dollar</MudSelectItem>
+                <MudSelectItem Value="@("CAD")">CAD — Canadian dollar</MudSelectItem>
+                <MudSelectItem Value="@("AUD")">AUD — Australian dollar</MudSelectItem>
+            </MudSelect>
+            <MudNumericField @bind-Value="_editing.Quantity" Label="Quantity sold" Min="0m" Immediate="true" />
+            <MudNumericField @bind-Value="_editing.Proceeds" Label="Proceeds (what you sold for, total)" Min="0m" Immediate="true"
+                             HelperText="Total amount received for the sale, in the currency above." />
+            <MudNumericField @bind-Value="_editing.CostBasis" Label="Cost basis (what you paid, total)" Min="0m" Immediate="true"
+                             HelperText="Total cost of the shares sold. Realized P/L = proceeds − cost." />
+            <MudDatePicker @bind-Date="_realizedDate" Label="Sale date" />
+            <MudText Typo="Typo.body2" Class="mt-2">
+                Realized P/L: <b style="@(Pnl >= 0 ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)")">@Pnl.ToString("C2") @_editing.Currency</b>
+            </MudText>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _visible = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private bool _visible;
+    private RealizedLot _editing = new();
+    private DateTime? _realizedDate;
+    private MudForm? _form;
+
+    private decimal Pnl => _editing.Proceeds - _editing.CostBasis;
+
+    /// <summary>Open to add a new lot (null) or edit an existing one (a copy is edited).</summary>
+    public void Open(RealizedLot? existing)
+    {
+        _editing = existing is null
+            ? new RealizedLot { AssetClass = AssetClass.Equity, AccountType = AccountType.Taxable, Currency = "USD", RealizedAtUtc = DateTime.UtcNow }
+            : new RealizedLot
+            {
+                Id = existing.Id, Ticker = existing.Ticker, Name = existing.Name, AssetClass = existing.AssetClass,
+                AccountType = existing.AccountType, Quantity = existing.Quantity, Proceeds = existing.Proceeds,
+                CostBasis = existing.CostBasis, Currency = existing.Currency, RealizedAtUtc = existing.RealizedAtUtc,
+            };
+        _realizedDate = _editing.RealizedAtUtc == default ? DateTime.UtcNow : _editing.RealizedAtUtc;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private async Task Save()
+    {
+        if (string.IsNullOrWhiteSpace(_editing.Ticker))
+        {
+            Snackbar.Add("Ticker is required.", Severity.Warning);
+            return;
+        }
+        _editing.Ticker = _editing.Ticker.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(_editing.Name)) _editing.Name = _editing.Ticker;
+        if (_realizedDate is { } d) _editing.RealizedAtUtc = DateTime.SpecifyKind(d, DateTimeKind.Utc);
+
+        try
+        {
+            if (_editing.Id == 0) await RealizedLots.CreateAsync(_editing);
+            else await RealizedLots.UpdateAsync(_editing.Id, _editing);
+            _visible = false;
+            Snackbar.Add("Realized sale saved.", Severity.Success);
+            await OnSaved.InvokeAsync();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+}
