@@ -55,4 +55,28 @@ public class SwingBacktesterTests
 
         result.AverageR.Should().BeInRange(-1.2m, p.RewardRiskRatio + 0.2m);
     }
+
+    [Fact]
+    public void HasEdge_rejects_break_even_noise_even_with_a_large_sample()
+    {
+        // The exact shape the live run produced: 1430 trades, +0.008R, PF 1.02 — statistically nothing.
+        var breakEven = new SwingBacktestSummary(
+            TotalTrades: 1430, Wins: 725, Losses: 705, WinRatePct: 50.7m,
+            AverageR: 0.008m, ExpectancyR: 0.008m, ProfitFactor: 1.02m,
+            MaxDrawdownR: 47.5m, AverageHoldingDays: 2.4m, FromUtc: null, ToUtc: null);
+        breakEven.HasEdge().Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasEdge_accepts_a_real_edge_and_rejects_too_small_a_sample()
+    {
+        var realEdge = new SwingBacktestSummary(
+            TotalTrades: 120, Wins: 60, Losses: 60, WinRatePct: 50m,
+            AverageR: 0.20m, ExpectancyR: 0.20m, ProfitFactor: 1.4m,
+            MaxDrawdownR: 8m, AverageHoldingDays: 2.5m, FromUtc: null, ToUtc: null);
+        realEdge.HasEdge().Should().BeTrue();
+
+        // Same per-trade edge but only 20 trades — not enough to trust.
+        (realEdge with { TotalTrades = 20 }).HasEdge().Should().BeFalse();
+    }
 }
