@@ -175,10 +175,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStockAnalysisService, StockAnalysisService>();
         services.AddScoped<IDailyRecommendationService, DailyRecommendationService>();
 
+        // Swing (short-horizon) module: pure scorer + orchestration (read models registered below).
+        services.AddSingleton<ISwingScoringService, SwingScoringService>();
+        services.AddScoped<ISwingService, SwingService>();
+
         services.AddScoped<INotificationChannel, EmailNotificationChannel>();
 
         services.AddScoped<IPortfolioQueries, PortfolioQueries>();
         services.AddScoped<IScreenerQueries, ScreenerQueries>();
+        services.AddScoped<ISwingQueries, SwingQueries>();
         services.AddScoped<IHoldingsService, HoldingsService>();
         services.AddScoped<IHoldingsImportService, HoldingsImportService>();
         services.AddScoped<IActivityImportService, ActivityImportService>();

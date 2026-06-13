@@ -16,5 +16,13 @@ public class Stock
     public string? ExternalId { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Member of the short-horizon swing universe (liquid US + TSX names), distinct from the
+    /// fundamental screener universe. A name can belong to both; the swing scanner only considers
+    /// rows with this set so it never surfaces thin, ungappable tickers.
+    /// </summary>
+    public bool IsSwingUniverse { get; set; }
+
     public DateTime AddedAtUtc { get; set; } = DateTime.UtcNow;
 }

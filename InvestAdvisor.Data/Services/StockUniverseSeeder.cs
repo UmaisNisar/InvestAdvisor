@@ -30,8 +30,46 @@ public sealed class StockUniverseSeeder(
         added += await SeedClassAsync(db, AssetClass.Crypto,
             Cryptos.Select(x => new Stock { Ticker = x.Symbol, Name = x.Name, Sector = "Crypto", AssetClass = AssetClass.Crypto, ExternalId = x.CoinGeckoId, IsActive = true, AddedAtUtc = now }), ct);
 
+        // Persist the class seeds before the swing pass, which reads existing rows back to flip their
+        // swing flag (a name like AAPL belongs to both universes) and to add the TSX/mover names.
         if (added > 0) await db.SaveChangesAsync(ct);
+
+        added += await SeedSwingAsync(db, now, ct);
         return added;
+    }
+
+    /// <summary>
+    /// Marks/adds the short-horizon swing universe: liquid US movers and liquid TSX large-caps. Runs
+    /// once (when no swing member exists yet), so the user can curate it from the UI afterwards.
+    /// Existing universe members are flipped in place; new names (TSX, higher-beta movers) are added.
+    /// </summary>
+    private async Task<int> SeedSwingAsync(InvestAdvisorDbContext db, DateTime now, CancellationToken ct)
+    {
+        if (await db.Stocks.AnyAsync(s => s.IsSwingUniverse, ct)) return 0;
+
+        var existing = await db.Stocks.ToListAsync(ct); // tracked, so flag flips persist
+        var byTicker = existing.ToDictionary(s => s.Ticker, StringComparer.OrdinalIgnoreCase);
+
+        var n = 0;
+        foreach (var (ticker, name, sector) in SwingNames)
+        {
+            if (byTicker.TryGetValue(ticker, out var st))
+            {
+                if (!st.IsSwingUniverse) { st.IsSwingUniverse = true; n++; }
+            }
+            else
+            {
+                db.Stocks.Add(new Stock
+                {
+                    Ticker = ticker, Name = name, Sector = sector,
+                    AssetClass = AssetClass.Equity, IsActive = true, IsSwingUniverse = true, AddedAtUtc = now,
+                });
+                n++;
+            }
+        }
+
+        if (n > 0) { await db.SaveChangesAsync(ct); logger?.LogInformation("Seeded {Count} swing-universe members.", n); }
+        return n;
     }
 
     private async Task<int> SeedClassAsync(InvestAdvisorDbContext db, AssetClass cls, IEnumerable<Stock> rows, CancellationToken ct)
@@ -101,6 +139,44 @@ public sealed class StockUniverseSeeder(
         ("TLT", "iShares 20+ Year Treasury", "Bonds"),
         ("VNQ", "Vanguard Real Estate ETF", "Real estate"),
         ("EEM", "iShares MSCI Emerging Markets", "Emerging markets"),
+    ];
+
+    /// <summary>
+    /// Swing universe: liquid names that move enough for a 2–3 day trade and have clean Yahoo bars.
+    /// US large-caps + higher-beta movers, plus liquid TSX large-caps (.TO). Deliberately excludes
+    /// thin TSX-V venture names — the liquidity gate would drop them anyway, but they don't belong
+    /// here. Names already in the equity/ETF universe are flipped in place; the rest are added.
+    /// </summary>
+    private static readonly (string Ticker, string Name, string Sector)[] SwingNames =
+    [
+        // US large-caps & movers
+        ("AAPL", "Apple Inc.", "Technology"), ("MSFT", "Microsoft Corp.", "Technology"),
+        ("NVDA", "NVIDIA Corp.", "Technology"), ("AMD", "Advanced Micro Devices", "Technology"),
+        ("TSLA", "Tesla Inc.", "Consumer"), ("META", "Meta Platforms Inc.", "Technology"),
+        ("AMZN", "Amazon.com Inc.", "Consumer"), ("GOOGL", "Alphabet Inc.", "Technology"),
+        ("NFLX", "Netflix Inc.", "Communication"), ("AVGO", "Broadcom Inc.", "Technology"),
+        ("MU", "Micron Technology", "Technology"), ("QCOM", "Qualcomm Inc.", "Technology"),
+        ("INTC", "Intel Corp.", "Technology"), ("CRM", "Salesforce Inc.", "Technology"),
+        ("ORCL", "Oracle Corp.", "Technology"), ("PLTR", "Palantir Technologies", "Technology"),
+        ("COIN", "Coinbase Global", "Financials"), ("SMCI", "Super Micro Computer", "Technology"),
+        ("UBER", "Uber Technologies", "Technology"), ("BA", "Boeing Co.", "Industrials"),
+        ("DIS", "Walt Disney Co.", "Communication"), ("JPM", "JPMorgan Chase & Co.", "Financials"),
+        ("BAC", "Bank of America Corp.", "Financials"), ("XOM", "Exxon Mobil Corp.", "Energy"),
+        ("CVX", "Chevron Corp.", "Energy"), ("LLY", "Eli Lilly and Co.", "Healthcare"),
+        // Liquid swing ETFs
+        ("SPY", "SPDR S&P 500 ETF", "Broad market"), ("QQQ", "Invesco QQQ", "Broad market"),
+        ("IWM", "iShares Russell 2000", "Small cap"), ("SMH", "VanEck Semiconductor ETF", "Semiconductors"),
+        // Liquid TSX large-caps (Yahoo .TO)
+        ("RY.TO", "Royal Bank of Canada", "Financials"), ("TD.TO", "Toronto-Dominion Bank", "Financials"),
+        ("BNS.TO", "Bank of Nova Scotia", "Financials"), ("BMO.TO", "Bank of Montreal", "Financials"),
+        ("CM.TO", "CIBC", "Financials"), ("ENB.TO", "Enbridge Inc.", "Energy"),
+        ("CNQ.TO", "Canadian Natural Resources", "Energy"), ("SU.TO", "Suncor Energy", "Energy"),
+        ("TRP.TO", "TC Energy", "Energy"), ("CVE.TO", "Cenovus Energy", "Energy"),
+        ("CNR.TO", "Canadian National Railway", "Industrials"), ("CP.TO", "Canadian Pacific Kansas City", "Industrials"),
+        ("SHOP.TO", "Shopify Inc.", "Technology"), ("BCE.TO", "BCE Inc.", "Communication"),
+        ("MFC.TO", "Manulife Financial", "Financials"), ("SLF.TO", "Sun Life Financial", "Financials"),
+        ("ABX.TO", "Barrick Gold", "Materials"), ("AEM.TO", "Agnico Eagle Mines", "Materials"),
+        ("NTR.TO", "Nutrien Ltd.", "Materials"), ("WCN.TO", "Waste Connections", "Industrials"),
     ];
 
     private static readonly (string Symbol, string Name, string CoinGeckoId)[] Cryptos =

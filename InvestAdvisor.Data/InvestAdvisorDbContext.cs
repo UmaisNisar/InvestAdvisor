@@ -26,6 +26,10 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<DailyRecommendation> DailyRecommendations => Set<DailyRecommendation>();
     public DbSet<SentimentRun> SentimentRuns => Set<SentimentRun>();
 
+    // Swing (short-horizon trading) entities.
+    public DbSet<PaperTrade> PaperTrades => Set<PaperTrade>();
+    public DbSet<SwingBacktestResult> SwingBacktestResults => Set<SwingBacktestResult>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(InvestAdvisorDbContext).Assembly);

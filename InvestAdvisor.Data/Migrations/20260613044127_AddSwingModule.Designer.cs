@@ -3,6 +3,7 @@ using System;
 using InvestAdvisor.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvestAdvisor.Data.Migrations
 {
     [DbContext(typeof(InvestAdvisorDbContext))]
-    partial class InvestAdvisorDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613044127_AddSwingModule")]
+    partial class AddSwingModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
@@ -570,77 +573,6 @@ namespace InvestAdvisor.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Profile", (string)null);
-                });
-
-            modelBuilder.Entity("InvestAdvisor.Core.Entities.RealizedLot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("AccountType")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("AssetClass")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("CostBasis")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(8)
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("USD");
-
-                    b.Property<bool>("ManualEntry")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Proceeds")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 8)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("RealizedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SourceHash")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Ticker")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "SourceHash")
-                        .IsUnique()
-                        .HasFilter("\"SourceHash\" <> ''");
-
-                    b.HasIndex("TenantId", "Ticker");
-
-                    b.ToTable("RealizedLot", (string)null);
                 });
 
             modelBuilder.Entity("InvestAdvisor.Core.Entities.RuntimeSettings", b =>
