@@ -80,7 +80,8 @@ public static class SwingBacktester
         IReadOnlyList<Candle> candles, SwingParams p, List<decimal> rOutcomes,
         ref int holdingDaysTotal, ref DateTime? from, ref DateTime? to)
     {
-        var warmup = Math.Max(Math.Max(p.EmaSlowPeriod, p.AtrPeriod), Math.Max(p.BreakoutLookback, p.MomentumSessions)) + 1;
+        // Need a full regime window before any signal can form.
+        var warmup = Math.Max(p.RegimeSmaPeriod, p.AtrPeriod) + 1;
         if (candles.Count <= warmup + 1) return;
 
         var i = warmup;
@@ -88,7 +89,7 @@ public static class SwingBacktester
         {
             var window = new ArraySegmentList(candles, i + 1); // bars [0..i]
             var built = SwingSignalBuilder.Build(new SwingInput("", "", "", default, window), p);
-            if (built is null || !SwingSignalBuilder.Qualifies(built.Value.Features))
+            if (built is null || !SwingSignalBuilder.Qualifies(built.Value.Features, p))
             {
                 i++;
                 continue;

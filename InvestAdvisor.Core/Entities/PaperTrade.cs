@@ -35,6 +35,13 @@ public class PaperTrade
     public decimal CompositeScore { get; set; }
     public string Rationale { get; set; } = string.Empty;
 
+    // Signal context at entry — kept so each resolved trade is a labelled example of which
+    // conditions did/didn't pay off, the dataset for tuning the strategy over time.
+    public decimal? SignalRsi { get; set; }
+    public decimal? RegimeDistancePct { get; set; }
+    public decimal? PullbackPct { get; set; }
+    public decimal? RelativeVolume { get; set; }
+
     // Outcome, filled in once later bars resolve the trade.
     public PaperTradeStatus Status { get; set; } = PaperTradeStatus.Open;
     public DateTime? ResolvedAtUtc { get; set; }

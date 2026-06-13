@@ -11,16 +11,22 @@ public class SwingSignalBuilderTests
         new("TEST", "Test Co.", "Tech", AssetClass.Equity, candles);
 
     [Fact]
+    public void Build_returns_null_without_a_full_regime_window()
+    {
+        // Fewer than 200 bars → can't compute the regime SMA → no plan.
+        SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip(bars: 120)), SwingParams.Default).Should().BeNull();
+    }
+
+    [Fact]
     public void Build_returns_null_when_there_is_no_volatility_to_size_a_stop()
     {
-        // Flat series → ATR 0 → no risk-bounded plan.
-        SwingSignalBuilder.Build(Input(SwingTestData.Flat(40)), SwingParams.Default).Should().BeNull();
+        SwingSignalBuilder.Build(Input(SwingTestData.Flat(260)), SwingParams.Default).Should().BeNull();
     }
 
     [Fact]
     public void Build_produces_a_stop_below_and_a_target_above_the_entry()
     {
-        var built = SwingSignalBuilder.Build(Input(SwingTestData.UptrendWithDips(60)), SwingParams.Default);
+        var built = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), SwingParams.Default);
         built.Should().NotBeNull();
         var setup = built!.Value.Setup;
 
@@ -30,38 +36,45 @@ public class SwingSignalBuilderTests
     }
 
     [Fact]
-    public void Target_distance_is_reward_risk_times_the_stop_distance()
+    public void Stop_and_target_track_the_ATR_multiples()
     {
-        var p = SwingParams.Default with { RewardRiskRatio = 2m };
-        var setup = SwingSignalBuilder.Build(Input(SwingTestData.UptrendWithDips(60)), p)!.Value.Setup;
+        var p = SwingParams.Default with { AtrStopMultiple = 2.5m, TargetAtrMultiple = 1.5m };
+        var setup = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Setup;
 
         var risk = setup.EntryReference - setup.StopLoss;
         var reward = setup.Target - setup.EntryReference;
-        (reward / risk).Should().BeApproximately(2m, 0.05m);
+        // reward:risk == target multiple : stop multiple == 1.5 : 2.5 == 0.6
+        (reward / risk).Should().BeApproximately(0.6m, 0.05m);
     }
 
     [Fact]
     public void Position_size_scales_inversely_with_stop_distance_and_caps_at_the_max()
     {
         var p = SwingParams.Default with { RiskPerTradePct = 1m, MaxPositionPct = 25m };
-        var built = SwingSignalBuilder.Build(Input(SwingTestData.UptrendWithDips(60)), p);
-        var setup = built!.Value.Setup;
+        var setup = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Setup;
 
-        // size% == riskPerTrade% / stopDistance% * 100, clamped to the max.
         var expected = Math.Min(25m, 1m / setup.StopDistancePct * 100m);
         setup.PositionSizePct.Should().BeApproximately(expected, 0.05m);
         setup.PositionSizePct.Should().BeLessThanOrEqualTo(25m);
     }
 
     [Fact]
-    public void Qualifies_requires_an_uptrend_and_a_non_extreme_rsi()
+    public void Qualifies_only_for_an_oversold_pullback_inside_an_uptrend()
     {
-        var up = SwingSignalBuilder.Build(Input(SwingTestData.UptrendWithDips(60)), SwingParams.Default)!.Value.Features;
-        SwingSignalBuilder.Qualifies(up).Should().BeTrue();
+        var p = SwingParams.Default;
 
-        // A pure parabolic up-move pins RSI at 100 (overbought) → must NOT qualify.
-        var parabolic = SwingTestData.FromCloses(Enumerable.Range(1, 40).Select(i => (decimal)i * 2));
-        var hot = SwingSignalBuilder.Build(Input(parabolic), SwingParams.Default)!.Value.Features;
-        SwingSignalBuilder.Qualifies(hot).Should().BeFalse();
+        // Up-trend + sharp recent dip → above the 200-day SMA AND oversold → qualifies.
+        var dip = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Features;
+        dip.AboveRegime.Should().BeTrue();
+        SwingSignalBuilder.Qualifies(dip, p).Should().BeTrue();
+
+        // Up-trend but no pullback (not oversold) → must NOT qualify (we don't chase strength).
+        var noDip = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpNoDip()), p)!.Value.Features;
+        SwingSignalBuilder.Qualifies(noDip, p).Should().BeFalse();
+
+        // Down-trend (below the 200-day SMA) → regime filter blocks it even if oversold.
+        var down = SwingSignalBuilder.Build(Input(SwingTestData.RegimeDown()), p)!.Value.Features;
+        down.AboveRegime.Should().BeFalse();
+        SwingSignalBuilder.Qualifies(down, p).Should().BeFalse();
     }
 }

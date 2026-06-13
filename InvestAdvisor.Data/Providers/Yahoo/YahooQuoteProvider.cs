@@ -96,6 +96,7 @@ public sealed class YahooQuoteProvider(
             HistoryRange.OneMonth => ("1mo", "1d"),
             HistoryRange.ThreeMonths => ("3mo", "1d"),
             HistoryRange.SixMonths => ("6mo", "1d"),
+            HistoryRange.TwoYears => ("2y", "1d"),
             _ => ("1y", "1d"),
         };
         var url = $"/v8/finance/chart/{Uri.EscapeDataString(ToYahooSymbol(ticker))}?interval={yInterval}&range={yRange}";

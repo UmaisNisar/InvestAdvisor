@@ -48,7 +48,8 @@ public sealed class SwingService(
             if (stale.Count > 0) { db.PaperTrades.RemoveRange(stale); await db.SaveChangesAsync(ct); }
         }
 
-        var universe = await LoadUniverseAsync(HistoryRange.SixMonths, ct);
+        // Two years of daily bars: the regime filter needs a full 200-day SMA.
+        var universe = await LoadUniverseAsync(HistoryRange.TwoYears, ct);
         if (universe.Count == 0) { logger?.LogWarning("Swing universe is empty or no bars fetched."); return 0; }
 
         var sentimentByTicker = await TryGetSentimentAsync(ct);
@@ -77,6 +78,12 @@ public sealed class SwingService(
                 CompositeScore = s.CompositeScore,
                 Rationale = s.Setup.Rationale,
                 Status = PaperTradeStatus.Open,
+                // Signal context at entry — so each resolved trade is a labelled example of what
+                // conditions did/didn't pay off (the outcome-tracking dataset).
+                SignalRsi = s.Features.Rsi,
+                RegimeDistancePct = s.Features.RegimeDistancePct,
+                PullbackPct = s.Features.PullbackPct,
+                RelativeVolume = s.Features.RelativeVolume,
             });
             added++;
         }
@@ -89,7 +96,7 @@ public sealed class SwingService(
 
     public async Task RunBacktestAsync(CancellationToken ct = default)
     {
-        var universe = await LoadUniverseAsync(HistoryRange.OneYear, ct);
+        var universe = await LoadUniverseAsync(HistoryRange.TwoYears, ct);
         if (universe.Count == 0) { logger?.LogWarning("Swing backtest skipped — no universe bars."); return; }
 
         var summary = SwingBacktester.Run(universe);

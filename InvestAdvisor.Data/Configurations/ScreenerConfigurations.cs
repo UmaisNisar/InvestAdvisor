@@ -130,7 +130,9 @@ public sealed class PaperTradeConfiguration : IEntityTypeConfiguration<PaperTrad
         foreach (var prop in new[] { nameof(PaperTrade.EntryLow), nameof(PaperTrade.EntryHigh),
                      nameof(PaperTrade.EntryReference), nameof(PaperTrade.StopLoss), nameof(PaperTrade.Target),
                      nameof(PaperTrade.RewardRiskRatio), nameof(PaperTrade.PositionSizePct),
-                     nameof(PaperTrade.CompositeScore), nameof(PaperTrade.ExitPrice), nameof(PaperTrade.RealizedR) })
+                     nameof(PaperTrade.CompositeScore), nameof(PaperTrade.ExitPrice), nameof(PaperTrade.RealizedR),
+                     nameof(PaperTrade.SignalRsi), nameof(PaperTrade.RegimeDistancePct),
+                     nameof(PaperTrade.PullbackPct), nameof(PaperTrade.RelativeVolume) })
             b.Property(prop).HasPrecision(18, 4);
         b.HasIndex(x => x.Status);
         b.HasIndex(x => x.GeneratedAtUtc);
