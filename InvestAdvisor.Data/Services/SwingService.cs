@@ -84,6 +84,7 @@ public sealed class SwingService(
                 PositionSizePct = s.Setup.PositionSizePct,
                 CompositeScore = s.CompositeScore,
                 Rationale = s.Setup.Rationale,
+                Kind = s.Setup.Kind,
                 Status = PaperTradeStatus.Open,
                 // Signal context at entry — so each resolved trade is a labelled example of what
                 // conditions did/didn't pay off (the outcome-tracking dataset).

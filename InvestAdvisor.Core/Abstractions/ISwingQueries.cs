@@ -42,6 +42,7 @@ public sealed record SwingSetupView(
     int HoldingDays,
     decimal PositionSizePct,
     decimal CompositeScore,
+    SwingSetupKind Kind,
     string Rationale,
     DateTime GeneratedAtUtc);
 

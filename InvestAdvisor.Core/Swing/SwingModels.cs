@@ -121,6 +121,20 @@ public sealed record SwingFeatures(
 }
 
 /// <summary>
+/// Which trigger fired — and the implied conviction. A deep-oversold dip is the higher-conviction
+/// mean-reversion setup; the gentler pullback-to-the-50-day-MA is a lower-conviction "B" setup that
+/// only the looser risk levels surface.
+/// </summary>
+public enum SwingSetupKind
+{
+    None = 0,
+    /// <summary>RSI(short) at/below the oversold threshold — the stronger signal.</summary>
+    DeepOversold = 1,
+    /// <summary>Pulled back to the rising 50-day MA — gentler, lower conviction.</summary>
+    MaBounce = 2,
+}
+
+/// <summary>
 /// A concrete, risk-bounded trade plan. Never a bare "buy" — every setup carries the stop and the
 /// size, so the worst case is defined before entry. All prices in the instrument's own currency.
 /// </summary>
@@ -135,6 +149,7 @@ public sealed record TradeSetup(
     decimal RewardRiskRatio,
     int HoldingDays,
     decimal PositionSizePct,
+    SwingSetupKind Kind,
     string Rationale)
 {
     /// <summary>Reference entry (mid of the zone) used for risk math and backtest fills.</summary>

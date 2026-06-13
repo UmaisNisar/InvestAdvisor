@@ -127,6 +127,7 @@ public sealed class PaperTradeConfiguration : IEntityTypeConfiguration<PaperTrad
         b.Property(x => x.Name).HasMaxLength(128);
         b.Property(x => x.Rationale).HasMaxLength(512);
         b.Property(x => x.Status).HasConversion<int>();
+        b.Property(x => x.Kind).HasConversion<int>();
         foreach (var prop in new[] { nameof(PaperTrade.EntryLow), nameof(PaperTrade.EntryHigh),
                      nameof(PaperTrade.EntryReference), nameof(PaperTrade.StopLoss), nameof(PaperTrade.Target),
                      nameof(PaperTrade.RewardRiskRatio), nameof(PaperTrade.PositionSizePct),

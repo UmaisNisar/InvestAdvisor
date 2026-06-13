@@ -1,5 +1,6 @@
 @* One swing trade setup: the plan with its risk bounds. Never a bare "buy" — entry, stop,
    target and size are always shown together so the worst case is visible before entry. *@
+@using InvestAdvisor.Core.Swing
 
 <MudPaper Class="pa-3 mb-2" Elevation="1" Outlined="true">
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
@@ -7,9 +8,17 @@
             <code>@Setup.Ticker</code>
             <MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">&nbsp;@Setup.Name</MudText>
         </MudText>
-        <MudTooltip Text="Relative swing score across the universe (technical factors). Higher = stronger setup, not a profit guarantee.">
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">@Setup.CompositeScore.ToString("0")</MudChip>
-        </MudTooltip>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            @if (Setup.Kind != SwingSetupKind.None)
+            {
+                <MudTooltip Text="@KindTooltip(Setup.Kind)">
+                    <MudChip T="string" Size="Size.Small" Variant="@(Setup.Kind == SwingSetupKind.DeepOversold ? Variant.Filled : Variant.Outlined)" Color="Color.Default">@KindLabel(Setup.Kind)</MudChip>
+                </MudTooltip>
+            }
+            <MudTooltip Text="Relative swing score across the universe (technical factors). Higher = stronger setup, not a profit guarantee.">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">@Setup.CompositeScore.ToString("0")</MudChip>
+            </MudTooltip>
+        </MudStack>
     </MudStack>
 
     <MudGrid Class="mt-1" Spacing="2">
@@ -42,4 +51,20 @@
     [Parameter, EditorRequired] public SwingSetupView Setup { get; set; } = default!;
 
     private static string Money(decimal v) => v.ToString("0.00");
+
+    // Conviction tag. Deep-oversold dips are the higher-conviction "A" setups (filled chip); the
+    // gentler pullback-to-the-50-day-MA is a lower-conviction "B" setup (outlined chip).
+    private static string KindLabel(SwingSetupKind k) => k switch
+    {
+        SwingSetupKind.DeepOversold => "Oversold · A",
+        SwingSetupKind.MaBounce => "MA bounce · B",
+        _ => "",
+    };
+
+    private static string KindTooltip(SwingSetupKind k) => k switch
+    {
+        SwingSetupKind.DeepOversold => "Deep short-term oversold dip — the higher-conviction mean-reversion setup.",
+        SwingSetupKind.MaBounce => "Gentler pullback to the rising 50-day average — a lower-conviction setup, only surfaced at Medium/High risk.",
+        _ => "",
+    };
 }

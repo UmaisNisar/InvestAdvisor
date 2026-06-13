@@ -54,6 +54,11 @@ public static class SwingSignalBuilder
             ? 0m
             : Math.Min(p.MaxPositionPct, p.RiskPerTradePct / stopDistancePct * 100m);
 
+        // Which trigger fired (deep oversold takes precedence over the gentler MA-bounce when both do).
+        var kind = IsDeepOversold(features, p) ? SwingSetupKind.DeepOversold
+            : IsMaBounce(features, p) ? SwingSetupKind.MaBounce
+            : SwingSetupKind.None;
+
         var setup = new TradeSetup(
             Ticker: input.Ticker,
             Name: input.Name,
@@ -65,6 +70,7 @@ public static class SwingSignalBuilder
             RewardRiskRatio: Math.Round(p.RewardRiskRatio, 2),
             HoldingDays: p.HoldingDays,
             PositionSizePct: Math.Round(positionPct, 2),
+            Kind: kind,
             Rationale: Rationale(features, p));
 
         return (features, setup);
