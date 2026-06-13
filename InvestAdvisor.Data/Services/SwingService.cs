@@ -38,6 +38,16 @@ public sealed class SwingService(
             return 0;
         }
 
+        // A manual re-scan refreshes today's snapshot: drop today's still-open setups so they're
+        // regenerated at current levels. Resolved trades (the track record) are never touched.
+        if (force)
+        {
+            var stale = await db.PaperTrades
+                .Where(t => t.GeneratedAtUtc == today && t.Status == PaperTradeStatus.Open)
+                .ToListAsync(ct);
+            if (stale.Count > 0) { db.PaperTrades.RemoveRange(stale); await db.SaveChangesAsync(ct); }
+        }
+
         var universe = await LoadUniverseAsync(HistoryRange.SixMonths, ct);
         if (universe.Count == 0) { logger?.LogWarning("Swing universe is empty or no bars fetched."); return 0; }
 

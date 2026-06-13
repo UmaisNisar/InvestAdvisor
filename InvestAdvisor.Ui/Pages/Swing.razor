@@ -1,11 +1,21 @@
 @page "/swing"
 @inject ISwingQueries Queries
+@inject ISwingService Scanner
+@inject ISnackbar Snackbar
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
     <MudTooltip Text="Short-horizon (2–3 day) technical setups across liquid US + TSX names. Each idea is risk-bounded: entry, stop, target and size. Research, not advice.">
         <MudText Typo="Typo.h4">Swing setups</MudText>
     </MudTooltip>
-    <MudButton Href="/screener" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TrendingUp" Style="white-space:nowrap">Long-term screener →</MudButton>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="flex-wrap:wrap">
+        <MudTooltip Text="Re-scan the universe now and refresh today's setups at current levels. Resolves any open paper trades too. Takes up to a minute (fetches bars for every name).">
+            <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled"
+                       OnClick="RunNow" Disabled="_running" Style="white-space:nowrap">
+                @(_running ? "Scanning…" : "Re-scan now")
+            </MudButton>
+        </MudTooltip>
+        <MudButton Href="/screener" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TrendingUp" Style="white-space:nowrap">Long-term screener →</MudButton>
+    </MudStack>
 </MudStack>
 
 @if (!_loaded)
@@ -120,10 +130,29 @@ else
 @code {
     private SwingDashboard? _data;
     private bool _loaded;
+    private bool _running;
 
     protected override async Task OnInitializedAsync()
     {
         try { _data = await Queries.GetDashboardAsync(); }
         finally { _loaded = true; }
+    }
+
+    private async Task RunNow()
+    {
+        if (_running) return;
+        _running = true;
+        try
+        {
+            Snackbar.Add("Scanning the swing universe… this can take a minute.", Severity.Info);
+            var count = await Scanner.GenerateSetupsAsync(force: true);
+            Snackbar.Add(count > 0 ? $"Done — {count} setup(s) found." : "Done — no qualifying setups right now.", Severity.Success);
+            _data = await Queries.GetDashboardAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Scan failed: {ex.Message}", Severity.Error);
+        }
+        finally { _running = false; }
     }
 }
