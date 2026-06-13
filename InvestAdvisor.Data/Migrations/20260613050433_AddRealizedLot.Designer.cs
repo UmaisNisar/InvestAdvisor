@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvestAdvisor.Data.Migrations
 {
     [DbContext(typeof(InvestAdvisorDbContext))]
-    [Migration("20260613045356_AddRealizedLot")]
+    [Migration("20260613050433_AddRealizedLot")]
     partial class AddRealizedLot
     {
         /// <inheritdoc />
@@ -396,6 +396,91 @@ namespace InvestAdvisor.Data.Migrations
                         .IsDescending(false, true);
 
                     b.ToTable("NewsItem", (string)null);
+                });
+
+            modelBuilder.Entity("InvestAdvisor.Core.Entities.PaperTrade", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("CompositeScore")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EntryHigh")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EntryLow")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("EntryReference")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("ExitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("GeneratedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("HoldingDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("PositionSizePct")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Rationale")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("RealizedR")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("RewardRiskRatio")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("StopLoss")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Target")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Ticker")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneratedAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Ticker", "GeneratedAtUtc")
+                        .IsUnique();
+
+                    b.ToTable("PaperTrade", (string)null);
                 });
 
             modelBuilder.Entity("InvestAdvisor.Core.Entities.PriceSnapshot", b =>
@@ -790,6 +875,9 @@ namespace InvestAdvisor.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsSwingUniverse")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -808,6 +896,8 @@ namespace InvestAdvisor.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssetClass");
+
+                    b.HasIndex("IsSwingUniverse");
 
                     b.HasIndex("Ticker")
                         .IsUnique();
@@ -941,6 +1031,61 @@ namespace InvestAdvisor.Data.Migrations
                         .IsDescending(false, true);
 
                     b.ToTable("StockMetric", (string)null);
+                });
+
+            modelBuilder.Entity("InvestAdvisor.Core.Entities.SwingBacktestResult", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("AverageHoldingDays")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("AverageR")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ExpectancyR")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FromUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("GeneratedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Losses")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("MaxDrawdownR")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ProfitFactor")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ToUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TotalTrades")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("WinRatePct")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Wins")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GeneratedAtUtc");
+
+                    b.ToTable("SwingBacktestResult", (string)null);
                 });
 
             modelBuilder.Entity("InvestAdvisor.Core.Entities.Tenant", b =>
