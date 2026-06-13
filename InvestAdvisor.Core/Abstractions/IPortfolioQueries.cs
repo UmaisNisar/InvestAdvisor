@@ -14,6 +14,9 @@ public interface IPortfolioQueries
     /// </summary>
     Task<PortfolioValueHistory> GetValueHistoryAsync(HistoryRange range, CancellationToken ct = default);
 
+    /// <summary>Closed (sold) lots — the realized P&amp;L ledger — newest first.</summary>
+    Task<IReadOnlyList<RealizedLotView>> GetRealizedLotsAsync(CancellationToken ct = default);
+
     Task<AdvicePage> GetAdvicePageAsync(int skip, int take, CancellationToken ct = default);
     Task<AdviceLogDetailView?> GetAdviceDetailAsync(long id, CancellationToken ct = default);
     Task<HealthStatus> GetHealthAsync(CancellationToken ct = default);
