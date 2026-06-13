@@ -17,6 +17,7 @@ public sealed class StockConfiguration : IEntityTypeConfiguration<Stock>
         b.Property(x => x.ExternalId).HasMaxLength(64);
         b.HasIndex(x => x.Ticker).IsUnique();
         b.HasIndex(x => x.AssetClass);
+        b.HasIndex(x => x.IsSwingUniverse);
     }
 }
 
@@ -113,5 +114,41 @@ public sealed class ScreenerScoreConfiguration : IEntityTypeConfiguration<Screen
         b.Property(x => x.Price).HasPrecision(18, 4);
         b.HasIndex(x => new { x.Ticker, x.AsOfDate }).IsUnique();
         b.HasIndex(x => x.AsOfDate);
+    }
+}
+
+public sealed class PaperTradeConfiguration : IEntityTypeConfiguration<PaperTrade>
+{
+    public void Configure(EntityTypeBuilder<PaperTrade> b)
+    {
+        b.ToTable("PaperTrade");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Ticker).HasMaxLength(16).IsRequired();
+        b.Property(x => x.Name).HasMaxLength(128);
+        b.Property(x => x.Rationale).HasMaxLength(512);
+        b.Property(x => x.Status).HasConversion<int>();
+        foreach (var prop in new[] { nameof(PaperTrade.EntryLow), nameof(PaperTrade.EntryHigh),
+                     nameof(PaperTrade.EntryReference), nameof(PaperTrade.StopLoss), nameof(PaperTrade.Target),
+                     nameof(PaperTrade.RewardRiskRatio), nameof(PaperTrade.PositionSizePct),
+                     nameof(PaperTrade.CompositeScore), nameof(PaperTrade.ExitPrice), nameof(PaperTrade.RealizedR) })
+            b.Property(prop).HasPrecision(18, 4);
+        b.HasIndex(x => x.Status);
+        b.HasIndex(x => x.GeneratedAtUtc);
+        // One open setup per ticker per session — the guard that makes a daily scan idempotent.
+        b.HasIndex(x => new { x.Ticker, x.GeneratedAtUtc }).IsUnique();
+    }
+}
+
+public sealed class SwingBacktestResultConfiguration : IEntityTypeConfiguration<SwingBacktestResult>
+{
+    public void Configure(EntityTypeBuilder<SwingBacktestResult> b)
+    {
+        b.ToTable("SwingBacktestResult");
+        b.HasKey(x => x.Id);
+        foreach (var prop in new[] { nameof(SwingBacktestResult.WinRatePct), nameof(SwingBacktestResult.AverageR),
+                     nameof(SwingBacktestResult.ExpectancyR), nameof(SwingBacktestResult.ProfitFactor),
+                     nameof(SwingBacktestResult.MaxDrawdownR), nameof(SwingBacktestResult.AverageHoldingDays) })
+            b.Property(prop).HasPrecision(18, 4);
+        b.HasIndex(x => x.GeneratedAtUtc);
     }
 }

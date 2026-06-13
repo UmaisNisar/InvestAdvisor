@@ -62,6 +62,7 @@ if (workersEnabled)
 {
     builder.Services.AddHostedService<InvestAdvisorWorker>();
     builder.Services.AddHostedService<ScreenerWorker>();
+    builder.Services.AddHostedService<SwingWorker>();
 }
 builder.Services.AddHostedService<HoldingsImportWorker>();
 

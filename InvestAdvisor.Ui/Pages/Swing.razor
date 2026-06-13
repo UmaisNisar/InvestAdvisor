@@ -1,0 +1,129 @@
+@page "/swing"
+@inject ISwingQueries Queries
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
+    <MudTooltip Text="Short-horizon (2–3 day) technical setups across liquid US + TSX names. Each idea is risk-bounded: entry, stop, target and size. Research, not advice.">
+        <MudText Typo="Typo.h4">Swing setups</MudText>
+    </MudTooltip>
+    <MudButton Href="/screener" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TrendingUp" Style="white-space:nowrap">Long-term screener →</MudButton>
+</MudStack>
+
+@if (!_loaded)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    @* The honest gate: setups are paper-only until the backtest shows a measured edge. *@
+    @if (_data!.Validated)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+            Backtest shows a positive edge on @_data.Backtest!.TotalTrades historical trades. Still probabilistic — size with the stop, never bet the farm.
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+            <b>Paper only — not yet validated.</b> These setups have not cleared the backtest + paper-trade gate
+            (a positive edge over ≥30 historical trades). Treat them as practice: paper-trade them and watch the
+            track record below before risking real money. Short-horizon trading loses money for most people.
+        </MudAlert>
+    }
+
+    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-3">
+        @if (_data.SetupsGeneratedAtUtc is { } d)
+        {
+            @($"Generated {d:MMM d} · universe of {_data.UniverseSize} liquid names · refreshes daily")
+        }
+        else
+        {
+            @($"Universe of {_data.UniverseSize} liquid names · the scanner produces setups once a day — check back shortly")
+        }
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="7">
+            <MudText Typo="Typo.h6" GutterBottom="true">Today's setups</MudText>
+            @if (_data.Setups.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                    No qualifying setups right now. The scanner only fires when trend, momentum and volume line up — no signal is itself a signal.
+                </MudAlert>
+            }
+            else
+            {
+                @foreach (var s in _data.Setups)
+                {
+                    <SwingSetupCard Setup="s" />
+                }
+            }
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudText Typo="Typo.h6" GutterBottom="true">Track record</MudText>
+            <MudPaper Class="pa-4 mb-4" Elevation="1">
+                @if (_data.TrackRecord is { } tr)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">Out-of-sample, from logged paper trades.</MudText>
+                    <MudSimpleTable Dense="true" Hover="false" Class="mt-2" Style="background:transparent">
+                        <tbody>
+                            <tr><td>Resolved</td><td align="right">@tr.Resolved</td></tr>
+                            <tr><td>Open</td><td align="right">@tr.Open</td></tr>
+                            <tr><td>Win rate</td><td align="right">@tr.WinRatePct.ToString("0.0")%</td></tr>
+                            <tr><td>Total result</td><td align="right">@tr.TotalR.ToString("+0.0;-0.0;0.0")R</td></tr>
+                            <tr><td>Avg per trade</td><td align="right">@tr.AverageR.ToString("+0.000;-0.000;0.000")R</td></tr>
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-2">R = multiples of the per-trade risk (distance to stop).</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">No paper trades logged yet — accruing as the scanner runs.</MudText>
+                }
+            </MudPaper>
+
+            <MudText Typo="Typo.h6" GutterBottom="true">Backtest</MudText>
+            <MudPaper Class="pa-4" Elevation="1">
+                @if (_data.Backtest is { } bt)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">
+                        Replay of the same rule over history@(bt.FromUtc is { } f && bt.ToUtc is { } t ? $" ({f:MMM yyyy}–{t:MMM yyyy})" : "").
+                    </MudText>
+                    <MudSimpleTable Dense="true" Hover="false" Class="mt-2" Style="background:transparent">
+                        <tbody>
+                            <tr><td>Trades</td><td align="right">@bt.TotalTrades</td></tr>
+                            <tr><td>Win rate</td><td align="right">@bt.WinRatePct.ToString("0.0")%</td></tr>
+                            <tr><td>Expectancy</td><td align="right">@bt.ExpectancyR.ToString("+0.000;-0.000;0.000")R</td></tr>
+                            <tr><td>Profit factor</td><td align="right">@bt.ProfitFactor.ToString("0.00")</td></tr>
+                            <tr><td>Max drawdown</td><td align="right">@bt.MaxDrawdownR.ToString("0.0")R</td></tr>
+                            <tr><td>Avg hold</td><td align="right">@bt.AverageHoldingDays.ToString("0.0") d</td></tr>
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-2">
+                        Backtests overstate live results (no liquidity/slippage beyond a flat cost, survivorship in the universe). A sanity check, not a promise.
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">Backtest hasn't run yet — it executes on the worker's first cycle.</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" Class="mt-4">
+        Educational research only, not financial advice. No broker is connected — you place any trade yourself.
+        Always honour the stop.
+    </MudAlert>
+}
+
+@code {
+    private SwingDashboard? _data;
+    private bool _loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _data = await Queries.GetDashboardAsync(); }
+        finally { _loaded = true; }
+    }
+}

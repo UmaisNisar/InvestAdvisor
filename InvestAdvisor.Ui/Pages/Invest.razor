@@ -1,5 +1,6 @@
 @page "/invest"
 @inject IScreenerQueries Screener
+@inject ISwingQueries Swing
 
 @* flex-wrap + nowrap on the link: on phones the title wraps while the link stays whole,
    instead of the link breaking into "Full" / "screener →". *@
@@ -30,7 +31,29 @@ else
 
     <MudGrid>
         <MudItem xs="12" md="4">
-            <MudPaper Class="pa-4" Elevation="1" Style="height:100%"><RecommendationGroup Label="Stocks to buy" Picks="_rec.Stocks" /></MudPaper>
+            <MudPaper Class="pa-4" Elevation="1" Style="height:100%">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1">
+                    <MudTooltip Text="Short-horizon (2–3 day) technical setups, in place of the old big-cap stock picks. Each carries a stop, target and size.">
+                        <MudText Typo="Typo.subtitle2">Stocks to trade (2–3 day swing)</MudText>
+                    </MudTooltip>
+                    <MudButton Href="/swing" Variant="Variant.Text" Size="Size.Small" Color="Color.Primary">All →</MudButton>
+                </MudStack>
+                @if (_swing is null || _swing.Setups.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">No qualifying swing setups today.</MudText>
+                }
+                else
+                {
+                    @if (!_swing.Validated)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning" Class="d-block mb-1">Paper only — not yet validated.</MudText>
+                    }
+                    @foreach (var s in _swing.Setups.Take(3))
+                    {
+                        <SwingSetupCard Setup="s" />
+                    }
+                }
+            </MudPaper>
         </MudItem>
         <MudItem xs="12" md="4">
             <MudPaper Class="pa-4" Elevation="1" Style="height:100%"><RecommendationGroup Label="ETFs to buy" Picks="_rec.Etfs" /></MudPaper>
@@ -48,11 +71,16 @@ else
 
 @code {
     private DailyRecommendationView? _rec;
+    private SwingDashboard? _swing;
     private bool _loaded;
 
     protected override async Task OnInitializedAsync()
     {
-        try { _rec = await Screener.GetDailyRecommendationAsync(); }
+        try
+        {
+            _rec = await Screener.GetDailyRecommendationAsync();
+            _swing = await Swing.GetDashboardAsync();
+        }
         finally { _loaded = true; }
     }
 
