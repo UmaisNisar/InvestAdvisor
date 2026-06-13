@@ -1,0 +1,181 @@
+@inject ITickerSearchService TickerSearch
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* App-wide command palette: jump to any page or search a ticker to add it. Opened from the
+   search button in the rail/app bar, or with Ctrl/Cmd+K. Ticker picks are handed back to the
+   host (MainLayout) via OnAddTicker, which opens the shared Add-holding dialog. *@
+<MudOverlay Visible="_open" DarkBackground="true" AutoClose="true" VisibleChanged="OnOverlayVisibleChanged" Class="ia-search-overlay">
+    <div class="ia-search-panel" @onclick:stopPropagation="true">
+        <MudTextField @ref="_field" @bind-Value="_query" Immediate="true" DebounceInterval="180"
+                      OnDebounceIntervalElapsed="OnQueryChanged" OnKeyDown="OnKeyDown"
+                      Placeholder="Jump to a page, or search a ticker to add…"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Text" Class="px-4 pt-2" Clearable="true" />
+
+        <MudDivider />
+
+        <div class="ia-search-results">
+            @if (_navResults.Count > 0)
+            {
+                <MudList T="object" Dense="true" ReadOnly="false">
+                    @foreach (var n in _navResults)
+                    {
+                        <MudListItem T="object" Icon="@n.Icon" OnClick="@(() => GoTo(n.Href))">@n.Label</MudListItem>
+                    }
+                </MudList>
+            }
+
+            @if (_searching || _tickers.Count > 0)
+            {
+                @if (_navResults.Count > 0) { <MudDivider /> }
+                <MudList T="object" Dense="true">
+                    @if (_searching && _tickers.Count == 0)
+                    {
+                        <MudListItem T="object" Disabled="true" Icon="@Icons.Material.Filled.Search">Searching…</MudListItem>
+                    }
+                    @foreach (var t in _tickers)
+                    {
+                        <MudListItem T="object" Icon="@Icons.Material.Filled.AddCircleOutline" OnClick="@(() => PickTicker(t))">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;min-width:72px"><code>@t.Symbol</code></MudText>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">@t.AssetClass</MudChip>
+                                <MudText Typo="Typo.caption" Color="Color.Surface">@t.Name</MudText>
+                            </MudStack>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+
+            @if (_navResults.Count == 0 && _tickers.Count == 0 && !_searching)
+            {
+                <div class="ia-search-empty">
+                    <MudText Typo="Typo.body2" Color="Color.Surface">
+                        @(string.IsNullOrWhiteSpace(_query) ? "Type to jump to a page or find a stock, ETF or crypto." : "No matches.")
+                    </MudText>
+                </div>
+            }
+        </div>
+    </div>
+</MudOverlay>
+
+@code {
+    /// <summary>Raised when the user picks a ticker — the host opens the Add-holding dialog with it.</summary>
+    [Parameter] public EventCallback<TickerSearchResult> OnAddTicker { get; set; }
+
+    private bool _open;
+    private string _query = string.Empty;
+    private MudTextField<string>? _field;
+    private bool _focusPending;
+
+    private bool _searching;
+    private CancellationTokenSource? _searchCts;
+    private IReadOnlyList<TickerSearchResult> _tickers = Array.Empty<TickerSearchResult>();
+
+    private sealed record NavTarget(string Label, string Href, string Icon);
+
+    // The app's destinations, mirroring NavMenu, so the palette doubles as a fast nav.
+    private static readonly NavTarget[] AllNav =
+    {
+        new("Dashboard", "/", Icons.Material.Filled.Dashboard),
+        new("Where to invest", "/invest", Icons.Material.Filled.Lightbulb),
+        new("Swing setups", "/swing", Icons.Material.Filled.Bolt),
+        new("Long-term screener", "/screener", Icons.Material.Filled.TrendingUp),
+        new("Advice feed", "/advice", Icons.Material.Filled.History),
+        new("AI cost", "/costs", Icons.Material.Filled.Paid),
+        new("Watchlist", "/watchlist", Icons.Material.Filled.Visibility),
+        new("Settings", "/settings", Icons.Material.Filled.Settings),
+    };
+
+    private List<NavTarget> _navResults = AllNav.ToList();
+
+    /// <summary>Open the palette (clears the previous query) and focus the field.</summary>
+    public void Open()
+    {
+        _query = string.Empty;
+        _tickers = Array.Empty<TickerSearchResult>();
+        _navResults = AllNav.ToList();
+        _searching = false;
+        _open = true;
+        _focusPending = true;
+        StateHasChanged();
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _searchCts?.Cancel();
+    }
+
+    private void OnOverlayVisibleChanged(bool visible)
+    {
+        if (!visible) Close();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusPending && _field is not null)
+        {
+            _focusPending = false;
+            try { await _field.FocusAsync(); } catch { /* not focusable yet */ }
+        }
+    }
+
+    private async Task OnQueryChanged(string value)
+    {
+        _query = value ?? string.Empty;
+        var q = _query.Trim();
+
+        _navResults = string.IsNullOrEmpty(q)
+            ? AllNav.ToList()
+            : AllNav.Where(n => n.Label.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // Cancel any in-flight search; only query symbols once there's something to match.
+        _searchCts?.Cancel();
+        if (q.Length < 1)
+        {
+            _tickers = Array.Empty<TickerSearchResult>();
+            _searching = false;
+            StateHasChanged();
+            return;
+        }
+
+        _searchCts = new CancellationTokenSource();
+        var ct = _searchCts.Token;
+        _searching = true;
+        StateHasChanged();
+        try
+        {
+            var results = await TickerSearch.SearchAsync(q, ct);
+            if (ct.IsCancellationRequested) return;
+            _tickers = results;
+        }
+        catch { if (!ct.IsCancellationRequested) _tickers = Array.Empty<TickerSearchResult>(); }
+        finally { if (!ct.IsCancellationRequested) { _searching = false; StateHasChanged(); } }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { Close(); return; }
+        if (e.Key is "Enter" or "NumpadEnter")
+        {
+            // Enter activates the top result: a matching page first, else the first ticker.
+            if (_navResults.Count > 0) GoTo(_navResults[0].Href);
+            else if (_tickers.Count > 0) await PickTicker(_tickers[0]);
+        }
+    }
+
+    private void GoTo(string href)
+    {
+        Close();
+        Nav.NavigateTo(href);
+    }
+
+    private async Task PickTicker(TickerSearchResult t)
+    {
+        Close();
+        await OnAddTicker.InvokeAsync(t);
+    }
+
+    public void Dispose() => _searchCts?.Dispose();
+}

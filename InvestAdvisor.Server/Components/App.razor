@@ -143,6 +143,75 @@
             warn: () => { if (window.iaHaptics.enabled()) navigator.vibrate(28); }
         };
 
+        // Global search hotkey: Ctrl/Cmd+K opens the command palette (MainLayout registers itself).
+        window.iaHotkeys = {
+            _ref: null,
+            register: function (ref) {
+                this._ref = ref;
+                if (this._bound) return; this._bound = true;
+                document.addEventListener('keydown', function (e) {
+                    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+                        e.preventDefault();
+                        if (window.iaHotkeys._ref) window.iaHotkeys._ref.invokeMethodAsync('OpenSearchFromHotkey');
+                    }
+                });
+            },
+            unregister: function () { this._ref = null; }
+        };
+
+        // Pull-to-refresh (touch only). A page opts in by registering a .NET ref exposing an
+        // [JSInvokable] OnPullRefresh(); the gesture only engages at the top of the page. The
+        // body locks native overscroll (app.css), so this is the only pull affordance on phones.
+        window.iaPullRefresh = {
+            _ref: null,
+            _inited: false,
+            register: function (ref) { this._ref = ref; this._init(); },
+            unregister: function (ref) { if (this._ref === ref) this._ref = null; },
+            _init: function () {
+                if (this._inited) return; this._inited = true;
+                var ind = document.createElement('div');
+                ind.id = 'ia-ptr';
+                ind.innerHTML = '<div class="ia-ptr-spinner"></div>';
+                document.body.appendChild(ind);
+
+                var startY = 0, dist = 0, pulling = false, busy = false;
+                var THRESH = 70, MAX = 110;
+                var self = this;
+
+                document.addEventListener('touchstart', function (e) {
+                    if (busy || !self._ref || window.scrollY > 0 || e.touches.length !== 1) { pulling = false; return; }
+                    startY = e.touches[0].clientY; dist = 0; pulling = true;
+                }, { passive: true });
+
+                document.addEventListener('touchmove', function (e) {
+                    if (!pulling) return;
+                    dist = e.touches[0].clientY - startY;
+                    if (dist <= 0) { ind.style.transform = 'translateX(-50%) translateY(0)'; ind.style.opacity = '0'; return; }
+                    var d = Math.min(dist, MAX);
+                    ind.style.transform = 'translateX(-50%) translateY(' + d + 'px)';
+                    ind.style.opacity = Math.min(1, d / THRESH).toString();
+                    ind.classList.toggle('ia-ptr-ready', dist >= THRESH);
+                }, { passive: true });
+
+                document.addEventListener('touchend', async function () {
+                    if (!pulling) return;
+                    pulling = false;
+                    if (dist >= THRESH && self._ref && !busy) {
+                        busy = true;
+                        ind.classList.add('ia-ptr-spin');
+                        ind.style.transform = 'translateX(-50%) translateY(' + THRESH + 'px)';
+                        ind.style.opacity = '1';
+                        try { if (window.iaHaptics) window.iaHaptics.tap(); } catch (e) {}
+                        try { await self._ref.invokeMethodAsync('OnPullRefresh'); } catch (e) {}
+                        busy = false;
+                        ind.classList.remove('ia-ptr-spin', 'ia-ptr-ready');
+                    }
+                    ind.style.transform = 'translateX(-50%) translateY(0)';
+                    ind.style.opacity = '0';
+                });
+            }
+        };
+
         // Global: a light tap pulse on any actionable element, touch input only (mouse never buzzes).
         document.addEventListener('pointerup', function (e) {
             if (e.pointerType !== 'touch') return;
