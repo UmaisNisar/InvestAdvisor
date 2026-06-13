@@ -77,4 +77,11 @@ public class SwingSignalBuilderTests
         down.AboveRegime.Should().BeFalse();
         SwingSignalBuilder.Qualifies(down, p).Should().BeFalse();
     }
+
+    [Fact]
+    public void Setup_kind_tags_a_deep_oversold_dip()
+    {
+        var setup = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), SwingParams.Default)!.Value.Setup;
+        setup.Kind.Should().Be(SwingSetupKind.DeepOversold);
+    }
 }

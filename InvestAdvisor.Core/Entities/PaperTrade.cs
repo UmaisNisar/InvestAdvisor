@@ -1,3 +1,5 @@
+using InvestAdvisor.Core.Swing;
+
 namespace InvestAdvisor.Core.Entities;
 
 /// <summary>How an open paper trade ended.</summary>
@@ -34,6 +36,9 @@ public class PaperTrade
     public decimal PositionSizePct { get; set; }
     public decimal CompositeScore { get; set; }
     public string Rationale { get; set; } = string.Empty;
+
+    /// <summary>Which trigger produced this setup — drives the conviction tag on the card.</summary>
+    public SwingSetupKind Kind { get; set; } = SwingSetupKind.None;
 
     // Signal context at entry — kept so each resolved trade is a labelled example of which
     // conditions did/didn't pay off, the dataset for tuning the strategy over time.

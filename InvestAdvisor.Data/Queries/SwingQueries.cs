@@ -36,7 +36,7 @@ public sealed class SwingQueries(
                 .Select(t => new SwingSetupView(
                     t.Ticker, t.Name, t.EntryLow, t.EntryHigh, t.StopLoss, t.Target,
                     t.RewardRiskRatio, t.HoldingDays, t.PositionSizePct, t.CompositeScore,
-                    t.Rationale, t.GeneratedAtUtc))
+                    t.Kind, t.Rationale, t.GeneratedAtUtc))
                 .ToList();
 
         var openCount = await db.PaperTrades.AsNoTracking().CountAsync(t => t.Status == PaperTradeStatus.Open, ct);
