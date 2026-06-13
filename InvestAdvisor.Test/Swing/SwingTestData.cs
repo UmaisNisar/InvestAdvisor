@@ -59,8 +59,8 @@ internal static class SwingTestData
         return FromCloses(closes, volume: volume);
     }
 
-    /// <summary>A long, pure up-trend with no recent dip — above its SMA but NOT oversold.</summary>
-    public static IReadOnlyList<Candle> RegimeUpNoDip(int bars = 260, decimal start = 100m, decimal rise = 0.4m, long volume = 2_000_000)
+    /// <summary>A long, pure up-trend with no recent dip — extended above its MAs and NOT oversold.</summary>
+    public static IReadOnlyList<Candle> RegimeUpNoDip(int bars = 260, decimal start = 100m, decimal rise = 0.7m, long volume = 2_000_000)
     {
         var closes = new List<decimal>(bars);
         var price = start;

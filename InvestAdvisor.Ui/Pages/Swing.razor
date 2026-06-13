@@ -1,6 +1,8 @@
 @page "/swing"
+@using InvestAdvisor.Core.Swing
 @inject ISwingQueries Queries
 @inject ISwingService Scanner
+@inject IRuntimeSettingsStore Settings
 @inject ISnackbar Snackbar
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
@@ -8,6 +10,14 @@
         <MudText Typo="Typo.h4">Swing setups</MudText>
     </MudTooltip>
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="flex-wrap:wrap">
+        <MudTooltip Text="Risk dial. Higher = looser oversold trigger, more setup types, bigger position sizing and more names surfaced (more trades, lower conviction each). Lower = stricter and smaller. Changing it re-scans.">
+            <MudSelect T="SwingRiskLevel" Value="_risk" ValueChanged="OnRiskChanged" Label="Risk" Dense="true"
+                       Variant="Variant.Outlined" Disabled="_running" Style="min-width:120px">
+                <MudSelectItem Value="SwingRiskLevel.Low">Low</MudSelectItem>
+                <MudSelectItem Value="SwingRiskLevel.Medium">Medium</MudSelectItem>
+                <MudSelectItem Value="SwingRiskLevel.High">High</MudSelectItem>
+            </MudSelect>
+        </MudTooltip>
         <MudTooltip Text="Re-scan the universe now and refresh today's setups at current levels. Resolves any open paper trades too. Takes up to a minute (fetches bars for every name).">
             <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled"
                        OnClick="RunNow" Disabled="_running" Style="white-space:nowrap">
@@ -35,7 +45,7 @@ else
     {
         <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
             <b>Paper only — not yet validated.</b> These setups have not cleared the backtest + paper-trade gate
-            (a real edge — profit factor ≥1.1 over a meaningful sample, not break-even noise). Treat them as
+            (a real edge — profit factor ≥1.15 over a meaningful sample, not break-even noise). Treat them as
             practice: paper-trade them and watch the track record below before risking real money. Short-horizon
             trading loses money for most people.
         </MudAlert>
@@ -58,7 +68,7 @@ else
             @if (_data.Setups.Count == 0)
             {
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                    No qualifying setups right now — nothing in the universe is on a buyable pullback (up-trend + short-term oversold). The scanner waits for that rather than chasing strength, so no signal is itself a signal.
+                    No qualifying setups at <b>@_risk</b> risk right now — nothing is on a buyable pullback (up-trend + oversold). The scanner waits rather than chasing strength. Try a higher risk level, or watch the names below that are closest to triggering.
                 </MudAlert>
             }
             else
@@ -122,9 +132,36 @@ else
         </MudItem>
     </MudGrid>
 
+    @if (_data.Watchlist.Count > 0)
+    {
+        <MudText Typo="Typo.h6" Class="mt-5" GutterBottom="true">Watchlist — closest to triggering</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-2">
+            In a confirmed up-trend but not yet oversold enough to buy. These would fire on a further dip — watch them.
+        </MudText>
+        <MudPaper Elevation="1" Class="pa-1">
+            <MudSimpleTable Dense="true" Hover="true" Style="background:transparent">
+                <thead>
+                    <tr><th>Ticker</th><th style="text-align:right">Price</th><th style="text-align:right">RSI(3)</th><th style="text-align:right">vs 200-MA</th><th>What it needs</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var w in _data.Watchlist)
+                    {
+                        <tr>
+                            <td><code>@w.Ticker</code> <MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">@w.Name</MudText></td>
+                            <td style="text-align:right">@w.Close.ToString("0.00")</td>
+                            <td style="text-align:right">@(w.Rsi?.ToString("0") ?? "—")</td>
+                            <td style="text-align:right">@((w.RegimeDistancePct * 100m)?.ToString("+0.0;-0.0") ?? "—")%</td>
+                            <td><MudText Typo="Typo.caption" Color="Color.Surface">@w.Note</MudText></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
     <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" Class="mt-4">
         Educational research only, not financial advice. No broker is connected — you place any trade yourself.
-        Always honour the stop.
+        Always honour the stop. Higher risk = more setups but lower conviction each — it is a trade-off, not free.
     </MudAlert>
 }
 
@@ -132,11 +169,25 @@ else
     private SwingDashboard? _data;
     private bool _loaded;
     private bool _running;
+    private SwingRiskLevel _risk = SwingRiskLevel.Medium;
 
     protected override async Task OnInitializedAsync()
     {
-        try { _data = await Queries.GetDashboardAsync(); }
+        try
+        {
+            _data = await Queries.GetDashboardAsync();
+            _risk = _data.RiskLevel;
+        }
         finally { _loaded = true; }
+    }
+
+    private async Task OnRiskChanged(SwingRiskLevel level)
+    {
+        if (level == _risk || _running) return;
+        _risk = level;
+        await Settings.UpdateAsync(s => s.SwingRiskLevel = level);
+        Snackbar.Add($"Risk set to {level} — re-scanning…", Severity.Info);
+        await RunNow();
     }
 
     private async Task RunNow()
@@ -147,8 +198,9 @@ else
         {
             Snackbar.Add("Scanning the swing universe… this can take a minute.", Severity.Info);
             var count = await Scanner.GenerateSetupsAsync(force: true);
-            Snackbar.Add(count > 0 ? $"Done — {count} setup(s) found." : "Done — no qualifying setups right now.", Severity.Success);
+            Snackbar.Add(count > 0 ? $"Done — {count} setup(s) found." : "Done — no qualifying setups right now (see the watchlist).", Severity.Success);
             _data = await Queries.GetDashboardAsync();
+            _risk = _data.RiskLevel;
         }
         catch (Exception ex)
         {

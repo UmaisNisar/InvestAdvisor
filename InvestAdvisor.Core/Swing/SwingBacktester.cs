@@ -21,14 +21,15 @@ public sealed record SwingBacktestSummary(
         new(0, 0, 0, 0m, 0m, 0m, 0m, 0m, 0m, null, null);
 
     /// <summary>
-    /// The validation gate. A real edge needs a meaningful sample AND results clear of break-even
-    /// noise — barely-positive expectancy with a profit factor near 1.0 (e.g. +0.008R, PF 1.02) is
-    /// statistically nothing and must NOT light up "validated". Below this, setups stay
-    /// "paper only — not yet validated". Thresholds are deliberately conservative: this gate exists
-    /// to keep an honest strategy honest, not to flatter it.
+    /// The validation gate. A real edge needs a meaningful sample, positive expectancy, and — the key
+    /// discriminator — a profit factor clearly above break-even. Profit factor is the honest signal:
+    /// the original momentum strategy sat at PF 1.02 (= noise) and must NOT validate, whereas a PF of
+    /// ~1.2+ over thousands of trades is a genuine, if modest, edge. A small per-trade R is fine when
+    /// the sample is large and the gross-profit/gross-loss ratio is solid. Below this, setups stay
+    /// "paper only — not yet validated". This gate keeps an honest strategy honest, not flattered.
     /// </summary>
-    public bool HasEdge(int minTrades = 50, decimal minExpectancyR = 0.05m, decimal minProfitFactor = 1.10m) =>
-        TotalTrades >= minTrades && ExpectancyR >= minExpectancyR && ProfitFactor >= minProfitFactor;
+    public bool HasEdge(int minTrades = 50, decimal minProfitFactor = 1.15m) =>
+        TotalTrades >= minTrades && ExpectancyR > 0m && ProfitFactor >= minProfitFactor;
 }
 
 /// <summary>
