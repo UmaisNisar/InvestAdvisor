@@ -78,4 +78,16 @@ public class SwingBacktesterTests
         // Same per-trade edge but only 20 trades — not enough to trust.
         (realEdge with { TotalTrades = 20 }).HasEdge().Should().BeFalse();
     }
+
+    [Fact]
+    public void HasEdge_accepts_a_modest_but_real_edge_on_a_large_sample()
+    {
+        // The shape the expanded-universe live backtest produced: small per-trade R but a solid
+        // profit factor over thousands of trades — a genuine, modest edge, not noise.
+        var modest = new SwingBacktestSummary(
+            TotalTrades: 2856, Wins: 1591, Losses: 1265, WinRatePct: 55.7m,
+            AverageR: 0.031m, ExpectancyR: 0.031m, ProfitFactor: 1.18m,
+            MaxDrawdownR: 16m, AverageHoldingDays: 2.6m, FromUtc: null, ToUtc: null);
+        modest.HasEdge().Should().BeTrue();
+    }
 }

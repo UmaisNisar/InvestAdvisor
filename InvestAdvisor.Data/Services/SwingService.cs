@@ -19,15 +19,17 @@ public sealed class SwingService(
     IPriceHistoryProvider history,
     ISwingScoringService scoring,
     ISentimentScoringService sentiment,
+    IRuntimeSettingsStore settingsStore,
     ISystemClock clock,
     ILogger<SwingService>? logger = null) : ISwingService
 {
-    /// <summary>How many top qualifying setups to surface (and paper-trade) per day.</summary>
-    private const int DailySetupCount = 5;
+    /// <summary>How many near-setups to keep on the watchlist when no/few setups qualify.</summary>
+    private const int WatchlistCount = 8;
 
     public async Task<int> GenerateSetupsAsync(bool force = false, CancellationToken ct = default)
     {
         var today = clock.UtcNow.Date;
+        var p = SwingParams.For((await settingsStore.GetAsync(ct)).SwingRiskLevel);
 
         await ResolveOpenTradesAsync(ct);
 
@@ -53,8 +55,13 @@ public sealed class SwingService(
         if (universe.Count == 0) { logger?.LogWarning("Swing universe is empty or no bars fetched."); return 0; }
 
         var sentimentByTicker = await TryGetSentimentAsync(ct);
-        var ranked = scoring.Rank(universe, sentimentByTicker);
-        var picks = ranked.Where(s => s.Qualifies).Take(DailySetupCount).ToList();
+        var ranked = scoring.Rank(universe, sentimentByTicker, p);
+
+        // Always refresh the watchlist (near-setups), even when nothing qualifies — so the page is
+        // never blank. Replace today's snapshot.
+        await RefreshWatchlistAsync(db, ranked, today, ct);
+
+        var picks = ranked.Where(s => s.Qualifies).Take(p.SetupCount).ToList();
         if (picks.Count == 0) { logger?.LogInformation("No qualifying swing setups today."); return 0; }
 
         var added = 0;
@@ -90,16 +97,49 @@ public sealed class SwingService(
 
         if (added > 0) await db.SaveChangesAsync(ct);
         logger?.LogInformation("Logged {Count} swing setups for {Day:yyyy-MM-dd}: {Tickers}.",
-            added, today, string.Join(", ", picks.Select(p => p.Ticker)));
+            added, today, string.Join(", ", picks.Select(x => x.Ticker)));
         return added;
+    }
+
+    /// <summary>
+    /// Replaces today's watchlist with the near-setups: names in a confirmed up-trend that haven't
+    /// pulled back far enough to trigger yet, closest first (lowest RSI). Keeps the page useful on
+    /// days with no actionable setup.
+    /// </summary>
+    private async Task RefreshWatchlistAsync(InvestAdvisorDbContext db, IReadOnlyList<SwingScore> ranked, DateTime today, CancellationToken ct)
+    {
+        var existing = await db.SwingWatchItems.Where(w => w.GeneratedAtUtc == today).ToListAsync(ct);
+        if (existing.Count > 0) db.SwingWatchItems.RemoveRange(existing);
+
+        var near = ranked
+            .Where(s => !s.Qualifies && s.Features.AboveRegime && s.Features.Rsi is not null)
+            .OrderBy(s => s.Features.Rsi)
+            .Take(WatchlistCount);
+
+        foreach (var s in near)
+            db.SwingWatchItems.Add(new SwingWatchItem
+            {
+                GeneratedAtUtc = today,
+                Ticker = s.Ticker,
+                Name = s.Name,
+                Close = s.Features.Close,
+                CompositeScore = s.CompositeScore,
+                Rsi = s.Features.Rsi,
+                RegimeDistancePct = s.Features.RegimeDistancePct,
+                TrendDistancePct = s.Features.TrendDistancePct,
+                Note = $"In an up-trend; RSI(3) {s.Features.Rsi:0}. Triggers if it dips a bit more.",
+            });
+
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task RunBacktestAsync(CancellationToken ct = default)
     {
+        var p = SwingParams.For((await settingsStore.GetAsync(ct)).SwingRiskLevel);
         var universe = await LoadUniverseAsync(HistoryRange.TwoYears, ct);
         if (universe.Count == 0) { logger?.LogWarning("Swing backtest skipped — no universe bars."); return; }
 
-        var summary = SwingBacktester.Run(universe);
+        var summary = SwingBacktester.Run(universe, p);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         db.SwingBacktestResults.Add(new SwingBacktestResult

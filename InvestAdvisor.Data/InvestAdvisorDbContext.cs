@@ -29,6 +29,7 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     // Swing (short-horizon trading) entities.
     public DbSet<PaperTrade> PaperTrades => Set<PaperTrade>();
     public DbSet<SwingBacktestResult> SwingBacktestResults => Set<SwingBacktestResult>();
+    public DbSet<SwingWatchItem> SwingWatchItems => Set<SwingWatchItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -154,3 +154,19 @@ public sealed class SwingBacktestResultConfiguration : IEntityTypeConfiguration<
         b.HasIndex(x => x.GeneratedAtUtc);
     }
 }
+
+public sealed class SwingWatchItemConfiguration : IEntityTypeConfiguration<SwingWatchItem>
+{
+    public void Configure(EntityTypeBuilder<SwingWatchItem> b)
+    {
+        b.ToTable("SwingWatchItem");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Ticker).HasMaxLength(16).IsRequired();
+        b.Property(x => x.Name).HasMaxLength(128);
+        b.Property(x => x.Note).HasMaxLength(256);
+        foreach (var prop in new[] { nameof(SwingWatchItem.Close), nameof(SwingWatchItem.CompositeScore),
+                     nameof(SwingWatchItem.Rsi), nameof(SwingWatchItem.RegimeDistancePct), nameof(SwingWatchItem.TrendDistancePct) })
+            b.Property(prop).HasPrecision(18, 4);
+        b.HasIndex(x => x.GeneratedAtUtc);
+    }
+}

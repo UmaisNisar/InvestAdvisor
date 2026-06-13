@@ -16,14 +16,26 @@ public sealed record SwingParams
     /// <summary>Long-term trend filter: only go long when close is above this SMA.</summary>
     public int RegimeSmaPeriod { get; init; } = 200;
 
-    /// <summary>Intermediate SMA used to gauge how far price has pulled back short-term.</summary>
+    /// <summary>Intermediate trend SMA — the "buy the pullback to support" anchor for the MA-bounce setup.</summary>
+    public int TrendSmaPeriod { get; init; } = 50;
+
+    /// <summary>Short SMA used to gauge how far price has pulled back short-term.</summary>
     public int PullbackSmaPeriod { get; init; } = 5;
 
     /// <summary>Short RSI for the oversold trigger — Connors-style. 2–3 suits a 2–3 day hold.</summary>
     public int RsiPeriod { get; init; } = 3;
 
-    /// <summary>Enter only when RSI(<see cref="RsiPeriod"/>) is at or below this (oversold pullback).</summary>
-    public decimal OversoldEntry { get; init; } = 20m;
+    /// <summary>Deep-oversold trigger: enter when RSI(<see cref="RsiPeriod"/>) is at or below this.</summary>
+    public decimal OversoldEntry { get; init; } = 25m;
+
+    /// <summary>Whether the gentler "pullback to the 50-day MA" setup is also active.</summary>
+    public bool EnableMaBounce { get; init; } = true;
+
+    /// <summary>MA-bounce: price must be within this fraction above the 50-day SMA (pulled back to it).</summary>
+    public decimal MaBounceBandPct { get; init; } = 0.04m;
+
+    /// <summary>MA-bounce: RSI must be below this (mildly soft, not necessarily deeply oversold).</summary>
+    public decimal MaBounceRsiMax { get; init; } = 50m;
 
     public int AtrPeriod { get; init; } = 14;
     public int VolumeLookback { get; init; } = 20;
@@ -43,13 +55,40 @@ public sealed record SwingParams
     /// <summary>Hard cap on any single position, as a percent of capital.</summary>
     public decimal MaxPositionPct { get; init; } = 25m;
 
+    /// <summary>How many top qualifying setups to surface (and paper-trade) per scan.</summary>
+    public int SetupCount { get; init; } = 5;
+
     /// <summary>Liquidity floor: trailing avg dollar volume below this excludes the name entirely.</summary>
     public decimal MinAvgDollarVolume { get; init; } = 5_000_000m;
 
     /// <summary>Reward:risk implied by the ATR multiples (for display).</summary>
     public decimal RewardRiskRatio => AtrStopMultiple == 0m ? 0m : TargetAtrMultiple / AtrStopMultiple;
 
-    public static readonly SwingParams Default = new();
+    public static readonly SwingParams Default = For(SwingRiskLevel.Medium);
+
+    /// <summary>
+    /// Preset for a risk level. The dial moves four things together: how oversold a name must be to
+    /// trigger (looser = more trades), whether the gentler MA-bounce setup is on, how much capital
+    /// each trade risks, and how many names are surfaced. Lower = stricter/smaller; higher = more/larger.
+    /// </summary>
+    public static SwingParams For(SwingRiskLevel level) => level switch
+    {
+        SwingRiskLevel.Low => new SwingParams
+        {
+            OversoldEntry = 15m, EnableMaBounce = false, AtrStopMultiple = 3.0m,
+            RiskPerTradePct = 0.5m, MaxPositionPct = 15m, SetupCount = 3,
+        },
+        SwingRiskLevel.High => new SwingParams
+        {
+            OversoldEntry = 35m, EnableMaBounce = true, AtrStopMultiple = 2.0m,
+            RiskPerTradePct = 1.5m, MaxPositionPct = 35m, SetupCount = 8,
+        },
+        _ => new SwingParams
+        {
+            OversoldEntry = 25m, EnableMaBounce = true, AtrStopMultiple = 2.5m,
+            RiskPerTradePct = 1.0m, MaxPositionPct = 25m, SetupCount = 5,
+        },
+    };
 }
 
 /// <summary>One stock's bars plus identity, fed to the swing scorer. Candles are oldest-first.</summary>
@@ -64,6 +103,7 @@ public sealed record SwingInput(
 public sealed record SwingFeatures(
     decimal Close,
     decimal? RegimeSma,
+    decimal? TrendSma,
     decimal? Rsi,
     decimal? PullbackPct,
     decimal? RelativeVolume,
@@ -75,6 +115,9 @@ public sealed record SwingFeatures(
 
     /// <summary>How far above the 200-day SMA, as a fraction — uptrend health (and over-extension).</summary>
     public decimal? RegimeDistancePct => RegimeSma is { } s && s > 0m ? (Close - s) / s : null;
+
+    /// <summary>Distance above the 50-day SMA, as a fraction (negative = below it). Null if missing.</summary>
+    public decimal? TrendDistancePct => TrendSma is { } s && s > 0m ? (Close - s) / s : null;
 }
 
 /// <summary>

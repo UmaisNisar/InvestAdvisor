@@ -9,12 +9,15 @@ namespace InvestAdvisor.Data.Queries;
 /// Read models for the Swing page. Today's setups are the most recently generated open paper
 /// trades; the track record is computed from resolved ones; the gate comes from the latest backtest.
 /// </summary>
-public sealed class SwingQueries(IDbContextFactory<InvestAdvisorDbContext> dbFactory) : ISwingQueries
+public sealed class SwingQueries(
+    IDbContextFactory<InvestAdvisorDbContext> dbFactory,
+    IRuntimeSettingsStore settingsStore) : ISwingQueries
 {
     public async Task<SwingDashboard> GetDashboardAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
+        var riskLevel = (await settingsStore.GetAsync(ct)).SwingRiskLevel;
         var universeSize = await db.Stocks.AsNoTracking().CountAsync(s => s.IsActive && s.IsSwingUniverse, ct);
 
         // Today's setups = the open trades from the latest generation date.
@@ -57,6 +60,20 @@ public sealed class SwingQueries(IDbContextFactory<InvestAdvisorDbContext> dbFac
                 AverageR: resolved.Count == 0 ? 0m : Math.Round(resolved.Average(), 3));
         }
 
+        // Watchlist = the latest near-setups snapshot (closest-to-triggering names).
+        var watchDate = await db.SwingWatchItems.AsNoTracking()
+            .OrderByDescending(w => w.GeneratedAtUtc)
+            .Select(w => (DateTime?)w.GeneratedAtUtc)
+            .FirstOrDefaultAsync(ct);
+        var watchlist = watchDate is null
+            ? new List<SwingWatchView>()
+            : (await db.SwingWatchItems.AsNoTracking()
+                    .Where(w => w.GeneratedAtUtc == watchDate)
+                    .OrderBy(w => w.Rsi)
+                    .ToListAsync(ct))
+                .Select(w => new SwingWatchView(w.Ticker, w.Name, w.Close, w.Rsi, w.RegimeDistancePct, w.Note))
+                .ToList();
+
         var bt = await db.SwingBacktestResults.AsNoTracking()
             .OrderByDescending(x => x.GeneratedAtUtc)
             .FirstOrDefaultAsync(ct);
@@ -74,6 +91,6 @@ public sealed class SwingQueries(IDbContextFactory<InvestAdvisorDbContext> dbFac
                 bt.MaxDrawdownR, bt.AverageHoldingDays, bt.FromUtc, bt.ToUtc, validated);
         }
 
-        return new SwingDashboard(universeSize, latestDate, validated, setups, track, backtest);
+        return new SwingDashboard(universeSize, riskLevel, latestDate, validated, setups, watchlist, track, backtest);
     }
 }

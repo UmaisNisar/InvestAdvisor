@@ -1,3 +1,5 @@
+using InvestAdvisor.Core.Swing;
+
 namespace InvestAdvisor.Core.Entities;
 
 public class RuntimeSettings
@@ -53,6 +55,9 @@ public class RuntimeSettings
     public int WeightMomentum { get; set; } = 15;
     /// <summary>News + social-media sentiment factor (LLM-graded over a recent window).</summary>
     public int WeightSentiment { get; set; } = 10;
+
+    /// <summary>How aggressively the swing scanner surfaces setups (Low/Medium/High). User-set on /swing.</summary>
+    public SwingRiskLevel SwingRiskLevel { get; set; } = SwingRiskLevel.Medium;
 
     // Optional sources for auto-importing holdings (e.g. a Wealthsimple export). When set, the
     // import worker pulls them on its daily cycle; manual import via the Settings buttons works

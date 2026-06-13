@@ -1,6 +1,8 @@
+using InvestAdvisor.Core.Swing;
+
 namespace InvestAdvisor.Core.Abstractions;
 
-/// <summary>Read models for the Swing page: today's setups, the paper-trade track record, the backtest gate.</summary>
+/// <summary>Read models for the Swing page: today's setups, the watchlist, the track record, the gate.</summary>
 public interface ISwingQueries
 {
     Task<SwingDashboard> GetDashboardAsync(CancellationToken ct = default);
@@ -8,15 +10,26 @@ public interface ISwingQueries
 
 /// <summary>
 /// Everything the Swing page renders. <see cref="Validated"/> reflects the gate — when false, the
-/// page shows setups as "paper only, not yet validated".
+/// page shows setups as "paper only, not yet validated". <see cref="Watchlist"/> shows near-setups
+/// so the page is useful even when nothing qualifies.
 /// </summary>
 public sealed record SwingDashboard(
     int UniverseSize,
+    SwingRiskLevel RiskLevel,
     DateTime? SetupsGeneratedAtUtc,
     bool Validated,
     IReadOnlyList<SwingSetupView> Setups,
+    IReadOnlyList<SwingWatchView> Watchlist,
     SwingTrackRecord? TrackRecord,
     SwingBacktestView? Backtest);
+
+public sealed record SwingWatchView(
+    string Ticker,
+    string Name,
+    decimal Close,
+    decimal? Rsi,
+    decimal? RegimeDistancePct,
+    string Note);
 
 public sealed record SwingSetupView(
     string Ticker,
