@@ -4,6 +4,9 @@
 @inject IRuntimeSettingsStore SettingsStore
 @inject IHoldingsService HoldingsService
 @inject IHoldingsImportService HoldingsImport
+@inject IActivityImportService ActivityImport
+@inject IRealizedLotsService RealizedLots
+@inject IPortfolioQueries PortfolioQueries
 @inject ITenantContext Tenant
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
@@ -234,17 +237,81 @@
                 </RowTemplate>
             </MudTable>
 
+            <MudDivider Class="my-6" />
+
+            <MudExpansionPanels Class="mb-3">
+                <MudExpansionPanel Text="Import sales from Activity CSV (realized gains)">
+                    <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2">
+                        The holdings CSV above only tracks what you <b>currently own</b>. When you sell, that position
+                        just disappears — and the profit you locked in would be lost. Upload your Wealthsimple
+                        <b>Activity</b> export here and every <b>sell</b> is recorded as a permanent realized gain/loss.
+                        Re-uploading is safe — duplicate sales are skipped.
+                    </MudText>
+                    <MudFileUpload T="IBrowserFile" Accept=".csv" FilesChanged="OnActivityFileSelected" MaximumFileCount="1">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile">
+                                Choose Activity CSV & import
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                <MudText Typo="Typo.h6">Realized gains</MudText>
+                <MudButton StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small"
+                           OnClick="@(() => _realizedDialog?.Open(null))">Add sale</MudButton>
+            </MudStack>
+            @if (_realizedLots is null || _realizedLots.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-4">
+                    No realized sales yet. Import your Activity CSV above, or add one by hand.
+                </MudText>
+            }
+            else
+            {
+                <MudTable Items="_realizedLots" Dense="true" Hover="true" HorizontalScrollbar="true" Breakpoint="Breakpoint.Sm" Class="mb-4">
+                    <HeaderContent>
+                        <MudTh>Date</MudTh>
+                        <MudTh>Ticker</MudTh>
+                        <MudTh>Account</MudTh>
+                        <MudTh Style="text-align:right">Qty</MudTh>
+                        <MudTh Style="text-align:right">Proceeds</MudTh>
+                        <MudTh Style="text-align:right">Cost</MudTh>
+                        <MudTh Style="text-align:right">Realized P/L</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Date">@context.RealizedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="Ticker"><code>@context.Ticker</code></MudTd>
+                        <MudTd DataLabel="Account">@context.AccountType</MudTd>
+                        <MudTd DataLabel="Qty" Style="text-align:right">@context.Quantity</MudTd>
+                        <MudTd DataLabel="Proceeds" Style="text-align:right">@context.Proceeds.ToString("C2") @context.Currency</MudTd>
+                        <MudTd DataLabel="Cost" Style="text-align:right">@context.CostBasis.ToString("C2") @context.Currency</MudTd>
+                        <MudTd DataLabel="Realized P/L" Style="@($"text-align:right;font-weight:600;color:{(context.RealizedPnl >= 0 ? "var(--mud-palette-success)" : "var(--mud-palette-error)")}")">
+                            @(context.RealizedPnl >= 0 ? "+" : "")@context.RealizedPnl.ToString("C2") @context.Currency
+                        </MudTd>
+                        <MudTd DataLabel="">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => OpenRealizedEdit(context))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteRealizedLot(context))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
         }
     </MudTabPanel>
 </MudTabs>
 
 <HoldingEditDialog @ref="_holdingDialog" OnSaved="ReloadAll" />
+<RealizedLotEditDialog @ref="_realizedDialog" OnSaved="ReloadAll" />
 
 @code {
     private Profile? _profile;
     private RuntimeSettings? _settings;
     private List<Holding>? _holdings;
+    private IReadOnlyList<RealizedLotView>? _realizedLots;
     private HoldingEditDialog? _holdingDialog;
+    private RealizedLotEditDialog? _realizedDialog;
 
     // One MudForm per tab so each Save validates only its own fields.
     private MudForm? _profileForm;
@@ -320,6 +387,49 @@
         catch (Exception ex) { Snackbar.Add($"Import failed: {ex.Message}", Severity.Error); }
     }
 
+    private async Task OnActivityFileSelected(IBrowserFile? file)
+    {
+        if (file is null) return;
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            var result = await ActivityImport.ImportActivityCsvAsync(await Tenant.GetTenantIdAsync(), content);
+            if (result.Errors.Count > 0)
+                Snackbar.Add($"Recorded {result.Recorded} sale(s), {result.Duplicates} duplicate(s) · {result.Errors[0]}", Severity.Warning);
+            else
+                Snackbar.Add($"Recorded {result.Recorded} realized sale(s); {result.Duplicates} already on file.",
+                    result.AnyChanges ? Severity.Success : Severity.Info);
+
+            await ReloadAll();
+        }
+        catch (Exception ex) { Snackbar.Add($"Activity import failed: {ex.Message}", Severity.Error); }
+    }
+
+    private void OpenRealizedEdit(RealizedLotView v) => _realizedDialog?.Open(new RealizedLot
+    {
+        Id = v.Id, Ticker = v.Ticker, Name = v.Name,
+        AssetClass = Enum.Parse<AssetClass>(v.AssetClass), AccountType = Enum.Parse<AccountType>(v.AccountType),
+        Quantity = v.Quantity, Proceeds = v.Proceeds, CostBasis = v.CostBasis,
+        Currency = v.Currency, RealizedAtUtc = v.RealizedAtUtc,
+    });
+
+    private async Task DeleteRealizedLot(RealizedLotView v)
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Delete realized sale?",
+            $"Remove the recorded sale of {v.Ticker} ({v.RealizedAtUtc.ToLocalTime():yyyy-MM-dd})? This only affects realized-gains history.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (ok != true) return;
+        try
+        {
+            await RealizedLots.DeleteAsync(v.Id);
+            await ReloadAll();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
     private async Task ImportFromUrl()
     {
         if (_settings is null || string.IsNullOrWhiteSpace(_settings.HoldingsCsvUrl))
@@ -351,6 +461,7 @@
             // The store returns a cached instance; clone it so we don't mutate the cached snapshot directly.
             _settings = Clone(settings);
             _holdings = (await HoldingsService.ListAsync()).ToList();
+            _realizedLots = await PortfolioQueries.GetRealizedLotsAsync();
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
     }

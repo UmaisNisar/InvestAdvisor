@@ -181,6 +181,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScreenerQueries, ScreenerQueries>();
         services.AddScoped<IHoldingsService, HoldingsService>();
         services.AddScoped<IHoldingsImportService, HoldingsImportService>();
+        services.AddScoped<IActivityImportService, ActivityImportService>();
+        services.AddScoped<IRealizedLotsService, RealizedLotsService>();
         services.AddScoped<ITickerSearchService, TickerSearchService>();
         services.AddScoped<IWatchlistService, WatchlistService>();
         services.AddScoped<IProfileService, ProfileService>();

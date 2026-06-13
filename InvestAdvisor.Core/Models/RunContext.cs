@@ -32,7 +32,8 @@ public sealed record PortfolioTotals(
     decimal UnrealizedPnlUsd,
     decimal UnrealizedPnlPct,
     decimal TodaysChangeUsd,
-    decimal TodaysChangePct);
+    decimal TodaysChangePct,
+    decimal RealizedPnlUsd = 0m);
 
 public sealed record HoldingView(
     string Ticker,
