@@ -14,15 +14,15 @@ public class SwingBacktesterTests
     [Fact]
     public void Flat_market_yields_no_trades()
     {
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.Flat(120)) });
+        var result = SwingBacktester.Run(new[] { Input(SwingTestData.Flat(300)) });
         result.Should().Be(SwingBacktestSummary.Empty);
         result.TotalTrades.Should().Be(0);
     }
 
     [Fact]
-    public void Trending_market_produces_trades_with_consistent_aggregates()
+    public void Uptrend_with_recurring_dips_produces_trades_with_consistent_aggregates()
     {
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.UptrendWithDips(150)) });
+        var result = SwingBacktester.Run(new[] { Input(SwingTestData.RegimeUpWithDips(520)) });
 
         result.TotalTrades.Should().BeGreaterThan(0);
         (result.Wins + result.Losses).Should().Be(result.TotalTrades);
@@ -32,15 +32,14 @@ public class SwingBacktesterTests
     }
 
     [Fact]
-    public void A_crash_after_an_uptrend_registers_at_least_one_losing_trade()
+    public void A_crash_after_an_oversold_entry_registers_at_least_one_losing_trade()
     {
-        // Qualify on the up-trend, then collapse so a held position is stopped out.
-        var up = SwingTestData.UptrendWithDips(40).Select(c => c.Close).ToList();
-        var crash = new List<decimal>(up);
-        var p = up[^1];
-        for (var i = 0; i < 8; i++) { p *= 0.90m; crash.Add(p); } // -10%/bar collapse
+        // Up-trend with dips (mean-reversion entries fire), then a collapse that runs the stop.
+        var closes = SwingTestData.RegimeUpWithDips(300).Select(c => c.Close).ToList();
+        var p = closes[^1];
+        for (var i = 0; i < 10; i++) { p *= 0.92m; closes.Add(p); } // sustained collapse
 
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.FromCloses(crash)) });
+        var result = SwingBacktester.Run(new[] { Input(SwingTestData.FromCloses(closes)) });
 
         result.TotalTrades.Should().BeGreaterThan(0);
         result.Losses.Should().BeGreaterThanOrEqualTo(1);
@@ -49,9 +48,9 @@ public class SwingBacktesterTests
     [Fact]
     public void Every_outcome_stays_within_the_R_bounds_of_the_rule()
     {
-        // No single trade can lose much more than 1R or win much more than the reward:risk target.
+        // No single trade loses much more than 1R or wins much more than the reward:risk target.
         var p = SwingParams.Default;
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.UptrendWithDips(200)) }, p);
+        var result = SwingBacktester.Run(new[] { Input(SwingTestData.RegimeUpWithDips(520)) }, p);
 
         result.AverageR.Should().BeInRange(-1.2m, p.RewardRiskRatio + 0.2m);
     }

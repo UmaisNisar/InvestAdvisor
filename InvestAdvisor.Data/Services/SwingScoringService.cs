@@ -11,8 +11,9 @@ namespace InvestAdvisor.Data.Services;
 /// </summary>
 public sealed class SwingScoringService : ISwingScoringService
 {
-    // Sub-score weights (sum 100): trend/momentum lead, breakout confirms, RSI/volume/sentiment trim.
-    private const decimal WTrend = 25m, WMomentum = 25m, WBreakout = 20m, WRsi = 10m, WVolume = 10m, WSentiment = 10m;
+    // Sub-score weights (sum 100) for the mean-reversion thesis: the oversold trigger and the
+    // up-trend regime lead; pullback depth and a volume/sentiment confirm trim.
+    private const decimal WOversold = 30m, WRegime = 25m, WPullback = 20m, WVolume = 10m, WSentiment = 15m;
 
     public IReadOnlyList<SwingScore> Rank(
         IReadOnlyList<SwingInput> universe,
@@ -31,40 +32,39 @@ public sealed class SwingScoringService : ISwingScoringService
             // Liquidity gate: skip names that can't be traded cleanly on a 2–3 day horizon.
             if (features.AverageDollarVolume is not { } adv || adv < p.MinAvgDollarVolume) continue;
 
-            sentimentByTicker?.TryGetValue(input.Ticker, out var sent);
             rows.Add(new Row(input, features, setup,
-                Trend: features.EmaFast is { } f && features.EmaSlow is { } s && s != 0m ? (f - s) / s : null,
                 Sentiment: sentimentByTicker is not null && sentimentByTicker.TryGetValue(input.Ticker, out var sv) ? sv : null));
         }
 
         if (rows.Count == 0) return Array.Empty<SwingScore>();
 
-        var rTrend = Rank(rows, r => r.Trend, higherBetter: true);
-        var rMom = Rank(rows, r => r.Features.Momentum, higherBetter: true);
-        var rBreak = Rank(rows, r => r.Features.BreakoutStrength, higherBetter: true);
-        var rRsi = Rank(rows, r => r.Features.Rsi is { } ? SwingSignalBuilder.RsiQuality(r.Features.Rsi) : (decimal?)null, higherBetter: true);
+        // Oversold: a lower RSI is a better mean-reversion entry, so rank it lower-better.
+        var rOversold = Rank(rows, r => r.Features.Rsi, higherBetter: false);
+        // Regime: more above the 200-day SMA = a healthier up-trend to fade the dip into.
+        var rRegime = Rank(rows, r => r.Features.RegimeDistancePct, higherBetter: true);
+        // Pullback depth: a deeper short-term dip has more to revert.
+        var rPullback = Rank(rows, r => r.Features.PullbackPct, higherBetter: true);
         var rVol = Rank(rows, r => r.Features.RelativeVolume, higherBetter: true);
         var rSent = Rank(rows, r => r.Sentiment, higherBetter: true);
 
         var scores = new List<SwingScore>(rows.Count);
         foreach (var r in rows)
         {
-            decimal? sTrend = Scale(Get(rTrend, r.Input.Ticker));
-            decimal? sMom = Scale(Get(rMom, r.Input.Ticker));
-            decimal? sBreak = Scale(Get(rBreak, r.Input.Ticker));
-            decimal? sRsi = Scale(Get(rRsi, r.Input.Ticker));
+            decimal? sOversold = Scale(Get(rOversold, r.Input.Ticker));
+            decimal? sRegime = Scale(Get(rRegime, r.Input.Ticker));
+            decimal? sPullback = Scale(Get(rPullback, r.Input.Ticker));
             decimal? sVol = Scale(Get(rVol, r.Input.Ticker));
             decimal? sSent = Scale(Get(rSent, r.Input.Ticker));
 
             var composite = Composite(
-                (sTrend, WTrend), (sMom, WMomentum), (sBreak, WBreakout),
-                (sRsi, WRsi), (sVol, WVolume), (sSent, WSentiment));
+                (sOversold, WOversold), (sRegime, WRegime), (sPullback, WPullback),
+                (sVol, WVolume), (sSent, WSentiment));
             if (composite is null) continue;
 
             scores.Add(new SwingScore(
                 r.Input.Ticker, r.Input.Name, r.Input.Sector, composite.Value,
-                new SwingFactorScores(sTrend, sMom, sBreak, sRsi, sVol, sSent),
-                r.Features, r.Setup, SwingSignalBuilder.Qualifies(r.Features)));
+                new SwingFactorScores(sRegime, sOversold, sPullback, sVol, sSent),
+                r.Features, r.Setup, SwingSignalBuilder.Qualifies(r.Features, p)));
         }
 
         return scores
@@ -73,7 +73,7 @@ public sealed class SwingScoringService : ISwingScoringService
             .ToList();
     }
 
-    private sealed record Row(SwingInput Input, SwingFeatures Features, TradeSetup Setup, decimal? Trend, decimal? Sentiment);
+    private sealed record Row(SwingInput Input, SwingFeatures Features, TradeSetup Setup, decimal? Sentiment);
 
     private static decimal? Composite(params (decimal? Score, decimal Weight)[] parts)
     {

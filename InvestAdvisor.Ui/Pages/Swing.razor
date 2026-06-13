@@ -4,7 +4,7 @@
 @inject ISnackbar Snackbar
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
-    <MudTooltip Text="Short-horizon (2–3 day) technical setups across liquid US + TSX names. Each idea is risk-bounded: entry, stop, target and size. Research, not advice.">
+    <MudTooltip Text="Short-horizon (2–3 day) setups: buy liquid US + TSX names that are in an up-trend (above their 200-day average) but short-term oversold — a pullback to buy, then ride the bounce. Each idea is risk-bounded: entry, stop, target and size. Research, not advice.">
         <MudText Typo="Typo.h4">Swing setups</MudText>
     </MudTooltip>
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="flex-wrap:wrap">
@@ -58,7 +58,7 @@ else
             @if (_data.Setups.Count == 0)
             {
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                    No qualifying setups right now. The scanner only fires when trend, momentum and volume line up — no signal is itself a signal.
+                    No qualifying setups right now — nothing in the universe is on a buyable pullback (up-trend + short-term oversold). The scanner waits for that rather than chasing strength, so no signal is itself a signal.
                 </MudAlert>
             }
             else

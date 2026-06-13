@@ -44,4 +44,58 @@ internal static class SwingTestData
         foreach (var c in closes) list.Add(Bar(i++, c, bandPct, volume));
         return list;
     }
+
+    /// <summary>
+    /// A long up-trend (well above its 200-day SMA) that ends in a sharp multi-day sell-off — the
+    /// canonical mean-reversion setup: confirmed up-trend, short-term oversold (RSI(3) ≈ 0).
+    /// </summary>
+    public static IReadOnlyList<Candle> RegimeUpThenDip(
+        int bars = 260, decimal start = 100m, decimal rise = 0.4m, int dipDays = 4, decimal dipStep = 2.5m, long volume = 2_000_000)
+    {
+        var closes = new List<decimal>(bars);
+        var price = start;
+        for (var i = 0; i < bars - dipDays; i++) { closes.Add(price); price += rise; }
+        for (var i = 0; i < dipDays; i++) { price -= dipStep; closes.Add(price); }
+        return FromCloses(closes, volume: volume);
+    }
+
+    /// <summary>A long, pure up-trend with no recent dip — above its SMA but NOT oversold.</summary>
+    public static IReadOnlyList<Candle> RegimeUpNoDip(int bars = 260, decimal start = 100m, decimal rise = 0.4m, long volume = 2_000_000)
+    {
+        var closes = new List<decimal>(bars);
+        var price = start;
+        for (var i = 0; i < bars; i++) { closes.Add(price); price += rise; }
+        return FromCloses(closes, volume: volume);
+    }
+
+    /// <summary>A long down-trend — price below its 200-day SMA, so the regime filter blocks longs.</summary>
+    public static IReadOnlyList<Candle> RegimeDown(int bars = 260, decimal start = 200m, decimal fall = 0.4m, long volume = 2_000_000)
+    {
+        var closes = new List<decimal>(bars);
+        var price = start;
+        for (var i = 0; i < bars; i++) { closes.Add(price); price = Math.Max(1m, price - fall); }
+        return FromCloses(closes, volume: volume);
+    }
+
+    /// <summary>
+    /// A long up-trend with recurring short, sharp dips (8 up days, then 3 down days). Stays above its
+    /// 200-day SMA while repeatedly hitting short-term oversold — produces many mean-reversion entries
+    /// for the backtest.
+    /// </summary>
+    public static IReadOnlyList<Candle> RegimeUpWithDips(
+        int bars = 520, decimal start = 100m, int upRun = 8, decimal upStep = 1.2m, int downRun = 3, decimal downStep = 2m, long volume = 2_000_000)
+    {
+        var closes = new List<decimal>(bars);
+        var price = start;
+        var up = true;
+        var run = 0;
+        while (closes.Count < bars)
+        {
+            closes.Add(price);
+            price += up ? upStep : -downStep;
+            if (price < 5m) price = 5m;
+            if (++run >= (up ? upRun : downRun)) { up = !up; run = 0; }
+        }
+        return FromCloses(closes, volume: volume);
+    }
 }

@@ -4,53 +4,51 @@ namespace InvestAdvisor.Core.Swing;
 
 /// <summary>
 /// Turns one ticker's bars into a <see cref="SwingFeatures"/> reading and a concrete
-/// <see cref="TradeSetup"/> (entry zone, ATR stop, reward:risk target, position size). Pure and
-/// deterministic — the live scorer and the backtest both call it, so a setup generated today is
-/// computed identically to one replayed from history.
+/// <see cref="TradeSetup"/>. Strategy: regime-filtered mean reversion — long only when price is above
+/// its 200-day SMA (confirmed up-trend) and short-term oversold (low RSI(3)), targeting the bounce
+/// with a wide ATR stop. Pure and deterministic, so a setup generated live is computed identically to
+/// one replayed in the backtest.
 /// </summary>
 public static class SwingSignalBuilder
 {
-    /// <summary>RSI sweet spot for a long swing entry: strong but not yet exhausted.</summary>
-    private const decimal IdealRsi = 60m;
-
     /// <summary>
     /// Builds the feature reading + trade plan for <paramref name="input"/>, or null when there
-    /// aren't enough bars for the core indicators (ATR / EMAs). The setup's <c>AsOfUtc</c> is the
-    /// timestamp of the latest bar — the close the plan is anchored to.
+    /// aren't enough bars for the regime SMA / ATR. The setup's <c>AsOfUtc</c> is the latest bar.
     /// </summary>
     public static (SwingFeatures Features, TradeSetup Setup)? Build(SwingInput input, SwingParams p)
     {
         var candles = input.Candles;
-        if (candles.Count < p.EmaSlowPeriod + 1) return null;
+        if (candles.Count < p.RegimeSmaPeriod + 1) return null; // need a full 200-day regime window
 
         var closes = Indicators.Closes(candles);
         var atr = Indicators.Atr(candles, p.AtrPeriod);
         if (atr is not { } atrValue || atrValue <= 0m) return null; // no volatility estimate → no risk-bounded plan
 
         var latest = candles[^1];
+        var regimeSma = Indicators.Sma(closes, p.RegimeSmaPeriod);
+        var pullbackSma = Indicators.Sma(closes, p.PullbackSmaPeriod);
+        decimal? pullbackPct = pullbackSma is { } ps && ps > 0m ? (ps - latest.Close) / ps : null;
+
         var features = new SwingFeatures(
             Close: latest.Close,
+            RegimeSma: regimeSma,
             Rsi: Indicators.Rsi(closes, p.RsiPeriod),
-            EmaFast: Indicators.Ema(closes, p.EmaFastPeriod),
-            EmaSlow: Indicators.Ema(closes, p.EmaSlowPeriod),
-            BreakoutStrength: Indicators.BreakoutStrength(candles, p.BreakoutLookback),
+            PullbackPct: pullbackPct,
             RelativeVolume: Indicators.RelativeVolume(candles, p.VolumeLookback),
-            Momentum: Indicators.Return(candles, p.MomentumSessions),
-            Gap: Indicators.Gap(candles),
             Atr: atrValue,
             AverageDollarVolume: Indicators.AverageDollarVolume(candles, p.VolumeLookback));
 
         var entryRef = latest.Close;
-        // Tight, symmetric entry band around the close (±0.3%) so the zone's mid is the close itself —
-        // that keeps EntryReference, and therefore the realized reward:risk, consistent with the plan.
+        // Symmetric ±0.3% band so the zone's mid is the close — keeps EntryReference (and realized R)
+        // consistent with the plan.
         var entryLow = entryRef * 0.997m;
         var entryHigh = entryRef * 1.003m;
 
         var stop = entryRef - p.AtrStopMultiple * atrValue;
         if (stop <= 0m) stop = entryRef * 0.5m; // degenerate guard; keeps risk math finite
-        var riskPerShare = entryRef - stop;
-        var target = entryRef + p.RewardRiskRatio * riskPerShare;
+        var target = entryRef + p.TargetAtrMultiple * atrValue;
 
+        var riskPerShare = entryRef - stop;
         var stopDistancePct = entryRef == 0m ? 0m : riskPerShare / entryRef * 100m;
         var positionPct = stopDistancePct <= 0m
             ? 0m
@@ -64,35 +62,32 @@ public static class SwingSignalBuilder
             EntryHigh: Math.Round(entryHigh, 4),
             StopLoss: Math.Round(stop, 4),
             Target: Math.Round(target, 4),
-            RewardRiskRatio: p.RewardRiskRatio,
+            RewardRiskRatio: Math.Round(p.RewardRiskRatio, 2),
             HoldingDays: p.HoldingDays,
             PositionSizePct: Math.Round(positionPct, 2),
-            Rationale: Rationale(features));
+            Rationale: Rationale(features, p));
 
         return (features, setup);
     }
 
     /// <summary>
-    /// A long swing entry "qualifies" only when the trend, momentum and RSI line up and the name
-    /// isn't already over-extended. Non-qualifying names still get scored (for ranking context) but
-    /// are not surfaced as actionable setups.
+    /// A long entry qualifies only when the name is in a confirmed long-term up-trend (above the
+    /// 200-day SMA) <i>and</i> short-term oversold (RSI at/below the threshold) — i.e. a pullback to
+    /// buy, not strength to chase. Non-qualifying names still get scored, for ranking context.
     /// </summary>
-    public static bool Qualifies(SwingFeatures f) =>
-        f.TrendUp
-        && f.Rsi is >= 45m and < 75m              // momentum present, not exhausted
-        && (f.Momentum is > 0m || f.BreakoutStrength is > 0m); // moving up or breaking out
+    public static bool Qualifies(SwingFeatures f, SwingParams p) =>
+        f.AboveRegime
+        && f.Rsi is { } r && r <= p.OversoldEntry
+        && f.Atr is > 0m;
 
-    /// <summary>How close an RSI reading is to the long-entry sweet spot — higher is better.</summary>
-    public static decimal RsiQuality(decimal? rsi) => rsi is { } r ? -Math.Abs(r - IdealRsi) : decimal.MinValue;
-
-    private static string Rationale(SwingFeatures f)
+    private static string Rationale(SwingFeatures f, SwingParams p)
     {
         var parts = new List<string>();
-        if (f.TrendUp) parts.Add("9/21 EMA up-trend");
-        if (f.BreakoutStrength is > 0m) parts.Add($"breakout +{f.BreakoutStrength.Value * 100m:0.0}% over 20-day high");
-        if (f.Momentum is { } m) parts.Add($"{m * 100m:+0.0;-0.0}% 5-day momentum");
-        if (f.Rsi is { } r) parts.Add($"RSI {r:0}");
-        if (f.RelativeVolume is { } rv and > 1.2m) parts.Add($"{rv:0.0}× volume");
-        return parts.Count == 0 ? "No clear edge" : string.Join(", ", parts) + ".";
+        if (f.RegimeDistancePct is { } d) parts.Add($"{d * 100m:0.0}% above 200-day MA (up-trend)");
+        if (f.Rsi is { } r) parts.Add($"RSI({p.RsiPeriod}) {r:0} — oversold pullback");
+        if (f.PullbackPct is { } pb and > 0m) parts.Add($"{pb * 100m:0.0}% below its {p.PullbackSmaPeriod}-day average");
+        if (f.RelativeVolume is { } rv and > 1.3m) parts.Add($"{rv:0.0}× volume");
+        return (parts.Count == 0 ? "No clear edge" : string.Join(", ", parts))
+            + $". Buy the bounce: target +{p.TargetAtrMultiple:0.0}×ATR, stop −{p.AtrStopMultiple:0.0}×ATR, hold ≤{p.HoldingDays} sessions.";
     }
 }

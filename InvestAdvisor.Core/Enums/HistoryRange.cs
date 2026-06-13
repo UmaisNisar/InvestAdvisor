@@ -11,4 +11,6 @@ public enum HistoryRange
     ThreeMonths,
     SixMonths,
     OneYear,
+    /// <summary>Two years of daily bars — enough for a 200-day regime SMA plus a usable test window.</summary>
+    TwoYears,
 }
