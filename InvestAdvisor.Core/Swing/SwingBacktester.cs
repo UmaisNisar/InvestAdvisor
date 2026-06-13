@@ -21,10 +21,14 @@ public sealed record SwingBacktestSummary(
         new(0, 0, 0, 0m, 0m, 0m, 0m, 0m, 0m, null, null);
 
     /// <summary>
-    /// The validation gate: a positive edge needs a meaningful sample <i>and</i> positive expectancy.
-    /// Below this, live setups must be labelled "unvalidated — paper only".
+    /// The validation gate. A real edge needs a meaningful sample AND results clear of break-even
+    /// noise — barely-positive expectancy with a profit factor near 1.0 (e.g. +0.008R, PF 1.02) is
+    /// statistically nothing and must NOT light up "validated". Below this, setups stay
+    /// "paper only — not yet validated". Thresholds are deliberately conservative: this gate exists
+    /// to keep an honest strategy honest, not to flatter it.
     /// </summary>
-    public bool HasEdge(int minTrades = 30) => TotalTrades >= minTrades && ExpectancyR > 0m;
+    public bool HasEdge(int minTrades = 50, decimal minExpectancyR = 0.05m, decimal minProfitFactor = 1.10m) =>
+        TotalTrades >= minTrades && ExpectancyR >= minExpectancyR && ProfitFactor >= minProfitFactor;
 }
 
 /// <summary>
