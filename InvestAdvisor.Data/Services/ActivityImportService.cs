@@ -75,7 +75,10 @@ public sealed class ActivityImportService(
             var isBuy = type.Contains("buy");
             if (!isSell && !isBuy) continue; // ignore dividends, deposits, transfers, etc.
 
-            if (!TryDecimal(Get(row, qtyIdx), out var qty) || qty <= 0m) continue;
+            // Wealthsimple signs quantity by direction (sells are negative); magnitude is what we record.
+            if (!TryDecimal(Get(row, qtyIdx), out var qty)) continue;
+            qty = Math.Abs(qty);
+            if (qty == 0m) continue;
             TryDecimal(Get(row, priceIdx), out var price);
             if (!TryDecimal(Get(row, amountIdx), out var amount)) amount = 0m;
             amount = Math.Abs(amount);

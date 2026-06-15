@@ -21,8 +21,8 @@ public class ActivityImportServiceTests
         transaction_date,settlement_date,account_id,account_type,activity_type,activity_sub_type,direction,symbol,name,currency,quantity,unit_price,commission,net_cash_amount
         2026-06-08,2026-06-08,HQ,TFSA,Trade,BUY,LONG,MU,Micron CDR (CAD Hedged),CAD,12.0452,41.51,0,-500
         2026-06-08,2026-06-08,HQ,TFSA,Trade,BUY,LONG,ELMT,Elmet Group Company (The),CAD,20,27.67512321,0,-553.5
-        2026-06-12,2026-06-12,HQ,TFSA,Trade,SELL,LONG,MU,Micron CDR (CAD Hedged),CAD,12.0452,43.78,0,527.34
-        2026-06-12,2026-06-12,HQ,TFSA,Trade,SELL,LONG,ELMT,Elmet Group Company (The),CAD,20,28.799,0,575.98
+        2026-06-12,2026-06-12,HQ,TFSA,Trade,SELL,LONG,MU,Micron CDR (CAD Hedged),CAD,-12.0452,43.78,0,527.34
+        2026-06-12,2026-06-12,HQ,TFSA,Trade,SELL,LONG,ELMT,Elmet Group Company (The),CAD,-20,28.799,0,575.98
         """;
 
     // The user's actual export to date: buys, EFT deposits and interest — but no sells yet.
@@ -112,7 +112,7 @@ public class ActivityImportServiceTests
             transaction_date,settlement_date,account_id,account_type,activity_type,activity_sub_type,direction,symbol,name,currency,quantity,unit_price,commission,net_cash_amount
             2026-06-01,2026-06-01,HQ,Personal,Trade,BUY,LONG,FOO,Foo Corp,USD,10,10,0,-100
             2026-06-02,2026-06-02,HQ,Personal,Trade,BUY,LONG,FOO,Foo Corp,USD,10,20,0,-200
-            2026-06-12,2026-06-12,HQ,Personal,Trade,SELL,LONG,FOO,Foo Corp,USD,10,25,0,250
+            2026-06-12,2026-06-12,HQ,Personal,Trade,SELL,LONG,FOO,Foo Corp,USD,-10,25,0,250
             """;
         var result = await sut.ImportActivityCsvAsync(Tenant, csv);
 
