@@ -24,5 +24,12 @@ public class Stock
     /// </summary>
     public bool IsSwingUniverse { get; set; }
 
+    /// <summary>
+    /// Member of the high-volatility momentum universe (high-beta US + Canadian names volatile enough
+    /// for a ~10% breakout move in a few sessions). Distinct from the swing and screener universes; a
+    /// name can belong to several. The momentum scanner only considers rows with this set.
+    /// </summary>
+    public bool IsMomentumUniverse { get; set; }
+
     public DateTime AddedAtUtc { get; set; } = DateTime.UtcNow;
 }

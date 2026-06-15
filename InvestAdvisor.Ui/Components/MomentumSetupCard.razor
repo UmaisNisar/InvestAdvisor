@@ -1,0 +1,76 @@
+@* One high-vol momentum setup: the breakout plan with its risk bounds. Never a bare "buy" —
+   entry, stop, target and size are always shown together so the worst case is visible before entry. *@
+@using InvestAdvisor.Core.Abstractions
+@using InvestAdvisor.Core.Momentum
+
+<MudPaper Class="pa-3 mb-2" Elevation="1" Outlined="true">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600">
+            <code>@Setup.Ticker</code>
+            <MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">&nbsp;@Setup.Name</MudText>
+        </MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            @if (Setup.Kind != MomentumSetupKind.None)
+            {
+                <MudTooltip Text="@KindTooltip(Setup.Kind)">
+                    <MudChip T="string" Size="Size.Small" Variant="@(Setup.Kind == MomentumSetupKind.SqueezeBreakout ? Variant.Filled : Variant.Outlined)" Color="Color.Default">@KindLabel(Setup.Kind)</MudChip>
+                </MudTooltip>
+            }
+            <MudTooltip Text="Relative momentum score across the universe (breakout/squeeze/volume/volatility factors). Higher = stronger setup, not a profit guarantee.">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">@Setup.CompositeScore.ToString("0")</MudChip>
+            </MudTooltip>
+        </MudStack>
+    </MudStack>
+
+    <MudGrid Class="mt-1" Spacing="2">
+        <MudItem xs="6" sm="3">
+            <MudText Typo="Typo.caption" Color="Color.Surface">Entry</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600">@Money(Setup.EntryLow)–@Money(Setup.EntryHigh)</MudText>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudText Typo="Typo.caption" Color="Color.Surface">Stop</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-error)">@Money(Setup.StopLoss)</MudText>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudTooltip Text="@TargetTip">
+                <MudText Typo="Typo.caption" Color="Color.Surface">Target (+@Setup.TargetGainPct.ToString("0.0")%)</MudText>
+                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-success)">@Money(Setup.Target)</MudText>
+            </MudTooltip>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudTooltip Text="Suggested size from the per-trade risk budget and stop distance. Caps at the risk level's max.">
+                <MudText Typo="Typo.caption" Color="Color.Surface">Size</MudText>
+                <MudText Typo="Typo.body2" Style="font-weight:600">@Setup.PositionSizePct.ToString("0.0")%</MudText>
+            </MudTooltip>
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-1">
+        @Setup.Rationale Hold ~@Setup.HoldingDays sessions.
+    </MudText>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public MomentumSetupView Setup { get; set; } = default!;
+
+    private static string Money(decimal v) => v.ToString("0.00");
+
+    private string TargetTip =>
+        $"Reward:risk {Setup.RewardRiskRatio:0.0}:1 — projected gain to target ~{Setup.TargetGainPct:0.0}%.";
+
+    // Conviction tag. A squeeze breakout (tight base + volume) is the higher-conviction "A" setup
+    // (filled chip); a momentum continuation with no tight base is a lower-conviction "B" setup.
+    private static string KindLabel(MomentumSetupKind k) => k switch
+    {
+        MomentumSetupKind.SqueezeBreakout => "Squeeze · A",
+        MomentumSetupKind.Continuation => "Continuation · B",
+        _ => "",
+    };
+
+    private static string KindTooltip(MomentumSetupKind k) => k switch
+    {
+        MomentumSetupKind.SqueezeBreakout => "Break of a tight consolidation on a volume surge — the higher-conviction breakout setup.",
+        MomentumSetupKind.Continuation => "Strong trailing momentum carrying through a breakout, no tight base required — a lower-conviction setup, only surfaced at Medium/High risk.",
+        _ => "",
+    };
+}

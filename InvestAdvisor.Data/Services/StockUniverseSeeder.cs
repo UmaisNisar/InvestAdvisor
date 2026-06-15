@@ -35,7 +35,43 @@ public sealed class StockUniverseSeeder(
         if (added > 0) await db.SaveChangesAsync(ct);
 
         added += await SeedSwingAsync(db, now, ct);
+        added += await SeedMomentumAsync(db, now, ct);
         return added;
+    }
+
+    /// <summary>
+    /// Marks/adds the high-volatility momentum universe: high-beta US names + leveraged ETFs and
+    /// volatile-but-liquid Canadian (.TO) names — the pool where a ~10% move in a few sessions is
+    /// plausible. Runs once (when no momentum member exists yet) so the user can curate it from the UI
+    /// afterwards. Existing rows are flipped in place; new names are added. Mirrors the swing pass.
+    /// </summary>
+    private async Task<int> SeedMomentumAsync(InvestAdvisorDbContext db, DateTime now, CancellationToken ct)
+    {
+        if (await db.Stocks.AnyAsync(s => s.IsMomentumUniverse, ct)) return 0;
+
+        var existing = await db.Stocks.ToListAsync(ct); // tracked, so flag flips persist
+        var byTicker = existing.ToDictionary(s => s.Ticker, StringComparer.OrdinalIgnoreCase);
+
+        var n = 0;
+        foreach (var (ticker, name, sector, cls) in MomentumNames)
+        {
+            if (byTicker.TryGetValue(ticker, out var st))
+            {
+                if (!st.IsMomentumUniverse) { st.IsMomentumUniverse = true; n++; }
+            }
+            else
+            {
+                db.Stocks.Add(new Stock
+                {
+                    Ticker = ticker, Name = name, Sector = sector,
+                    AssetClass = cls, IsActive = true, IsMomentumUniverse = true, AddedAtUtc = now,
+                });
+                n++;
+            }
+        }
+
+        if (n > 0) { await db.SaveChangesAsync(ct); logger?.LogInformation("Seeded {Count} momentum-universe members.", n); }
+        return n;
     }
 
     /// <summary>
@@ -241,6 +277,57 @@ public sealed class StockUniverseSeeder(
         ("ARX.TO", "ARC Resources", "Energy"), ("FNV.TO", "Franco-Nevada", "Materials"),
         ("WPM.TO", "Wheaton Precious Metals", "Materials"), ("K.TO", "Kinross Gold", "Materials"),
         ("FM.TO", "First Quantum Minerals", "Materials"), ("TECK.B.TO", "Teck Resources", "Materials"),
+    ];
+
+    /// <summary>
+    /// Momentum universe: high-beta names volatile enough that a ~10% breakout move in 2–3 sessions is
+    /// plausible, but still liquid enough to fill a small position. US high-beta single names +
+    /// leveraged sector ETFs, plus volatile-but-liquid Canadian (.TO) names (miners, crypto proxies,
+    /// high-beta tech). Deliberately excludes thin TSX-V venture tickers — the liquidity gate would
+    /// drop them anyway. Names already seeded elsewhere are flipped in place; the rest are added.
+    /// </summary>
+    private static readonly (string Ticker, string Name, string Sector, AssetClass Class)[] MomentumNames =
+    [
+        // --- US high-beta single names ---
+        ("TSLA", "Tesla Inc.", "Consumer", AssetClass.Equity), ("NVDA", "NVIDIA Corp.", "Technology", AssetClass.Equity),
+        ("AMD", "Advanced Micro Devices", "Technology", AssetClass.Equity), ("COIN", "Coinbase Global", "Financials", AssetClass.Equity),
+        ("MSTR", "MicroStrategy", "Technology", AssetClass.Equity), ("SMCI", "Super Micro Computer", "Technology", AssetClass.Equity),
+        ("PLTR", "Palantir Technologies", "Technology", AssetClass.Equity), ("MARA", "Marathon Digital", "Financials", AssetClass.Equity),
+        ("RIOT", "Riot Platforms", "Financials", AssetClass.Equity), ("CLSK", "CleanSpark", "Financials", AssetClass.Equity),
+        ("SOFI", "SoFi Technologies", "Financials", AssetClass.Equity), ("HOOD", "Robinhood Markets", "Financials", AssetClass.Equity),
+        ("AFRM", "Affirm Holdings", "Financials", AssetClass.Equity), ("UPST", "Upstart Holdings", "Financials", AssetClass.Equity),
+        ("RBLX", "Roblox", "Communication", AssetClass.Equity), ("NET", "Cloudflare", "Technology", AssetClass.Equity),
+        ("SNOW", "Snowflake", "Technology", AssetClass.Equity), ("CRWD", "CrowdStrike", "Technology", AssetClass.Equity),
+        ("DDOG", "Datadog", "Technology", AssetClass.Equity), ("DKNG", "DraftKings", "Consumer", AssetClass.Equity),
+        ("CVNA", "Carvana", "Consumer", AssetClass.Equity), ("ARM", "Arm Holdings", "Technology", AssetClass.Equity),
+        ("ENPH", "Enphase Energy", "Technology", AssetClass.Equity), ("FSLR", "First Solar", "Technology", AssetClass.Equity),
+        ("ROKU", "Roku Inc.", "Communication", AssetClass.Equity), ("DASH", "DoorDash", "Consumer", AssetClass.Equity),
+        ("ABNB", "Airbnb", "Consumer", AssetClass.Equity), ("RIVN", "Rivian Automotive", "Consumer", AssetClass.Equity),
+        ("LCID", "Lucid Group", "Consumer", AssetClass.Equity), ("NIO", "NIO Inc.", "Consumer", AssetClass.Equity),
+        ("MRVL", "Marvell Technology", "Technology", AssetClass.Equity), ("MU", "Micron Technology", "Technology", AssetClass.Equity),
+        ("ON", "ON Semiconductor", "Technology", AssetClass.Equity), ("SHOP", "Shopify (US)", "Technology", AssetClass.Equity),
+        // --- Leveraged / high-vol US ETFs ---
+        ("TQQQ", "ProShares UltraPro QQQ (3x)", "Leveraged", AssetClass.Etf),
+        ("SOXL", "Direxion Semiconductor Bull 3x", "Leveraged", AssetClass.Etf),
+        ("SPXL", "Direxion S&P 500 Bull 3x", "Leveraged", AssetClass.Etf),
+        ("TNA", "Direxion Small Cap Bull 3x", "Leveraged", AssetClass.Etf),
+        ("LABU", "Direxion Biotech Bull 3x", "Leveraged", AssetClass.Etf),
+        ("FAS", "Direxion Financial Bull 3x", "Leveraged", AssetClass.Etf),
+        ("ARKK", "ARK Innovation ETF", "Innovation", AssetClass.Etf),
+        // --- Volatile, liquid Canadian (.TO) names ---
+        ("SHOP.TO", "Shopify Inc.", "Technology", AssetClass.Equity), ("CLS.TO", "Celestica Inc.", "Technology", AssetClass.Equity),
+        ("BB.TO", "BlackBerry Ltd.", "Technology", AssetClass.Equity), ("LSPD.TO", "Lightspeed Commerce", "Technology", AssetClass.Equity),
+        ("DND.TO", "Dye & Durham", "Technology", AssetClass.Equity), ("AC.TO", "Air Canada", "Industrials", AssetClass.Equity),
+        ("HUT.TO", "Hut 8 Corp.", "Financials", AssetClass.Equity), ("BITF.TO", "Bitfarms Ltd.", "Financials", AssetClass.Equity),
+        ("GLXY.TO", "Galaxy Digital", "Financials", AssetClass.Equity), ("CCO.TO", "Cameco Corp.", "Energy", AssetClass.Equity),
+        ("NXE.TO", "NexGen Energy", "Energy", AssetClass.Equity), ("DML.TO", "Denison Mines", "Energy", AssetClass.Equity),
+        ("BTE.TO", "Baytex Energy", "Energy", AssetClass.Equity), ("VRN.TO", "Veren Inc.", "Energy", AssetClass.Equity),
+        ("ATH.TO", "Athabasca Oil", "Energy", AssetClass.Equity), ("BLDP.TO", "Ballard Power Systems", "Technology", AssetClass.Equity),
+        ("WEED.TO", "Canopy Growth", "Healthcare", AssetClass.Equity), ("ACB.TO", "Aurora Cannabis", "Healthcare", AssetClass.Equity),
+        ("IVN.TO", "Ivanhoe Mines", "Materials", AssetClass.Equity), ("HBM.TO", "Hudbay Minerals", "Materials", AssetClass.Equity),
+        ("ERO.TO", "Ero Copper", "Materials", AssetClass.Equity), ("FM.TO", "First Quantum Minerals", "Materials", AssetClass.Equity),
+        ("TECK.B.TO", "Teck Resources", "Materials", AssetClass.Equity), ("K.TO", "Kinross Gold", "Materials", AssetClass.Equity),
+        ("LUN.TO", "Lundin Mining", "Materials", AssetClass.Equity),
     ];
 
     private static readonly (string Symbol, string Name, string CoinGeckoId)[] Cryptos =

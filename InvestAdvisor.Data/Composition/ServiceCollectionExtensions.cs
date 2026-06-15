@@ -183,12 +183,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISwingScoringService, SwingScoringService>();
         services.AddScoped<ISwingService, SwingService>();
 
+        // Momentum (high-volatility breakout) module: pure scorer + orchestration.
+        services.AddSingleton<IMomentumScoringService, InvestAdvisor.Core.Momentum.MomentumScoringService>();
+        services.AddScoped<IMomentumService, MomentumService>();
+
         services.AddScoped<INotificationChannel, EmailNotificationChannel>();
         services.AddScoped<INotificationChannel, InAppNotificationChannel>();
 
         services.AddScoped<IPortfolioQueries, PortfolioQueries>();
         services.AddScoped<IScreenerQueries, ScreenerQueries>();
         services.AddScoped<ISwingQueries, SwingQueries>();
+        services.AddScoped<IMomentumQueries, MomentumQueries>();
         services.AddScoped<IHoldingsService, HoldingsService>();
         services.AddScoped<IHoldingsImportService, HoldingsImportService>();
         services.AddScoped<IActivityImportService, ActivityImportService>();
