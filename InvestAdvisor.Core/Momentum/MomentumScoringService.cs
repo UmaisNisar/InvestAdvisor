@@ -40,8 +40,9 @@ public sealed class MomentumScoringService : IMomentumScoringService
 
         // Breakout: a stronger break of the prior range ranks higher.
         var rBreakout = Rank(rows, r => r.Features.BreakoutStrength, higherBetter: true);
-        // Squeeze: a tighter base (smaller range) is a better coil, so rank it lower-better.
-        var rSqueeze = Rank(rows, r => r.Features.BaseRangePct, higherBetter: false);
+        // Squeeze: a tighter base (fewer ATRs of range) is a better coil, so rank it lower-better.
+        // ATR-relative so high-vol names aren't unfairly penalised for their natural width.
+        var rSqueeze = Rank(rows, r => r.Features.BaseRangeAtr, higherBetter: false);
         var rVolume = Rank(rows, r => r.Features.RelativeVolume, higherBetter: true);
         var rVolatility = Rank(rows, r => r.Features.AtrPercent, higherBetter: true);
         var rMomentum = Rank(rows, r => r.Features.MomentumReturn, higherBetter: true);

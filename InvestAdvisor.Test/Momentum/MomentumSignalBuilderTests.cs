@@ -97,6 +97,28 @@ public class MomentumSignalBuilderTests
     }
 
     [Fact]
+    public void Squeeze_base_tightness_is_judged_in_ATR_units_not_absolute_percent()
+    {
+        var p = MomentumParams.For(MomentumRiskLevel.High); // MaxBaseRangeAtr 4.5, MinAtrPercent 0.04, MinRelVol 1.3
+
+        // A high-volatility name (ATR 6% of price) whose base spans 18% of price — wide in absolute
+        // terms, but only 3×ATR, i.e. genuinely coiled *for this stock*. Must qualify.
+        var tight = new MomentumFeatures(
+            Close: 100m, TrendSma: 90m, Atr: 6m, AtrPercent: 0.06m,
+            BreakoutStrength: 0.02m, BaseRangePct: 0.18m, RelativeVolume: 1.5m,
+            Rsi: 60m, MomentumReturn: 0.10m, AverageDollarVolume: 50_000_000m);
+        tight.BaseRangeAtr.Should().BeApproximately(3.0m, 0.01m);
+        MomentumSignalBuilder.IsSqueezeBreakout(tight, p).Should().BeTrue();
+        MomentumSignalBuilder.Qualifies(tight, p).Should().BeTrue();
+
+        // A 30%-of-price base on a 5%-ATR name = 6×ATR — loose for its own volatility. Must NOT qualify
+        // on the squeeze trigger even though it's still high-vol and breaking out.
+        var loose = tight with { Atr = 5m, AtrPercent = 0.05m, BaseRangePct = 0.30m, MomentumReturn = 0m };
+        loose.BaseRangeAtr.Should().BeApproximately(6.0m, 0.01m);
+        MomentumSignalBuilder.IsSqueezeBreakout(loose, p).Should().BeFalse();
+    }
+
+    [Fact]
     public void High_risk_preset_targets_roughly_a_double_digit_move()
     {
         var p = MomentumParams.For(MomentumRiskLevel.High);
