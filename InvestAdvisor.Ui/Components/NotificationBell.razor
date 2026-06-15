@@ -10,6 +10,7 @@
              IconColor="Color.Inherit" Size="Size.Small" AriaLabel="Notifications"
              AnchorOrigin="@(OpenUpward ? Origin.TopRight : Origin.BottomRight)"
              TransformOrigin="@(OpenUpward ? Origin.BottomLeft : Origin.TopRight)"
+             PopoverClass="@($"ia-notif-pop {(OpenUpward ? "ia-notif-up" : "ia-notif-down")}")"
              Dense="true" ListClass="ia-notif-menu">
         <div class="ia-notif-head">
             <MudText Typo="Typo.subtitle2">Notifications</MudText>
