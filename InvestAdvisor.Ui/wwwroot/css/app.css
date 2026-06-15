@@ -534,6 +534,30 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
     max-height: 70vh;
     overflow-y: auto;
 }
+
+/* iOS-style open: the card scales + fades from the bell corner with a slight spring overshoot.
+   transform-origin follows the anchor — the rail-footer bell opens upward (origin bottom), the
+   mobile bar opens downward (origin top). We also give the MudBlazor popover wrapper a brief
+   opacity fade so the close isn't a hard cut (it parks off-screen, so close stays quick). */
+.ia-notif-pop {
+    transition: opacity .14s ease;
+}
+.ia-notif-pop .ia-notif-menu {
+    opacity: 0;
+    transform: scale(.9);
+    transform-origin: top right;
+    transition: opacity .18s ease, transform .26s cubic-bezier(.2, .85, .25, 1.06);
+}
+.ia-notif-pop.ia-notif-up .ia-notif-menu {
+    transform-origin: bottom left;
+}
+.ia-notif-pop.mud-popover-open .ia-notif-menu {
+    opacity: 1;
+    transform: scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .ia-notif-pop .ia-notif-menu { transition: none; transform: none; opacity: 1; }
+}
 .ia-notif-head {
     display: flex;
     align-items: center;
