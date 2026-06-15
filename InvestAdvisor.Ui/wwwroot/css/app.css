@@ -528,19 +528,33 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 }
 
 /* ---------- Notification bell dropdown ---------- */
-/* Custom popover (not MudMenu): fixed to the viewport so it escapes the rail's overflow clipping
-   without JS (no transformed ancestors on the chrome). The card scales + fades from the bell
-   corner with a slight spring overshoot on open, and reverses on close — the component keeps it
-   mounted until this exit transition finishes (see ExitMs in NotificationBell.razor). */
+/* Rendered via MudPopover (content lives in the root popover provider, so it escapes the rail's
+   glass containing block and clipping). The wrapper is stripped of MudBlazor's default popover
+   chrome so our own .ia-pop card supplies the look — and the card scales + fades from the bell
+   corner on open and reverses on close (the component keeps it mounted until the exit transition
+   finishes; see ExitMs in NotificationBell.razor). */
+/* PopoverClass lands on the provider holder, not the positioned .mud-popover, so target the
+   wrapper that actually holds our card and strip MudBlazor's glass surface from it. */
+.mud-popover:has(> .ia-pop) {
+    background: transparent !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible;
+    /* Sit above the click-away overlay (~1201) so the card stays interactive, not just by paint order. */
+    z-index: 1300 !important;
+}
 .ia-pop-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 1300;
+    z-index: 0;
     background: transparent;
 }
 .ia-pop {
-    position: fixed;
-    z-index: 1301;
+    position: relative;
+    z-index: 1;           /* above the backdrop within the popover's stacking context */
     width: 340px;
     max-width: 92vw;
     max-height: 70vh;
@@ -554,8 +568,8 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
     transform: scale(.9);
     transition: opacity .18s ease, transform .24s cubic-bezier(.2, .85, .25, 1.06);
 }
-.ia-pop-up   { left: 12px;  bottom: 60px; transform-origin: bottom left; }
-.ia-pop-down { right: 12px; top: 60px;    transform-origin: top right; }
+.ia-pop-up   { transform-origin: bottom left; }
+.ia-pop-down { transform-origin: top right; }
 .ia-pop-open { opacity: 1; transform: scale(1); }
 @media (prefers-reduced-motion: reduce) {
     .ia-pop { transition: opacity .12s ease; transform: none; }

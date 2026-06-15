@@ -5,20 +5,26 @@
 @inject NavigationManager Nav
 @implements IDisposable
 
-@* Custom popover (not MudMenu) so we own the unmount: the card plays an exit animation and is
-   only removed from the DOM after it finishes — giving a real iOS-style open AND close. It uses
-   position:fixed (viewport-relative; no transformed ancestors on the chrome) so it escapes the
-   rail's overflow clipping with no JS, which keeps it working on both the Server and MAUI hosts. *@
+@* The bell's chrome (rail + app bar) uses backdrop-filter for the glass look, which establishes a
+   containing block — so a position:fixed popover anchored in the rail gets trapped and clipped to
+   it. We therefore render the panel through MudPopover, whose content lives in the root popover
+   provider (outside the glass), exactly like a MudMenu. But we drive Open ourselves so the card can
+   play an exit animation before it unmounts: a real iOS-style open AND close. A transparent
+   MudOverlay (also root-level) handles click-away. *@
 <MudBadge Content="_unread" Visible="_unread > 0" Color="Color.Error" Overlap="true" Bordered="true" Class="ia-notif-badge">
     <MudIconButton Icon="@(_unread > 0 ? Icons.Material.Filled.Notifications : Icons.Material.Outlined.Notifications)"
                    Color="Color.Inherit" Size="Size.Small" aria-label="Notifications" Title="Notifications" OnClick="Toggle" />
 </MudBadge>
 
-@if (_rendered)
-{
+<MudPopover Open="_popOpen" Paper="false" Fixed="false"
+            AnchorOrigin="@(OpenUpward ? Origin.TopRight : Origin.BottomRight)"
+            TransformOrigin="@(OpenUpward ? Origin.BottomLeft : Origin.TopRight)"
+            PopoverClass="ia-notif-popover">
+    @* Click-away backdrop. It lives inside the popover content (rendered in the root provider, so
+       no glass ancestor) — a position:fixed full-screen catcher behind the card, which sidesteps
+       MudOverlay's own z-index. *@
     <div class="ia-pop-backdrop" @onclick="Close"></div>
-    <div class="ia-pop @(OpenUpward ? "ia-pop-up" : "ia-pop-down") @(_visible ? "ia-pop-open" : null)"
-         @onclick:stopPropagation="true">
+    <div class="ia-pop @(OpenUpward ? "ia-pop-up" : "ia-pop-down") @(_visible ? "ia-pop-open" : null)">
         <div class="ia-notif-head">
             <MudText Typo="Typo.subtitle2">Notifications</MudText>
             @if (_items.Any(n => n.ReadUtc is null))
@@ -51,7 +57,7 @@
             }
         }
     </div>
-}
+</MudPopover>
 
 @code {
     /// <summary>When the bell sits at the bottom of the screen (desktop rail footer), open the menu upward.</summary>
@@ -64,13 +70,12 @@
     private int _unread;
     private IReadOnlyList<Notification> _items = Array.Empty<Notification>();
 
-    // Three-state open lifecycle so the close can animate before the node leaves the DOM:
-    //   _rendered — the popover is in the DOM
-    //   _visible  — the .ia-pop-open class is applied (drives the enter/exit transition)
-    //   _open     — the user's intent (guards against an in-flight close racing a re-open)
-    private bool _rendered;
+    // Open lifecycle. _popOpen mounts/positions the MudPopover (kept true through the exit animation);
+    // _visible toggles the card's .ia-pop-open class (drives the enter/exit transition); _wantOpen is
+    // the user's intent, so an in-flight close can tell whether it was re-opened mid-animation.
+    private bool _popOpen;
     private bool _visible;
-    private bool _open;
+    private bool _wantOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -83,23 +88,23 @@
         catch { /* no authenticated user (shouldn't happen behind Cloudflare) */ }
     }
 
-    // Mount the card closed, then flip to open on the next frame so the browser has a start frame
-    // to transition from (mounting straight into the open state would skip the animation).
+    // Mount the card closed, then flip to open on the next frame so the browser has a start frame to
+    // transition from (mounting straight into the open state would skip the enter animation).
     protected override void OnAfterRender(bool firstRender)
     {
-        if (_open && _rendered && !_visible)
+        if (_wantOpen && _popOpen && !_visible)
         {
             _visible = true;
             StateHasChanged();
         }
     }
 
-    private Task Toggle() => _open ? Close() : Open();
+    private Task Toggle() => _wantOpen ? Close() : Open();
 
     private async Task Open()
     {
-        _open = true;
-        _rendered = true;
+        _wantOpen = true;
+        _popOpen = true;
         _visible = false;
         await Refresh();
         StateHasChanged();
@@ -107,14 +112,14 @@
 
     private async Task Close()
     {
-        if (!_open) return;
-        _open = false;
-        _visible = false;       // removes .ia-pop-open → exit transition plays
+        if (!_wantOpen) return;
+        _wantOpen = false;
+        _visible = false;       // removes .ia-pop-open → exit transition plays (popover still mounted)
         StateHasChanged();
         await Task.Delay(ExitMs);
-        if (!_open)             // not re-opened mid-animation
+        if (!_wantOpen)         // not re-opened mid-animation
         {
-            _rendered = false;  // now safe to unmount
+            _popOpen = false;   // now unmount the popover + overlay
             StateHasChanged();
         }
     }
