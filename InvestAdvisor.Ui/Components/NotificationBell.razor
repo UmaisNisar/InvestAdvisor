@@ -5,13 +5,20 @@
 @inject NavigationManager Nav
 @implements IDisposable
 
+@* Custom popover (not MudMenu) so we own the unmount: the card plays an exit animation and is
+   only removed from the DOM after it finishes — giving a real iOS-style open AND close. It uses
+   position:fixed (viewport-relative; no transformed ancestors on the chrome) so it escapes the
+   rail's overflow clipping with no JS, which keeps it working on both the Server and MAUI hosts. *@
 <MudBadge Content="_unread" Visible="_unread > 0" Color="Color.Error" Overlap="true" Bordered="true" Class="ia-notif-badge">
-    <MudMenu Icon="@(_unread > 0 ? Icons.Material.Filled.Notifications : Icons.Material.Outlined.Notifications)"
-             IconColor="Color.Inherit" Size="Size.Small" AriaLabel="Notifications"
-             AnchorOrigin="@(OpenUpward ? Origin.TopRight : Origin.BottomRight)"
-             TransformOrigin="@(OpenUpward ? Origin.BottomLeft : Origin.TopRight)"
-             PopoverClass="@($"ia-notif-pop {(OpenUpward ? "ia-notif-up" : "ia-notif-down")}")"
-             Dense="true" ListClass="ia-notif-menu">
+    <MudIconButton Icon="@(_unread > 0 ? Icons.Material.Filled.Notifications : Icons.Material.Outlined.Notifications)"
+                   Color="Color.Inherit" Size="Size.Small" aria-label="Notifications" Title="Notifications" OnClick="Toggle" />
+</MudBadge>
+
+@if (_rendered)
+{
+    <div class="ia-pop-backdrop" @onclick="Close"></div>
+    <div class="ia-pop @(OpenUpward ? "ia-pop-up" : "ia-pop-down") @(_visible ? "ia-pop-open" : null)"
+         @onclick:stopPropagation="true">
         <div class="ia-notif-head">
             <MudText Typo="Typo.subtitle2">Notifications</MudText>
             @if (_items.Any(n => n.ReadUtc is null))
@@ -31,7 +38,7 @@
         {
             @foreach (var n in _items)
             {
-                <MudMenuItem OnClick="@(() => OnItemClick(n))" Class="@(n.ReadUtc is null ? "ia-notif-item ia-notif-unread" : "ia-notif-item")">
+                <div class="@(n.ReadUtc is null ? "ia-notif-item ia-notif-unread" : "ia-notif-item")" @onclick="@(() => OnItemClick(n))">
                     <div class="ia-notif-row">
                         <MudIcon Icon="@IconFor(n.Severity)" Color="@ColorFor(n.Severity)" Size="Size.Small" Class="ia-notif-ic" />
                         <div class="ia-notif-text">
@@ -40,19 +47,30 @@
                             <MudText Typo="Typo.caption" Color="Color.Default">@Ago(n.CreatedUtc)</MudText>
                         </div>
                     </div>
-                </MudMenuItem>
+                </div>
             }
         }
-    </MudMenu>
-</MudBadge>
+    </div>
+}
 
 @code {
     /// <summary>When the bell sits at the bottom of the screen (desktop rail footer), open the menu upward.</summary>
     [Parameter] public bool OpenUpward { get; set; }
 
+    // Keep in sync with the CSS exit transition duration below.
+    private const int ExitMs = 200;
+
     private int _tenantId = -1;
     private int _unread;
     private IReadOnlyList<Notification> _items = Array.Empty<Notification>();
+
+    // Three-state open lifecycle so the close can animate before the node leaves the DOM:
+    //   _rendered — the popover is in the DOM
+    //   _visible  — the .ia-pop-open class is applied (drives the enter/exit transition)
+    //   _open     — the user's intent (guards against an in-flight close racing a re-open)
+    private bool _rendered;
+    private bool _visible;
+    private bool _open;
 
     protected override async Task OnInitializedAsync()
     {
@@ -63,6 +81,42 @@
             await Refresh();
         }
         catch { /* no authenticated user (shouldn't happen behind Cloudflare) */ }
+    }
+
+    // Mount the card closed, then flip to open on the next frame so the browser has a start frame
+    // to transition from (mounting straight into the open state would skip the animation).
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_open && _rendered && !_visible)
+        {
+            _visible = true;
+            StateHasChanged();
+        }
+    }
+
+    private Task Toggle() => _open ? Close() : Open();
+
+    private async Task Open()
+    {
+        _open = true;
+        _rendered = true;
+        _visible = false;
+        await Refresh();
+        StateHasChanged();
+    }
+
+    private async Task Close()
+    {
+        if (!_open) return;
+        _open = false;
+        _visible = false;       // removes .ia-pop-open → exit transition plays
+        StateHasChanged();
+        await Task.Delay(ExitMs);
+        if (!_open)             // not re-opened mid-animation
+        {
+            _rendered = false;  // now safe to unmount
+            StateHasChanged();
+        }
     }
 
     private async Task Refresh()
@@ -91,6 +145,7 @@
             await Center.MarkReadAsync(_tenantId, n.Id);
             await Refresh();
         }
+        await Close();
         if (!string.IsNullOrWhiteSpace(n.LinkUrl)) Nav.NavigateTo(n.LinkUrl);
     }
 
