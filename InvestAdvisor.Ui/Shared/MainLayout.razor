@@ -14,6 +14,7 @@
         <MudText Typo="Typo.h6" Style="font-weight:600;letter-spacing:-.01em;">InvestAdvisor</MudText>
         <MudSpacer />
         <MudIconButton Icon="@Icons.Material.Outlined.Search" Color="Color.Inherit" OnClick="OpenSearch" Title="Search (⌘/Ctrl K)" Class="mr-1" />
+        <NotificationBell />
         <MudIconButton Icon="@(RootComponent?.IsDarkMode == true ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
                        Color="Color.Inherit" OnClick="ToggleTheme" Title="Toggle light/dark" Class="mr-2" />
         <ConnectionStatusPill />
@@ -41,6 +42,7 @@
         <NavMenu />
 
         <div class="ia-rail-footer">
+            <NotificationBell OpenUpward="true" />
             <MudIconButton Icon="@(RootComponent?.IsDarkMode == true ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
                            OnClick="ToggleTheme" Title="Toggle light/dark" Size="Size.Small" />
             @if (!string.IsNullOrEmpty(_email))

@@ -1,0 +1,129 @@
+@using InvestAdvisor.Core.Entities
+@using InvestAdvisor.Core.Enums
+@inject INotificationCenter Center
+@inject ITenantContext Tenant
+@inject NavigationManager Nav
+@implements IDisposable
+
+<MudBadge Content="_unread" Visible="_unread > 0" Color="Color.Error" Overlap="true" Bordered="true" Class="ia-notif-badge">
+    <MudMenu Icon="@(_unread > 0 ? Icons.Material.Filled.Notifications : Icons.Material.Outlined.Notifications)"
+             IconColor="Color.Inherit" Size="Size.Small" AriaLabel="Notifications"
+             AnchorOrigin="@(OpenUpward ? Origin.TopRight : Origin.BottomRight)"
+             TransformOrigin="@(OpenUpward ? Origin.BottomLeft : Origin.TopRight)"
+             Dense="true" ListClass="ia-notif-menu">
+        <div class="ia-notif-head">
+            <MudText Typo="Typo.subtitle2">Notifications</MudText>
+            @if (_items.Any(n => n.ReadUtc is null))
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="MarkAllRead">Mark all read</MudButton>
+            }
+        </div>
+        <MudDivider />
+        @if (_items.Count == 0)
+        {
+            <div class="ia-notif-empty">
+                <MudIcon Icon="@Icons.Material.Outlined.NotificationsNone" Size="Size.Large" Color="Color.Default" />
+                <MudText Typo="Typo.body2" Color="Color.Surface">You're all caught up</MudText>
+            </div>
+        }
+        else
+        {
+            @foreach (var n in _items)
+            {
+                <MudMenuItem OnClick="@(() => OnItemClick(n))" Class="@(n.ReadUtc is null ? "ia-notif-item ia-notif-unread" : "ia-notif-item")">
+                    <div class="ia-notif-row">
+                        <MudIcon Icon="@IconFor(n.Severity)" Color="@ColorFor(n.Severity)" Size="Size.Small" Class="ia-notif-ic" />
+                        <div class="ia-notif-text">
+                            <MudText Typo="Typo.body2" Style="@(n.ReadUtc is null ? "font-weight:600;" : null)">@n.Title</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Surface" Class="ia-notif-body">@n.Body</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Default">@Ago(n.CreatedUtc)</MudText>
+                        </div>
+                    </div>
+                </MudMenuItem>
+            }
+        }
+    </MudMenu>
+</MudBadge>
+
+@code {
+    /// <summary>When the bell sits at the bottom of the screen (desktop rail footer), open the menu upward.</summary>
+    [Parameter] public bool OpenUpward { get; set; }
+
+    private int _tenantId = -1;
+    private int _unread;
+    private IReadOnlyList<Notification> _items = Array.Empty<Notification>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Center.NotificationsChanged += OnNotificationsChanged;
+        try
+        {
+            _tenantId = await Tenant.GetTenantIdAsync();
+            await Refresh();
+        }
+        catch { /* no authenticated user (shouldn't happen behind Cloudflare) */ }
+    }
+
+    private async Task Refresh()
+    {
+        if (_tenantId < 0) return;
+        _unread = await Center.UnreadCountAsync(_tenantId);
+        _items = await Center.ListRecentAsync(_tenantId, take: 15);
+    }
+
+    // Live badge: this tenant's notifications changed (added/read elsewhere). Re-pull off the UI thread.
+    private async void OnNotificationsChanged(object? sender, int tenantId)
+    {
+        if (tenantId != _tenantId) return;
+        try
+        {
+            await Refresh();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { /* component may be tearing down */ }
+    }
+
+    private async Task OnItemClick(Notification n)
+    {
+        if (n.ReadUtc is null)
+        {
+            await Center.MarkReadAsync(_tenantId, n.Id);
+            await Refresh();
+        }
+        if (!string.IsNullOrWhiteSpace(n.LinkUrl)) Nav.NavigateTo(n.LinkUrl);
+    }
+
+    private async Task MarkAllRead()
+    {
+        await Center.MarkAllReadAsync(_tenantId);
+        await Refresh();
+    }
+
+    private static string IconFor(NotificationSeverity s) => s switch
+    {
+        NotificationSeverity.Success => Icons.Material.Filled.CheckCircle,
+        NotificationSeverity.Warning => Icons.Material.Filled.Warning,
+        NotificationSeverity.Error => Icons.Material.Filled.Error,
+        _ => Icons.Material.Filled.Info,
+    };
+
+    private static Color ColorFor(NotificationSeverity s) => s switch
+    {
+        NotificationSeverity.Success => Color.Success,
+        NotificationSeverity.Warning => Color.Warning,
+        NotificationSeverity.Error => Color.Error,
+        _ => Color.Info,
+    };
+
+    private static string Ago(DateTime utc)
+    {
+        var d = DateTime.UtcNow - utc;
+        if (d.TotalSeconds < 60) return "just now";
+        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
+        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
+        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d ago";
+        return utc.ToLocalTime().ToString("MMM d");
+    }
+
+    public void Dispose() => Center.NotificationsChanged -= OnNotificationsChanged;
+}
