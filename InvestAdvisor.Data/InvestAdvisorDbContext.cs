@@ -15,6 +15,7 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<NewsItem> NewsItems => Set<NewsItem>();
     public DbSet<AdviceLog> AdviceLogs => Set<AdviceLog>();
     public DbSet<AlertDelivery> AlertDeliveries => Set<AlertDelivery>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     // Screener (market-scanning) entities.
     public DbSet<Stock> Stocks => Set<Stock>();

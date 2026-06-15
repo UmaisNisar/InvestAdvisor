@@ -4,11 +4,13 @@ using InvestAdvisor.Core.Notifications;
 using InvestAdvisor.Core.Options;
 using InvestAdvisor.Data.Agent;
 using InvestAdvisor.Data.Events;
+using InvestAdvisor.Data.Notifications;
 using InvestAdvisor.Data.Providers.Anthropic;
 using InvestAdvisor.Data.Providers.CoinGecko;
 using InvestAdvisor.Data.Providers.Finnhub;
 using InvestAdvisor.Data.Queries;
 using InvestAdvisor.Data.RateLimiting;
+using InvestAdvisor.Data.Runs;
 using InvestAdvisor.Data.Services;
 using InvestAdvisor.Data.Smtp;
 using InvestAdvisor.Data.Stores;
@@ -49,6 +51,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRuntimeSettingsStore, RuntimeSettingsStore>();
         services.AddSingleton<IRateLimiter, TokenBucketRateLimiter>();
         services.AddSingleton<IRunEventBus, RunEventBus>();
+        services.AddSingleton<INotificationCenter, NotificationCenter>();
+        services.AddSingleton<IRunManager, RunManager>();
         services.AddSingleton<ITriggerEvaluator, TriggerEvaluator>();
         services.AddSingleton<CryptoSymbolRouter>();
         services.AddSingleton<ISmtpClient, MailKitSmtpClient>();
@@ -180,6 +184,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISwingService, SwingService>();
 
         services.AddScoped<INotificationChannel, EmailNotificationChannel>();
+        services.AddScoped<INotificationChannel, InAppNotificationChannel>();
 
         services.AddScoped<IPortfolioQueries, PortfolioQueries>();
         services.AddScoped<IScreenerQueries, ScreenerQueries>();
