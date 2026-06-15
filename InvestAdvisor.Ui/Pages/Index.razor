@@ -8,6 +8,7 @@
 @inject IProfileService Profiles
 @inject IDailyRecommendationService Recommender
 @inject IHoldingsService HoldingsSvc
+@inject IRunManager Runs
 @inject ITenantContext Tenant
 @inject IJSRuntime JS
 @implements IDisposable
@@ -366,6 +367,10 @@ else
     {
         Bus.RunCompleted += OnRunCompleted;
         Bus.PricesRefreshed += OnPricesRefreshed;
+        Runs.RunStateChanged += OnRunStateChanged;
+        // Pick up a run that's already in flight (e.g. started here, then navigated back).
+        try { _tid = await Tenant.GetTenantIdAsync(); _dashRun = Runs.GetActive(_tid, RunKind.Dashboard); }
+        catch { /* no authenticated user */ }
         await Reload();
         await LoadRecommendation();
         try { _cadenceHours = (await Profiles.GetAsync()).RebalanceCadenceHours; } catch { /* keep default */ }
@@ -495,57 +500,36 @@ else
         StateHasChanged();
     }
 
-    private bool _running;
-    private bool _canceling;
-    private string _runPhase = "";
-    private CancellationTokenSource? _runCts;
+    // Run state now lives in the singleton IRunManager, not this component — so the run keeps
+    // going (and stays visible) across navigation. These mirror the active run for the markup.
+    private int _tid = -1;
+    private ActiveRun? _dashRun;
+    private bool _running => _dashRun is not null;
+    private bool _canceling => _dashRun?.Canceling == true;
+    private string _runPhase => _dashRun?.Phase ?? "";
 
-    private async Task RunNow()
+    private void RunNow()
     {
-        if (_running) return;
-        _running = true;
-        _canceling = false;
-        _runCts = new CancellationTokenSource();
-        var ct = _runCts.Token;
-        try
-        {
-            var tid = await Tenant.GetTenantIdAsync();
-
-            _runPhase = "Analyzing your holdings…";
-            StateHasChanged();
-            await Agent.RunNowAsync(tid, "Dashboard Run now", ct);  // 1) holdings analysis
-
-            _runPhase = "Finding where to invest…";
-            StateHasChanged();
-            await Recommender.GenerateAsync(tid, force: true, ct: ct);  // 2) what to invest in
-
-            Snackbar.Add("Done — holdings advice and today's picks updated.", Severity.Success);
-            await Reload();
-            await LoadRecommendation();
-        }
-        catch (OperationCanceledException)
-        {
-            Snackbar.Add("Run canceled.", Severity.Info);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Run failed: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _running = false;
-            _canceling = false;
-            _runPhase = "";
-            _runCts?.Dispose();
-            _runCts = null;
-        }
+        if (_tid < 0) return;
+        if (!Runs.Start(_tid, RunKind.Dashboard))
+            Snackbar.Add("A run is already in progress.", Severity.Info);
+        // Progress + completion are driven by IRunManager.RunStateChanged; nothing to await here.
     }
 
     private void CancelRun()
     {
-        if (!_running || _canceling) return;
-        _canceling = true;
-        _runCts?.Cancel();
+        if (_tid < 0) return;
+        Runs.Cancel(_tid, RunKind.Dashboard);
+    }
+
+    // Fired by IRunManager on every phase change / start / finish. Reflect the dashboard run only.
+    private async void OnRunStateChanged(object? sender, RunStateChangedEvent e)
+    {
+        if (e.TenantId != _tid || e.Kind != RunKind.Dashboard) return;
+        _dashRun = e.Active;
+        if (e.Active is null) // run ended — refresh the picks panel (snapshot reloads via RunCompleted)
+            await InvokeAsync(LoadRecommendation);
+        await InvokeAsync(StateHasChanged);
     }
 
     private async void OnRunCompleted(object? sender, RunCompletedEvent e)
@@ -567,8 +551,7 @@ else
     {
         Bus.RunCompleted -= OnRunCompleted;
         Bus.PricesRefreshed -= OnPricesRefreshed;
-        _runCts?.Cancel();
-        _runCts?.Dispose();
+        Runs.RunStateChanged -= OnRunStateChanged;
         if (_selfRef is not null)
         {
             // Best-effort: stop the gesture firing into a disposed component.

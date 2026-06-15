@@ -1,9 +1,11 @@
 @page "/swing"
 @using InvestAdvisor.Core.Swing
 @inject ISwingQueries Queries
-@inject ISwingService Scanner
+@inject IRunManager Runs
+@inject ITenantContext Tenant
 @inject IRuntimeSettingsStore Settings
 @inject ISnackbar Snackbar
+@implements IDisposable
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
     <MudTooltip Text="Short-horizon (2–3 day) setups: buy liquid US + TSX names that are in an up-trend (above their 200-day average) but short-term oversold — a pullback to buy, then ride the bounce. Each idea is risk-bounded: entry, stop, target and size. Research, not advice.">
@@ -168,11 +170,17 @@ else
 @code {
     private SwingDashboard? _data;
     private bool _loaded;
-    private bool _running;
+    // The scan runs in the singleton IRunManager so it survives navigation; this mirrors its state.
+    private int _tid = -1;
+    private ActiveRun? _swingRun;
+    private bool _running => _swingRun is not null;
     private SwingRiskLevel _risk = SwingRiskLevel.Medium;
 
     protected override async Task OnInitializedAsync()
     {
+        Runs.RunStateChanged += OnRunStateChanged;
+        try { _tid = await Tenant.GetTenantIdAsync(); _swingRun = Runs.GetActive(_tid, RunKind.Swing); }
+        catch { /* no authenticated user */ }
         try
         {
             _data = await Queries.GetDashboardAsync();
@@ -187,25 +195,28 @@ else
         _risk = level;
         await Settings.UpdateAsync(s => s.SwingRiskLevel = level);
         Snackbar.Add($"Risk set to {level} — re-scanning…", Severity.Info);
-        await RunNow();
+        RunNow();
     }
 
-    private async Task RunNow()
+    private void RunNow()
     {
-        if (_running) return;
-        _running = true;
-        try
-        {
-            Snackbar.Add("Scanning the swing universe… this can take a minute.", Severity.Info);
-            var count = await Scanner.GenerateSetupsAsync(force: true);
-            Snackbar.Add(count > 0 ? $"Done — {count} setup(s) found." : "Done — no qualifying setups right now (see the watchlist).", Severity.Success);
-            _data = await Queries.GetDashboardAsync();
-            _risk = _data.RiskLevel;
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Scan failed: {ex.Message}", Severity.Error);
-        }
-        finally { _running = false; }
+        if (_tid < 0) return;
+        if (!Runs.Start(_tid, RunKind.Swing))
+            Snackbar.Add("A scan is already in progress.", Severity.Info);
+        // Progress + completion are driven by IRunManager.RunStateChanged.
     }
+
+    // Fired by IRunManager on every phase change / start / finish for this tenant's swing scan.
+    private async void OnRunStateChanged(object? sender, RunStateChangedEvent e)
+    {
+        if (e.TenantId != _tid || e.Kind != RunKind.Swing) return;
+        _swingRun = e.Active;
+        if (e.Active is null) // scan ended — refresh today's setups
+        {
+            try { _data = await Queries.GetDashboardAsync(); _risk = _data.RiskLevel; } catch { /* leave last view */ }
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Runs.RunStateChanged -= OnRunStateChanged;
 }
