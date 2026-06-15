@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Momentum;
 using InvestAdvisor.Core.Swing;
 
 namespace InvestAdvisor.Core.Entities;
@@ -58,6 +59,9 @@ public class RuntimeSettings
 
     /// <summary>How aggressively the swing scanner surfaces setups (Low/Medium/High). User-set on /swing.</summary>
     public SwingRiskLevel SwingRiskLevel { get; set; } = SwingRiskLevel.Medium;
+
+    /// <summary>How aggressively the high-vol momentum scanner surfaces breakout setups. User-set on /momentum.</summary>
+    public MomentumRiskLevel MomentumRiskLevel { get; set; } = MomentumRiskLevel.High;
 
     // Optional sources for auto-importing holdings (e.g. a Wealthsimple export). When set, the
     // import worker pulls them on its daily cycle; manual import via the Settings buttons works

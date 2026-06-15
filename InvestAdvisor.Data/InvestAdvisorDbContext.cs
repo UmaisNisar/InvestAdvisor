@@ -32,6 +32,10 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<SwingBacktestResult> SwingBacktestResults => Set<SwingBacktestResult>();
     public DbSet<SwingWatchItem> SwingWatchItems => Set<SwingWatchItem>();
 
+    // Momentum (high-volatility breakout) entities.
+    public DbSet<MomentumCandidate> MomentumCandidates => Set<MomentumCandidate>();
+    public DbSet<MomentumBacktestResult> MomentumBacktestResults => Set<MomentumBacktestResult>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(InvestAdvisorDbContext).Assembly);

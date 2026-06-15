@@ -1,0 +1,163 @@
+@page "/momentum"
+@using InvestAdvisor.Core.Abstractions
+@using InvestAdvisor.Core.Momentum
+@inject IMomentumQueries Queries
+@inject IMomentumService Scanner
+@inject IRuntimeSettingsStore Settings
+@inject ISnackbar Snackbar
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
+    <MudTooltip Text="High-volatility breakout setups: buy high-beta US + Canadian names that break a tight consolidation on a volume surge, riding the expansion for a few sessions toward a ~10% target. Tight stop, asymmetric reward. Far riskier than swing — most breakouts fail. Research, not advice.">
+        <MudText Typo="Typo.h4">Momentum breakouts</MudText>
+    </MudTooltip>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="flex-wrap:wrap">
+        <MudTooltip Text="Risk dial. Higher = looser base/volume quality, tighter stop, bigger position sizing and more names (more trades, lower conviction each). Lower = stricter and smaller. Changing it re-scans.">
+            <MudSelect T="MomentumRiskLevel" Value="_risk" ValueChanged="OnRiskChanged" Label="Risk" Dense="true"
+                       Variant="Variant.Outlined" Disabled="_running" Style="min-width:120px">
+                <MudSelectItem Value="MomentumRiskLevel.Low">Low</MudSelectItem>
+                <MudSelectItem Value="MomentumRiskLevel.Medium">Medium</MudSelectItem>
+                <MudSelectItem Value="MomentumRiskLevel.High">High</MudSelectItem>
+            </MudSelect>
+        </MudTooltip>
+        <MudTooltip Text="Re-scan the universe now and refresh today's setups at current levels. Takes up to a minute (fetches bars for every name).">
+            <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled"
+                       OnClick="RunNow" Disabled="_running" Style="white-space:nowrap">
+                @(_running ? "Scanning…" : "Re-scan now")
+            </MudButton>
+        </MudTooltip>
+        <MudButton Href="/swing" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Bolt" Style="white-space:nowrap">Swing setups →</MudButton>
+    </MudStack>
+</MudStack>
+
+@if (!_loaded)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    @* The honest gate: setups are paper-only until the backtest shows a measured edge. *@
+    @if (_data!.Validated)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+            Backtest shows a positive edge on @_data.Backtest!.TotalTrades historical trades (profit factor @_data.Backtest.ProfitFactor.ToString("0.00")). Still probabilistic — size with the stop, never bet the farm.
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+            <b>Paper only — not yet validated.</b> These breakout setups have not cleared the backtest gate
+            (a real edge — profit factor ≥1.30 over a meaningful sample, stricter than swing because breakouts
+            slip more). Treat them as practice and watch the backtest below before risking real money.
+            <b>High-volatility momentum loses money for most people — expect frequent stop-outs.</b>
+        </MudAlert>
+    }
+
+    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-3">
+        @if (_data.GeneratedAtUtc is { } d)
+        {
+            @($"Generated {d:MMM d} · universe of {_data.UniverseSize} high-volatility names · refreshes daily")
+        }
+        else
+        {
+            @($"Universe of {_data.UniverseSize} high-volatility names · the scanner produces setups once a day — check back shortly")
+        }
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="7">
+            <MudText Typo="Typo.h6" GutterBottom="true">Today's breakouts</MudText>
+            @if (_data.Setups.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                    No qualifying breakouts at <b>@_risk</b> risk right now — nothing is breaking a tight base on volume. The scanner waits rather than forcing a trade. Try a higher risk level or re-scan later.
+                </MudAlert>
+            }
+            else
+            {
+                @foreach (var s in _data.Setups)
+                {
+                    <MomentumSetupCard Setup="s" />
+                }
+            }
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudText Typo="Typo.h6" GutterBottom="true">Backtest</MudText>
+            <MudPaper Class="pa-4" Elevation="1">
+                @if (_data.Backtest is { } bt)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">
+                        Replay of the same rule over history@(bt.FromUtc is { } f && bt.ToUtc is { } t ? $" ({f:MMM yyyy}–{t:MMM yyyy})" : "").
+                    </MudText>
+                    <MudSimpleTable Dense="true" Hover="false" Class="mt-2" Style="background:transparent">
+                        <tbody>
+                            <tr><td>Trades</td><td align="right">@bt.TotalTrades</td></tr>
+                            <tr><td>Win rate</td><td align="right">@bt.WinRatePct.ToString("0.0")%</td></tr>
+                            <tr><td>Expectancy</td><td align="right">@bt.ExpectancyR.ToString("+0.000;-0.000;0.000")R</td></tr>
+                            <tr><td>Profit factor</td><td align="right">@bt.ProfitFactor.ToString("0.00")</td></tr>
+                            <tr><td>Max drawdown</td><td align="right">@bt.MaxDrawdownR.ToString("0.0")R</td></tr>
+                            <tr><td>Avg hold</td><td align="right">@bt.AverageHoldingDays.ToString("0.0") d</td></tr>
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-2">
+                        Backtests overstate live results (breakout slippage beyond a flat cost, survivorship in the universe). A sanity check, not a promise. R = multiples of the per-trade risk (distance to stop).
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Surface">Backtest hasn't run yet — it executes on the worker's first cycle.</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" Class="mt-4">
+        Educational research only, not financial advice. No broker is connected — you place any trade yourself.
+        Always honour the stop. This is the aggressive sleeve: higher reward, far higher chance of loss on each trade.
+    </MudAlert>
+}
+
+@code {
+    private MomentumDashboard? _data;
+    private bool _loaded;
+    private bool _running;
+    private MomentumRiskLevel _risk = MomentumRiskLevel.High;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _data = await Queries.GetDashboardAsync();
+            _risk = _data.RiskLevel;
+        }
+        finally { _loaded = true; }
+    }
+
+    private async Task OnRiskChanged(MomentumRiskLevel level)
+    {
+        if (level == _risk || _running) return;
+        _risk = level;
+        await Settings.UpdateAsync(s => s.MomentumRiskLevel = level);
+        Snackbar.Add($"Risk set to {level} — re-scanning…", Severity.Info);
+        await RunNow();
+    }
+
+    private async Task RunNow()
+    {
+        if (_running) return;
+        _running = true;
+        try
+        {
+            Snackbar.Add("Scanning the momentum universe… this can take a minute.", Severity.Info);
+            var count = await Scanner.GenerateSetupsAsync(force: true);
+            Snackbar.Add(count > 0 ? $"Done — {count} breakout(s) found." : "Done — no qualifying breakouts right now.", Severity.Success);
+            _data = await Queries.GetDashboardAsync();
+            _risk = _data.RiskLevel;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Scan failed: {ex.Message}", Severity.Error);
+        }
+        finally { _running = false; }
+    }
+}

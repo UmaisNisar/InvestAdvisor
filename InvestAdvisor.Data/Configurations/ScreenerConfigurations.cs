@@ -18,6 +18,7 @@ public sealed class StockConfiguration : IEntityTypeConfiguration<Stock>
         b.HasIndex(x => x.Ticker).IsUnique();
         b.HasIndex(x => x.AssetClass);
         b.HasIndex(x => x.IsSwingUniverse);
+        b.HasIndex(x => x.IsMomentumUniverse);
     }
 }
 

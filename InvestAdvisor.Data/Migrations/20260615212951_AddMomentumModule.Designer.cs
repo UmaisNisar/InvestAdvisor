@@ -3,6 +3,7 @@ using System;
 using InvestAdvisor.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace InvestAdvisor.Data.Migrations
 {
     [DbContext(typeof(InvestAdvisorDbContext))]
-    partial class InvestAdvisorDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260615212951_AddMomentumModule")]
+    partial class AddMomentumModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
@@ -536,50 +539,6 @@ namespace InvestAdvisor.Data.Migrations
                         .IsDescending(false, true);
 
                     b.ToTable("NewsItem", (string)null);
-                });
-
-            modelBuilder.Entity("InvestAdvisor.Core.Entities.Notification", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long?>("AdviceLogId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LinkUrl")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ReadUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Severity")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("TenantId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "CreatedUtc");
-
-                    b.HasIndex("TenantId", "ReadUtc");
-
-                    b.ToTable("Notification", (string)null);
                 });
 
             modelBuilder.Entity("InvestAdvisor.Core.Entities.PaperTrade", b =>
