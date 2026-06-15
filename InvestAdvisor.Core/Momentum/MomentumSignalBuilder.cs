@@ -90,7 +90,7 @@ public static class MomentumSignalBuilder
     /// <summary>Break of a tight base (a coiled "squeeze") on above-average volume — the stronger signal.</summary>
     public static bool IsSqueezeBreakout(MomentumFeatures f, MomentumParams p) =>
         f.BreakoutStrength is { } b && b > p.BreakoutMargin
-        && f.BaseRangePct is { } range && range <= p.MaxBaseRangePct
+        && f.BaseRangeAtr is { } range && range <= p.MaxBaseRangeAtr
         && f.RelativeVolume is { } rv && rv >= p.MinRelativeVolume;
 
     /// <summary>Strong trailing momentum carrying through a fresh breakout — gentler, no tight base required.</summary>
@@ -104,8 +104,8 @@ public static class MomentumSignalBuilder
     {
         var parts = new List<string>();
         if (f.BreakoutStrength is { } b and > 0m) parts.Add($"broke {p.BreakoutLookback}-day high (+{b * 100m:0.0}%)");
-        if (IsSqueezeBreakout(f, p) && f.BaseRangePct is { } range)
-            parts.Add($"out of a {range * 100m:0.0}% base (squeeze)");
+        if (IsSqueezeBreakout(f, p) && f.BaseRangeAtr is { } range)
+            parts.Add($"out of a {range:0.0}×ATR base (squeeze)");
         else if (IsContinuation(f, p) && f.MomentumReturn is { } m)
             parts.Add($"+{m * 100m:0.0}% {p.MomentumLookback}-day momentum");
         if (f.RelativeVolume is { } rv and > 1.3m) parts.Add($"{rv:0.0}× volume");

@@ -48,8 +48,12 @@ public sealed record MomentumParams
     /// <summary>Volatility floor: ATR as a fraction of price must be at least this — keeps a 10% target reachable.</summary>
     public decimal MinAtrPercent { get; init; } = 0.035m;
 
-    /// <summary>Base must be no wider than this fraction of price to count as a tight "squeeze".</summary>
-    public decimal MaxBaseRangePct { get; init; } = 0.09m;
+    /// <summary>
+    /// Base must be no wider than this many ATRs to count as a tight "squeeze". Measured in ATR units
+    /// (not a fixed % of price) so the bar scales with the name's own volatility — a 6%-ATR mover and a
+    /// 2%-ATR name are judged on the same "how coiled is it, for *this* stock" basis.
+    /// </summary>
+    public decimal MaxBaseRangeAtr { get; init; } = 3.5m;
 
     /// <summary>Close must clear the prior high by at least this fraction to confirm the breakout.</summary>
     public decimal BreakoutMargin { get; init; } = 0m;
@@ -116,19 +120,19 @@ public sealed record MomentumParams
     {
         MomentumRiskLevel.Low => new MomentumParams
         {
-            MinAtrPercent = 0.035m, MaxBaseRangePct = 0.06m, MinRelativeVolume = 2.0m,
+            MinAtrPercent = 0.035m, MaxBaseRangeAtr = 2.5m, MinRelativeVolume = 2.0m,
             EnableContinuation = false, StopAtrMultiple = 1.5m, TargetAtrMultiple = 3.0m,
             RiskPerTradePct = 0.75m, MaxPositionPct = 20m, SetupCount = 3,
         },
         MomentumRiskLevel.High => new MomentumParams
         {
-            MinAtrPercent = 0.04m, MaxBaseRangePct = 0.12m, MinRelativeVolume = 1.3m,
+            MinAtrPercent = 0.04m, MaxBaseRangeAtr = 4.5m, MinRelativeVolume = 1.3m,
             EnableContinuation = true, StopAtrMultiple = 1.0m, TargetAtrMultiple = 2.5m,
             RiskPerTradePct = 3.0m, MaxPositionPct = 40m, SetupCount = 6,
         },
         _ => new MomentumParams
         {
-            MinAtrPercent = 0.035m, MaxBaseRangePct = 0.09m, MinRelativeVolume = 1.5m,
+            MinAtrPercent = 0.035m, MaxBaseRangeAtr = 3.5m, MinRelativeVolume = 1.5m,
             EnableContinuation = true, StopAtrMultiple = 1.25m, TargetAtrMultiple = 2.5m,
             RiskPerTradePct = 1.5m, MaxPositionPct = 30m, SetupCount = 5,
         },
@@ -161,6 +165,12 @@ public sealed record MomentumFeatures(
 
     /// <summary>Volatile enough that a double-digit move in the hold window is plausible.</summary>
     public bool IsHighVolatility(MomentumParams p) => AtrPercent is { } a && a >= p.MinAtrPercent;
+
+    /// <summary>
+    /// Consolidation base width expressed in ATRs (range ÷ ATR) — tightness that scales with the name's
+    /// own volatility, so a high-beta mover isn't unfairly judged "loose" just for being volatile.
+    /// </summary>
+    public decimal? BaseRangeAtr => BaseRangePct is { } r && Atr is { } a && a > 0m ? r * Close / a : null;
 }
 
 /// <summary>
