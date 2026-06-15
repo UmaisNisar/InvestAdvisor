@@ -528,35 +528,37 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 }
 
 /* ---------- Notification bell dropdown ---------- */
-.ia-notif-menu {
+/* Custom popover (not MudMenu): fixed to the viewport so it escapes the rail's overflow clipping
+   without JS (no transformed ancestors on the chrome). The card scales + fades from the bell
+   corner with a slight spring overshoot on open, and reverses on close — the component keeps it
+   mounted until this exit transition finishes (see ExitMs in NotificationBell.razor). */
+.ia-pop-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    background: transparent;
+}
+.ia-pop {
+    position: fixed;
+    z-index: 1301;
     width: 340px;
     max-width: 92vw;
     max-height: 70vh;
     overflow-y: auto;
-}
-
-/* iOS-style open: the card scales + fades from the bell corner with a slight spring overshoot.
-   transform-origin follows the anchor — the rail-footer bell opens upward (origin bottom), the
-   mobile bar opens downward (origin top). We also give the MudBlazor popover wrapper a brief
-   opacity fade so the close isn't a hard cut (it parks off-screen, so close stays quick). */
-.ia-notif-pop {
-    transition: opacity .14s ease;
-}
-.ia-notif-pop .ia-notif-menu {
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, .22);
+    padding-bottom: 6px;
     opacity: 0;
     transform: scale(.9);
-    transform-origin: top right;
-    transition: opacity .18s ease, transform .26s cubic-bezier(.2, .85, .25, 1.06);
+    transition: opacity .18s ease, transform .24s cubic-bezier(.2, .85, .25, 1.06);
 }
-.ia-notif-pop.ia-notif-up .ia-notif-menu {
-    transform-origin: bottom left;
-}
-.ia-notif-pop.mud-popover-open .ia-notif-menu {
-    opacity: 1;
-    transform: scale(1);
-}
+.ia-pop-up   { left: 12px;  bottom: 60px; transform-origin: bottom left; }
+.ia-pop-down { right: 12px; top: 60px;    transform-origin: top right; }
+.ia-pop-open { opacity: 1; transform: scale(1); }
 @media (prefers-reduced-motion: reduce) {
-    .ia-notif-pop .ia-notif-menu { transition: none; transform: none; opacity: 1; }
+    .ia-pop { transition: opacity .12s ease; transform: none; }
 }
 .ia-notif-head {
     display: flex;
@@ -575,9 +577,15 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 .ia-notif-item {
     align-items: flex-start;
     white-space: normal;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background .12s ease;
+}
+.ia-notif-item:hover {
+    background: var(--mud-palette-action-default-hover);
 }
 .ia-notif-unread {
-    background: var(--mud-palette-action-default-hover);
+    background: color-mix(in srgb, var(--mud-palette-primary) 6%, transparent);
 }
 .ia-notif-row {
     display: flex;
