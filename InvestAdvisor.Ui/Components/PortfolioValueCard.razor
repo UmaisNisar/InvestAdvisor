@@ -220,6 +220,27 @@
     private decimal Disp(decimal usd) => usd / Rate;
     private decimal HeroValue => Math.Round(Disp(Snapshot.Totals.MarketValueUsd), 2);
 
+    // When every holding is charted (nothing excluded), the reconstructed line covers the whole book,
+    // so its right edge should land exactly on the live total instead of the last (possibly stale)
+    // history candle. With holdings excluded we can't form the charted subset's live value, so we
+    // leave the last candle alone rather than jumping to a total that includes uncharted names.
+    private decimal? LiveEndpointUsd =>
+        _history is { MissingTickers.Count: 0 } ? Snapshot.Totals.MarketValueUsd : (decimal?)null;
+
+    // The reference the period change is measured against (the dashed baseline on the chart):
+    // previous close for the 1-day view — so the line, the baseline, and the headline "Today" figure
+    // all agree — otherwise the window's first charted point.
+    private decimal? BaselineValue
+    {
+        get
+        {
+            if (_chartPoints is not { Count: >= 2 } pts) return null;
+            return _range == HistoryRange.OneDay
+                ? Math.Round(Disp(Snapshot.Totals.MarketValueUsd - Snapshot.Totals.TodaysChangeUsd), 2)
+                : pts[0].Value;
+        }
+    }
+
     // USD first, then the rest (holding currencies + saved preference) alphabetically.
     private string[] CurrencyOptions => Snapshot.RatesToUsd.Keys
         .OrderBy(c => c == "USD" ? 0 : 1).ThenBy(c => c, StringComparer.Ordinal).ToArray();
@@ -237,8 +258,9 @@
         _ => "past year",
     };
 
-    // 1D uses the live totals (vs. previous close — same number as the rest of the app);
-    // longer ranges are read off the reconstructed line (first → last point).
+    // 1D uses the live totals (vs. previous close — same number as the rest of the app); longer
+    // ranges are read off the reconstructed line (first → last point). The last point is pinned to
+    // the live total (RebuildChartPoints), so every range measures up to the same hero value.
     private (decimal Chg, decimal Pct)? PeriodChange
     {
         get
@@ -347,6 +369,10 @@
                 intraday ? DateTime.SpecifyKind(p.TimeUtc.ToLocalTime(), DateTimeKind.Utc) : p.TimeUtc,
                 Math.Round(p.ValueUsd / Rate, 2)))
             .ToList();
+        // Snap the final point to the live total so the line ends exactly on the hero number (the
+        // last history candle is fetched separately and can lag the live quote). See LiveEndpointUsd.
+        if (_chartPoints is { Count: > 0 } && LiveEndpointUsd is { } liveUsd)
+            _chartPoints[^1] = _chartPoints[^1] with { Value = Math.Round(liveUsd / Rate, 2) };
         BuildOptions(intraday);
         _chartVersion++;
     }
@@ -378,7 +404,7 @@
                 {
                     Yaxis = new List<AnnotationsYAxis>
                     {
-                        new() { Y = (double)pts[0].Value, BorderColor = "#9e9e9e", StrokeDashArray = 4, Opacity = 0.4 },
+                        new() { Y = (double)(BaselineValue ?? pts[0].Value), BorderColor = "#9e9e9e", StrokeDashArray = 4, Opacity = 0.4 },
                     },
                 }
                 : null,
