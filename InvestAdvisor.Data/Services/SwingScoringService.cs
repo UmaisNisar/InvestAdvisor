@@ -1,4 +1,5 @@
 using InvestAdvisor.Core.Abstractions;
+using InvestAdvisor.Core.Scoring;
 using InvestAdvisor.Core.Swing;
 
 namespace InvestAdvisor.Data.Services;
@@ -50,13 +51,14 @@ public sealed class SwingScoringService : ISwingScoringService
         var scores = new List<SwingScore>(rows.Count);
         foreach (var r in rows)
         {
-            decimal? sOversold = Scale(Get(rOversold, r.Input.Ticker));
-            decimal? sRegime = Scale(Get(rRegime, r.Input.Ticker));
-            decimal? sPullback = Scale(Get(rPullback, r.Input.Ticker));
-            decimal? sVol = Scale(Get(rVol, r.Input.Ticker));
-            decimal? sSent = Scale(Get(rSent, r.Input.Ticker));
+            var t = r.Input.Ticker;
+            decimal? sOversold = PercentileRanker.SubScore(rOversold, t);
+            decimal? sRegime = PercentileRanker.SubScore(rRegime, t);
+            decimal? sPullback = PercentileRanker.SubScore(rPullback, t);
+            decimal? sVol = PercentileRanker.SubScore(rVol, t);
+            decimal? sSent = PercentileRanker.SubScore(rSent, t);
 
-            var composite = Composite(
+            var composite = PercentileRanker.Composite(
                 (sOversold, WOversold), (sRegime, WRegime), (sPullback, WPullback),
                 (sVol, WVolume), (sSent, WSentiment));
             if (composite is null) continue;
@@ -75,32 +77,6 @@ public sealed class SwingScoringService : ISwingScoringService
 
     private sealed record Row(SwingInput Input, SwingFeatures Features, TradeSetup Setup, decimal? Sentiment);
 
-    private static decimal? Composite(params (decimal? Score, decimal Weight)[] parts)
-    {
-        decimal acc = 0m, wsum = 0m;
-        foreach (var (sc, w) in parts)
-            if (sc.HasValue) { acc += sc.Value * w; wsum += w; }
-        return wsum > 0m ? Math.Round(acc / wsum, 1) : null;
-    }
-
-    private static decimal? Scale(decimal? rank01) => rank01.HasValue ? Math.Round(rank01.Value * 100m, 1) : null;
-    private static decimal? Get(Dictionary<string, decimal> d, string t) => d.TryGetValue(t, out var v) ? v : null;
-
-    private static Dictionary<string, decimal> Rank(List<Row> rows, Func<Row, decimal?> sel, bool higherBetter)
-    {
-        var present = rows.Select(r => (r.Input.Ticker, V: sel(r)))
-            .Where(x => x.V.HasValue).Select(x => (x.Ticker, V: x.V!.Value)).ToList();
-        var result = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        var n = present.Count;
-        if (n == 0) return result;
-        if (n == 1) { result[present[0].Ticker] = 0.5m; return result; }
-        foreach (var (ticker, v) in present)
-        {
-            var better = present.Count(x => higherBetter ? x.V < v : x.V > v);
-            var equal = present.Count(x => x.V == v);
-            var rank = (better + (equal - 1) / 2m) / (n - 1);
-            result[ticker] = Math.Clamp(rank, 0m, 1m);
-        }
-        return result;
-    }
+    private static Dictionary<string, decimal> Rank(List<Row> rows, Func<Row, decimal?> sel, bool higherBetter) =>
+        PercentileRanker.Rank(rows, r => r.Input.Ticker, sel, higherBetter);
 }

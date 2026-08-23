@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Models;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,7 @@ public sealed class RealizedLotsService(
             Quantity = input.Quantity,
             Proceeds = input.Proceeds,
             CostBasis = input.CostBasis,
-            Currency = NormalizeCurrency(input.Currency),
+            Currency = Currency.Normalize(input.Currency),
             RealizedAtUtc = input.RealizedAtUtc == default ? DateTime.UtcNow : input.RealizedAtUtc,
             SourceHash = string.Empty, // hand-entered lots never collide with imported rows
             ManualEntry = true,
@@ -48,7 +49,7 @@ public sealed class RealizedLotsService(
         entity.Quantity = input.Quantity;
         entity.Proceeds = input.Proceeds;
         entity.CostBasis = input.CostBasis;
-        entity.Currency = NormalizeCurrency(input.Currency);
+        entity.Currency = Currency.Normalize(input.Currency);
         entity.RealizedAtUtc = input.RealizedAtUtc == default ? entity.RealizedAtUtc : input.RealizedAtUtc;
         // SourceHash and ManualEntry are preserved so an edited imported lot still de-dupes on re-import.
         await db.SaveChangesAsync(ct);
@@ -64,9 +65,6 @@ public sealed class RealizedLotsService(
         db.RealizedLots.Remove(entity);
         await db.SaveChangesAsync(ct);
     }
-
-    private static string NormalizeCurrency(string? c) =>
-        string.IsNullOrWhiteSpace(c) ? "USD" : c.Trim().ToUpperInvariant();
 
     private static void Validate(RealizedLot l)
     {

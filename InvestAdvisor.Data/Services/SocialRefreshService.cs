@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Text;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -94,7 +95,7 @@ public sealed class SocialRefreshService(
             db.NewsItems.Add(new NewsItem
             {
                 Ticker = p.Ticker,
-                Headline = Truncate(p.Text, MaxTextLength),
+                Headline = Strings.Truncate(p.Text, MaxTextLength),
                 Source = p.Source,
                 Url = p.Url,
                 Channel = p.Channel,
@@ -107,6 +108,4 @@ public sealed class SocialRefreshService(
         return added;
     }
 
-    private static string Truncate(string s, int max) =>
-        string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max];
 }

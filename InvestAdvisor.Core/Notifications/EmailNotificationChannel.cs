@@ -17,12 +17,7 @@ public sealed class EmailNotificationChannel(
 {
     public string ChannelName => "Email";
 
-    public bool ShouldDispatch(AgentAnalysis analysis)
-    {
-        var hasFlag = analysis.Flags.Any(f => f.Severity >= FlagSeverity.Warn);
-        var hasDrift = analysis.DriftAlerts.Any(d => d.Severity == DriftSeverity.ActionSuggested);
-        return hasFlag || hasDrift;
-    }
+    public bool ShouldDispatch(AgentAnalysis analysis) => AlertPolicy.IsAlertWorthy(analysis);
 
     public async Task<AlertDelivery> SendAsync(
         AdviceLog adviceLog,

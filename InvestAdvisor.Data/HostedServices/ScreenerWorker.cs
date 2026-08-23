@@ -134,15 +134,9 @@ public sealed class ScreenerWorker(
             var rec = sp.GetRequiredService<IDailyRecommendationService>();
 
             // Same cost guards as the agent loop: pause and the daily budget hold off the (LLM) daily rec.
-            var settings = await sp.GetRequiredService<IRuntimeSettingsStore>().GetAsync(ct);
-            if (settings.AgentPaused)
+            if (await sp.GetRequiredService<ICostService>().GetSpendHoldReasonAsync(ct) is { } hold)
             {
-                logger.LogInformation("Agent is paused; skipping daily recommendation.");
-                return;
-            }
-            if (await sp.GetRequiredService<ICostService>().IsOverDailyBudgetAsync(ct))
-            {
-                logger.LogWarning("Daily AI budget (${Budget}) reached; skipping daily recommendation.", settings.DailyBudgetUsd);
+                logger.LogInformation("{Reason}; skipping daily recommendation.", hold);
                 return;
             }
 

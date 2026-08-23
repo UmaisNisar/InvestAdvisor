@@ -65,6 +65,15 @@ public sealed class CostService(
         return await TodaySpendUsdAsync(ct) >= settings.DailyBudgetUsd;
     }
 
+    public async Task<string?> GetSpendHoldReasonAsync(CancellationToken ct = default)
+    {
+        var settings = await settingsStore.GetAsync(ct);
+        if (settings.AgentPaused) return "Agent is paused";
+        if (settings.DailyBudgetUsd > 0m && await TodaySpendUsdAsync(ct) >= settings.DailyBudgetUsd)
+            return $"Daily AI budget (${settings.DailyBudgetUsd}) reached";
+        return null;
+    }
+
     public async Task<CostReport> GetReportAsync(int days = 30, CancellationToken ct = default)
     {
         days = Math.Clamp(days, 1, 365);

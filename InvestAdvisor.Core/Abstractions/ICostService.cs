@@ -14,6 +14,13 @@ public interface ICostService
     /// <summary>True when today's spend has reached the configured daily budget (0 = unlimited).</summary>
     Task<bool> IsOverDailyBudgetAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// The one gate every LLM-spending path checks before calling out: null when spend is
+    /// allowed, otherwise a short human-readable reason ("Agent is paused" / "Daily AI budget
+    /// ($X) reached") for the caller to log and skip.
+    /// </summary>
+    Task<string?> GetSpendHoldReasonAsync(CancellationToken ct = default);
+
     /// <summary>Full breakdown over the trailing <paramref name="days"/> window.</summary>
     Task<CostReport> GetReportAsync(int days = 30, CancellationToken ct = default);
 }

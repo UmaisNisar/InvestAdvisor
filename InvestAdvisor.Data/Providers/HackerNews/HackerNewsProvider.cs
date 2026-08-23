@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Text;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using InvestAdvisor.Core.Abstractions;
@@ -50,7 +51,7 @@ public sealed class HackerNewsProvider(
             .Where(x => !string.IsNullOrWhiteSpace(x.text))
             .Select(x => new SocialPost(
                 Ticker: symbol,
-                Text: Truncate(x.text!, 1000),
+                Text: Strings.Truncate(x.text!, 1000),
                 Source: "Hacker News",
                 Url: $"https://news.ycombinator.com/item?id={x.hit.ObjectId}",
                 CreatedAtUtc: DateTimeOffset.FromUnixTimeSeconds(x.hit.CreatedAtI).UtcDateTime,
@@ -62,8 +63,6 @@ public sealed class HackerNewsProvider(
         !string.IsNullOrWhiteSpace(h.Title) ? h.Title
         : !string.IsNullOrWhiteSpace(h.StoryText) ? h.StoryText
         : h.CommentText;
-
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
 
     private sealed class SearchResponse
     {

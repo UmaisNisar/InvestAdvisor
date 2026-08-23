@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Models;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,7 @@ public sealed class HoldingsService(
             AssetClass = input.AssetClass,
             Quantity = input.Quantity,
             AvgCost = input.AvgCost,
-            Currency = NormalizeCurrency(input.Currency),
+            Currency = Currency.Normalize(input.Currency),
             AccountType = input.AccountType,
             TargetAllocationPct = input.TargetAllocationPct,
             Notes = string.IsNullOrWhiteSpace(input.Notes) ? null : input.Notes.Trim(),
@@ -52,7 +53,7 @@ public sealed class HoldingsService(
         entity.AssetClass = input.AssetClass;
         entity.Quantity = input.Quantity;
         entity.AvgCost = input.AvgCost;
-        entity.Currency = NormalizeCurrency(input.Currency);
+        entity.Currency = Currency.Normalize(input.Currency);
         entity.AccountType = input.AccountType;
         entity.TargetAllocationPct = input.TargetAllocationPct;
         entity.Notes = string.IsNullOrWhiteSpace(input.Notes) ? null : input.Notes.Trim();
@@ -70,9 +71,6 @@ public sealed class HoldingsService(
         db.Holdings.Remove(entity);
         await db.SaveChangesAsync(ct);
     }
-
-    private static string NormalizeCurrency(string? c) =>
-        string.IsNullOrWhiteSpace(c) ? "USD" : c.Trim().ToUpperInvariant();
 
     private static void Validate(Holding h)
     {

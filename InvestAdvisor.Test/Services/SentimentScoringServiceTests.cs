@@ -22,8 +22,9 @@ public class SentimentScoringServiceTests
         store.GetAsync(Arg.Any<CancellationToken>())
              .Returns(new ValueTask<RuntimeSettings>(new RuntimeSettings { AgentPaused = paused }));
         var cost = Substitute.For<ICostService>();
-        cost.IsOverDailyBudgetAsync(Arg.Any<CancellationToken>()).Returns(overBudget);
-        var sut = new SentimentScoringService(db.Factory, llm, store, cost, new FakeSystemClock(Now));
+        cost.GetSpendHoldReasonAsync(Arg.Any<CancellationToken>())
+            .Returns(paused ? "Agent is paused" : overBudget ? "Daily AI budget ($1) reached" : null);
+        var sut = new SentimentScoringService(db.Factory, llm, cost, new FakeSystemClock(Now));
         return (sut, llm, cost, store);
     }
 

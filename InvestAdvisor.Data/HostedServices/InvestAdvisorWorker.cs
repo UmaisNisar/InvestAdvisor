@@ -122,18 +122,9 @@ public sealed class InvestAdvisorWorker(
 
         // Cost guards: a manual pause or the daily budget short-circuits the LLM-spending part of the
         // tick. Price/news refresh above still ran, so the dashboard stays fresh while runs are held.
-        if (settings.AgentPaused)
+        if (await sp.GetRequiredService<ICostService>().GetSpendHoldReasonAsync(ct) is { } hold)
         {
-            logger.LogInformation("Agent is paused; skipping trigger evaluation and runs this tick.");
-            return tickInterval;
-        }
-
-        var cost = sp.GetRequiredService<ICostService>();
-        if (await cost.IsOverDailyBudgetAsync(ct))
-        {
-            logger.LogWarning(
-                "Daily AI budget (${Budget}) reached; skipping agent runs until UTC midnight.",
-                settings.DailyBudgetUsd);
+            logger.LogInformation("{Reason}; skipping trigger evaluation and runs this tick.", hold);
             return tickInterval;
         }
 
@@ -252,43 +243,17 @@ public sealed class InvestAdvisorWorker(
     /// </summary>
     private static Core.Models.AgentAnalysis SerializeAnalysisBack(AdviceLog row)
     {
-        var flags = System.Text.Json.JsonSerializer.Deserialize<Core.Models.Flag[]>(
-            row.ParsedFlagsJson, new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(
-                    System.Text.Json.JsonNamingPolicy.CamelCase) },
-            }) ?? Array.Empty<Core.Models.Flag>();
-        var drift = System.Text.Json.JsonSerializer.Deserialize<Core.Models.DriftAlert[]>(
-            row.ParsedDriftAlertsJson, new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(
-                    System.Text.Json.JsonNamingPolicy.CamelCase) },
-            }) ?? Array.Empty<Core.Models.DriftAlert>();
-        var cons = System.Text.Json.JsonSerializer.Deserialize<Core.Models.Consideration[]>(
-            row.ParsedConsiderationsJson, new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-            }) ?? Array.Empty<Core.Models.Consideration>();
-        var positions = System.Text.Json.JsonSerializer.Deserialize<Core.Models.PositionCall[]>(
-            row.ParsedPositionsJson, new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) },
-            }) ?? Array.Empty<Core.Models.PositionCall>();
-
         return new Core.Models.AgentAnalysis(
             Summary: row.ParsedSummary,
-            Flags: flags,
-            DriftAlerts: drift,
-            Considerations: cons,
+            Flags: Core.Agent.JsonOptions.ArrayOrEmpty<Core.Models.Flag>(row.ParsedFlagsJson),
+            DriftAlerts: Core.Agent.JsonOptions.ArrayOrEmpty<Core.Models.DriftAlert>(row.ParsedDriftAlertsJson),
+            Considerations: Core.Agent.JsonOptions.ArrayOrEmpty<Core.Models.Consideration>(row.ParsedConsiderationsJson),
             Metrics: new Core.Models.AgentRunMetrics(
                 Model: row.Model,
                 InputTokens: row.InputTokens,
                 OutputTokens: row.OutputTokens,
                 LatencyMs: row.LatencyMs,
                 ParseFallbackUsed: row.ParseFallbackUsed),
-            Positions: positions);
+            Positions: Core.Agent.JsonOptions.ArrayOrEmpty<Core.Models.PositionCall>(row.ParsedPositionsJson));
     }
 }
