@@ -1,3 +1,4 @@
+using FluentValidation;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -17,8 +18,15 @@ public abstract class TenantScopedCrudService<TEntity>(
 {
     protected abstract DbSet<TEntity> Set(InvestAdvisorDbContext db);
 
-    /// <summary>Throws <see cref="ArgumentException"/> when <paramref name="input"/> can't be saved.</summary>
-    protected abstract void Validate(TEntity input);
+    /// <summary>The same rules the UI form runs, so the server can never accept what the form rejects.</summary>
+    protected abstract IValidator<TEntity> Validator { get; }
+
+    /// <summary>Throws <see cref="ArgumentException"/> with the first rule message when <paramref name="input"/> can't be saved.</summary>
+    private void Validate(TEntity input)
+    {
+        var result = Validator.Validate(input);
+        if (!result.IsValid) throw new ArgumentException(result.Errors[0].ErrorMessage);
+    }
 
     /// <summary>A fresh row from user input; the base stamps <c>TenantId</c> afterwards.</summary>
     protected abstract TEntity NewEntity(TEntity input, DateTime nowUtc);

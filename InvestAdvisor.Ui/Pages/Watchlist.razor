@@ -44,7 +44,7 @@ else
     <MudDialog @bind-Visible="_editOpen" Options="@(new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true })">
         <TitleContent>@(_editing.Id == 0 ? "Add watchlist item" : "Edit watchlist item")</TitleContent>
         <DialogContent>
-            <MudForm @ref="_form" Model="@_editing" Validation="@(_validator.ValidateValue)">
+            <MudForm @ref="_form" Model="@_editing" Validation="@(_validator.ValidateValue())">
                 <MudTextField @bind-Value="_editing.Ticker" For="@(() => _editing!.Ticker)" Label="Ticker" Required="true"
                               RequiredError="Ticker is required." Immediate="true" OnKeyDown="OnKey" />
                 <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
@@ -104,13 +104,7 @@ else
     {
         if (_editing is null) return;
 
-        var validation = await _validator.ValidateAsync(_editing);
-        if (!validation.IsValid)
-        {
-            if (_form is not null) await _form.ValidateAsync();
-            Snackbar.Add(validation.Errors[0].ErrorMessage, Severity.Warning);
-            return;
-        }
+        if (!await _validator.ValidateOrWarnAsync(_editing, _form, Snackbar)) return;
 
         _editing.Ticker = _editing.Ticker.Trim().ToUpperInvariant();
         try

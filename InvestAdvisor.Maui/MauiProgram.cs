@@ -1,7 +1,6 @@
 using System.Globalization;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Data.Composition;
-using InvestAdvisor.Data.HostedServices;
 using InvestAdvisor.Maui.HostServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,14 +36,8 @@ public static class MauiProgram
         builder.Services.AddScoped<ICurrentUserAccessor, LocalUserAccessor>();
 
         // The desktop app is launched explicitly, so the credit-spending workers default on; set
-        // Scheduler:WorkerEnabled=false to run the UI without the agent loop. The holdings
-        // importer has no LLM cost, so it always runs — same split as the server host.
-        if (configuration.GetValue(InvestAdvisor.Core.Options.SchedulerOptions.WorkerEnabledKey, true))
-        {
-            builder.Services.AddHostedService<InvestAdvisorWorker>();
-            builder.Services.AddHostedService<ScreenerWorker>();
-        }
-        builder.Services.AddHostedService<HoldingsImportWorker>();
+        // Scheduler:WorkerEnabled=false to run the UI without the agent loop.
+        builder.Services.AddInvestAdvisorWorkers(configuration, workersEnabledByDefault: true);
 
         builder.Services.AddSingleton<EngineRunner>();
 
@@ -58,6 +51,7 @@ public static class MauiProgram
     private static IConfiguration BuildConfiguration() =>
         new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.Shared.json", optional: true, reloadOnChange: false)
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
             .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: false)
             .AddUserSecrets(typeof(MauiProgram).Assembly, optional: true)

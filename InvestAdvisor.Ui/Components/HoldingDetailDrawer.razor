@@ -5,9 +5,7 @@
 @inject IPriceHistoryProvider History
 @inject ISnackbar Snackbar
 
-<MudDrawer Open="Open" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Width="760px"
-           ClipMode="DrawerClipMode.Never" Variant="DrawerVariant.Temporary" Elevation="6">
-  <div tabindex="-1" @ref="_focusRoot" @onkeydown="OnKeyDown" style="outline:none;height:100%;overflow-y:auto">
+<DetailDrawer @ref="_drawer" Open="Open" OpenChanged="OpenChanged" Width="760px">
     @if (Holding is null)
     {
         <MudStack Class="pa-4"><MudProgressLinear Color="Color.Primary" Indeterminate="true" /></MudStack>
@@ -48,13 +46,13 @@
                 <MudStack Row="true" Spacing="6" Style="flex-wrap:wrap">
                     <div>
                         <MudText Typo="Typo.caption" Color="Color.Surface">Price</MudText>
-                        <MudText Typo="Typo.h6"><AnimatedNumber Value="Holding.Price" Prefix="@CurPrefix(Holding.Currency)" /></MudText>
+                        <MudText Typo="Typo.h6"><AnimatedNumber Value="Holding.Price" Prefix="@Fmt.CurPrefix(Holding.Currency)" /></MudText>
                     </div>
                     <div>
                         <MudTooltip Text="Change since yesterday's close.">
                             <MudText Typo="Typo.caption" Color="Color.Surface">Today</MudText>
                         </MudTooltip>
-                        <MudText Typo="Typo.h6" Style="@PnlColor(Holding.TodaysChangePct)">
+                        <MudText Typo="Typo.h6" Style="@Fmt.UpDownStyle(Holding.TodaysChangePct)">
                             <AnimatedNumber Value="Holding.TodaysChangePct" Signed="true" Suffix="%" />
                         </MudText>
                     </div>
@@ -62,7 +60,7 @@
                         <MudTooltip Text="Your gain or loss vs. what you paid (you still hold it — nothing sold).">
                             <MudText Typo="Typo.caption" Color="Color.Surface">Unrealized P/L</MudText>
                         </MudTooltip>
-                        <MudText Typo="Typo.h6" Style="@PnlColor(Holding.UnrealizedPnlPct)">
+                        <MudText Typo="Typo.h6" Style="@Fmt.UpDownStyle(Holding.UnrealizedPnlPct)">
                             <AnimatedNumber Value="Holding.UnrealizedPnlPct" Signed="true" Suffix="%" />
                         </MudText>
                     </div>
@@ -170,8 +168,7 @@
             </MudPaper>
         </MudStack>
     }
-  </div>
-</MudDrawer>
+</DetailDrawer>
 
 @code {
     [Parameter] public bool Open { get; set; }
@@ -225,8 +222,7 @@
     private PriceHistory? _history;
     private bool _loading;
     private string? _loadedTicker;       // the ticker the current _history belongs to
-    private ElementReference _focusRoot;
-    private bool _wasOpen;
+    private DetailDrawer? _drawer;
 
     // How much the closing price moved across the whole loaded window — the plain-English
     // "is it up or down over this period?" a beginner actually wants.
@@ -248,19 +244,6 @@
         {
             _range = HistoryRange.SixMonths;
             await LoadHistory();
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (Open && !_wasOpen)
-        {
-            _wasOpen = true;
-            try { await _focusRoot.FocusAsync(); } catch { /* element not ready; ignore */ }
-        }
-        else if (!Open)
-        {
-            _wasOpen = false;
         }
     }
 
@@ -293,18 +276,7 @@
         }
     }
 
-    private async Task OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") await Close();
-    }
-
-    private async Task Close() => await OpenChanged.InvokeAsync(false);
-
-    private async Task OnOpenChanged(bool open)
-    {
-        Open = open;
-        await OpenChanged.InvokeAsync(open);
-    }
+    private Task Close() => _drawer?.CloseAsync() ?? Task.CompletedTask;
 
     private static string RangeLabel(HistoryRange r) =>
         Ranges.FirstOrDefault(x => x.Range == r).Label ?? string.Empty;
@@ -320,9 +292,4 @@
         Math.Round(v, Math.Abs(v) >= 1m ? 2 : 4, MidpointRounding.AwayFromZero);
 
     // Currency symbol for the native-currency price (e.g. "C$"), matching the dashboard's formatting.
-    private static string CurPrefix(string currency) =>
-        currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" };
-
-    private static string PnlColor(decimal? v) =>
-        v is null ? string.Empty : v >= 0 ? "color:#66bb6a" : "color:#ef5350";
 }

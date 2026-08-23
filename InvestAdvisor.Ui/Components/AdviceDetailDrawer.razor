@@ -2,9 +2,7 @@
 @inject IAgentService Agent
 @inject ISnackbar Snackbar
 
-<MudDrawer Open="Open" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Width="640px"
-           ClipMode="DrawerClipMode.Never" Variant="DrawerVariant.Temporary" Elevation="6">
-  <div tabindex="-1" @ref="_focusRoot" @onkeydown="OnKeyDown" style="outline:none;height:100%">
+<DetailDrawer @ref="_drawer" Open="Open" OpenChanged="OpenChanged" Width="640px">
     <MudStack Class="pa-4" Spacing="3">
         @if (_detail is null)
         {
@@ -123,8 +121,7 @@
             </MudExpansionPanels>
         }
     </MudStack>
-  </div>
-</MudDrawer>
+</DetailDrawer>
 
 @code {
     [Parameter] public bool Open { get; set; }
@@ -134,27 +131,7 @@
     private AdviceLogDetailView? _detail;
     private string _editedPrompt = string.Empty;
     private long? _loadedFor;
-    private ElementReference _focusRoot;
-    private bool _wasOpen;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        // Move focus into the drawer when it opens so Escape (and the rest of the keyboard) works here.
-        if (Open && !_wasOpen)
-        {
-            _wasOpen = true;
-            try { await _focusRoot.FocusAsync(); } catch { /* element not ready; ignore */ }
-        }
-        else if (!Open)
-        {
-            _wasOpen = false;
-        }
-    }
-
-    private async Task OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") await Close();
-    }
+    private DetailDrawer? _drawer;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -171,13 +148,7 @@
         }
     }
 
-    private async Task Close() => await OpenChanged.InvokeAsync(false);
-
-    private async Task OnOpenChanged(bool open)
-    {
-        Open = open;
-        await OpenChanged.InvokeAsync(open);
-    }
+    private Task Close() => _drawer?.CloseAsync() ?? Task.CompletedTask;
 
     private async Task Replay()
     {

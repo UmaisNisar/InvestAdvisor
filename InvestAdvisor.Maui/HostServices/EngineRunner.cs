@@ -1,5 +1,4 @@
-using InvestAdvisor.Data;
-using Microsoft.EntityFrameworkCore;
+using InvestAdvisor.Data.Composition;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -20,12 +19,7 @@ public sealed class EngineRunner(IServiceProvider services, ILogger<EngineRunner
     {
         try
         {
-            await using (var scope = services.CreateAsyncScope())
-            {
-                var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<InvestAdvisorDbContext>>();
-                await using var db = await factory.CreateDbContextAsync(_cts.Token);
-                await db.Database.MigrateAsync(_cts.Token);
-            }
+            await services.MigrateInvestAdvisorAsync(_cts.Token);
 
             var hostedServices = services.GetServices<IHostedService>().ToArray();
             foreach (var svc in hostedServices)

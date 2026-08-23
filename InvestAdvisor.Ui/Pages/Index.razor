@@ -111,7 +111,7 @@ else
                                 <span style="display:inline-block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">@context.Name</span>
                             </MudTooltip>
                         </MudTd>
-                        <MudTd DataLabel="Price" Style="text-align:right"><AnimatedNumber Value="context.Price" Prefix="@CurPrefix(context.Currency)" /></MudTd>
+                        <MudTd DataLabel="Price" Style="text-align:right"><AnimatedNumber Value="context.Price" Prefix="@Fmt.CurPrefix(context.Currency)" /></MudTd>
                         <MudTd DataLabel="@($"Market value ({_displayCurrency})")" Style="text-align:right"><AnimatedNumber Value="DispVal(context.MarketValueUsd)" Prefix="$" Decimals="0" /></MudTd>
                         <MudTd DataLabel="P/L %" Style="@PnlStyle(context.UnrealizedPnlPct)"><AnimatedNumber Value="context.UnrealizedPnlPct" Signed="true" /></MudTd>
                         <MudTd DataLabel="Today %" Style="@PnlStyle(context.TodaysChangePct)"><AnimatedNumber Value="context.TodaysChangePct" Signed="true" /></MudTd>
@@ -153,8 +153,8 @@ else
                                 <span class="ia-holding-name">@h.Name</span>
                             </div>
                             <div class="ia-holding-nums">
-                                <span class="ia-holding-price"><AnimatedNumber Value="h.Price" Prefix="@CurPrefix(h.Currency)" /></span>
-                                <span class="ia-holding-chg @ChgClass(h.TodaysChangePct)">
+                                <span class="ia-holding-price"><AnimatedNumber Value="h.Price" Prefix="@Fmt.CurPrefix(h.Currency)" /></span>
+                                <span class="ia-holding-chg @Fmt.UpDownClass(h.TodaysChangePct)">
                                     @if (h.TodaysChangePct is null)
                                     {
                                         <text>—</text>
@@ -188,7 +188,7 @@ else
                 {
                     <MudText Typo="Typo.body2" Color="Color.Surface" Class="mt-1">@TeaserLine()</MudText>
                     <MudText Typo="Typo.caption" Color="Color.Surface">
-                        Updated @Ago(_rec.GeneratedAtUtc) · refreshes daily (next @Until(_rec.GeneratedAtUtc.Date.AddDays(1)))
+                        Updated @Fmt.Ago(_rec.GeneratedAtUtc) · refreshes daily (next @Fmt.Until(_rec.GeneratedAtUtc.Date.AddDays(1)))
                     </MudText>
                 }
                 <div class="mt-2">
@@ -210,7 +210,7 @@ else
                 else
                 {
                     <div @onclick="OpenLatestAdvice" style="cursor:pointer" title="Click for the full advice">
-                        <MudText Typo="Typo.body2">@Truncate(_snapshot.LatestAdvice.Summary, 220)</MudText>
+                        <MudText Typo="Typo.body2">@Fmt.Truncate(_snapshot.LatestAdvice.Summary, 220)</MudText>
                     </div>
                     @if (_snapshot.LatestAdvice.Positions.Count > 0)
                     {
@@ -230,14 +230,14 @@ else
                         </MudStack>
                     }
                     <MudText Typo="Typo.caption">
-                        Ran @Ago(_snapshot.LatestAdvice.TimestampUtc) · @_snapshot.LatestAdvice.TimestampUtc.ToString("MMM d, HH:mm 'UTC'") · @_snapshot.LatestAdvice.Trigger
+                        Ran @Fmt.Ago(_snapshot.LatestAdvice.TimestampUtc) · @_snapshot.LatestAdvice.TimestampUtc.ToString("MMM d, HH:mm 'UTC'") · @_snapshot.LatestAdvice.Trigger
                         @if (_snapshot.LatestAdvice.FlagCount > 0 || _snapshot.LatestAdvice.DriftAlertCount > 0)
                         {
                             <span> · @_snapshot.LatestAdvice.FlagCount flag(s), @_snapshot.LatestAdvice.DriftAlertCount drift alert(s)</span>
                         }
                     </MudText>
                     <MudText Typo="Typo.caption" Color="Color.Surface">
-                        Next scheduled analysis @Until(_snapshot.LatestAdvice.TimestampUtc.AddHours(_cadenceHours)) · or sooner on a price/drift trigger
+                        Next scheduled analysis @Fmt.Until(_snapshot.LatestAdvice.TimestampUtc.AddHours(_cadenceHours)) · or sooner on a price/drift trigger
                     </MudText>
                     <MudStack Row="true" Spacing="1" Class="mt-2">
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInFull" OnClick="OpenLatestAdvice">View details</MudButton>
@@ -286,7 +286,7 @@ else
                                 <tr @key="m.Ticker">
                                     <td><code>@m.Ticker</code></td>
                                     <td style="text-align:right"><AnimatedNumber Value="m.Price" Prefix="$" /></td>
-                                    <td style="text-align:right;color:@(m.PercentChange >= 0 ? "#2a7" : "#c33")">
+                                    <td style="text-align:right;@Fmt.UpDownStyle(m.PercentChange)">
                                         <AnimatedNumber Value="m.PercentChange" Signed="true" Suffix="%" />
                                     </td>
                                 </tr>
@@ -320,9 +320,6 @@ else
     }
 
     // Currency symbol for native-currency prices (the value itself stays in that currency).
-    private static string CurPrefix(string currency) =>
-        currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" };
-
     private bool _adviceDrawerOpen;
     private long? _selectedAdviceId;
 
@@ -343,13 +340,6 @@ else
     }
 
     // Daily-change capsule tint for the compact phone list.
-    private static string ChgClass(decimal? pct) => pct switch
-    {
-        null => "ia-chg-flat",
-        >= 0 => "ia-chg-up",
-        _ => "ia-chg-down",
-    };
-
     private void OpenLatestAdvice()
     {
         if (_snapshot?.LatestAdvice is { } a)
@@ -399,25 +389,6 @@ else
         StateHasChanged();
     }
 
-    private static string Ago(DateTime utc)
-    {
-        var d = DateTime.UtcNow - utc;
-        if (d < TimeSpan.Zero) d = TimeSpan.Zero;
-        if (d.TotalMinutes < 1) return "just now";
-        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
-        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
-        return $"{(int)d.TotalDays}d ago";
-    }
-
-    private static string Until(DateTime utc)
-    {
-        var d = utc - DateTime.UtcNow;
-        if (d <= TimeSpan.Zero) return "due now";
-        if (d.TotalMinutes < 60) return $"in {(int)d.TotalMinutes}m";
-        if (d.TotalHours < 24) return $"in {(int)d.TotalHours}h";
-        return $"in {(int)d.TotalDays}d";
-    }
-
     private async Task LoadRecommendation()
     {
         try { _rec = await Screener.GetDailyRecommendationAsync(); }
@@ -425,12 +396,7 @@ else
         finally { _recLoaded = true; }
     }
 
-    private static string Truncate(string s, int max) =>
-        string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max].TrimEnd() + "…";
-
-    // Green for gains, red for losses; right-aligned. Null (unpriced) stays neutral.
-    private static string PnlStyle(decimal? v) =>
-        "text-align:right;" + (v is null ? string.Empty : v >= 0 ? "color:#66bb6a;" : "color:#ef5350;");
+    private static string PnlStyle(decimal? v) => "text-align:right;" + Fmt.UpDownStyle(v);
 
     // True once any holding has a target weight — until then we hide the target/drift columns.
     private bool AnyTarget => _snapshot?.Holdings.Any(h => h.TargetAllocationPct is not null) ?? false;
@@ -480,11 +446,8 @@ else
     {
         var h = FindHolding(v);
         if (h is null) return;
-        var confirmed = await Dialogs.ShowMessageBoxAsync(
-            "Delete holding",
-            $"Remove {h.Ticker} ({h.Name}) from your portfolio? This can't be undone.",
-            yesText: "Delete", cancelText: "Cancel");
-        if (confirmed != true) return;
+        if (!await Dialogs.ConfirmDeleteAsync("Delete holding",
+                $"Remove {h.Ticker} ({h.Name}) from your portfolio? This can't be undone.")) return;
         try
         {
             await HoldingsSvc.DeleteAsync(h.Id);

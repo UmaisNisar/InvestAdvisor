@@ -1,11 +1,6 @@
 <MudNavMenu>
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
-    <MudNavLink Href="/invest" Icon="@Icons.Material.Filled.Lightbulb">Where to invest</MudNavLink>
-    <MudNavLink Href="/swing" Icon="@Icons.Material.Filled.Bolt">Swing setups</MudNavLink>
-    <MudNavLink Href="/momentum" Icon="@Icons.Material.Filled.RocketLaunch">Momentum breakouts</MudNavLink>
-    <MudNavLink Href="/screener" Icon="@Icons.Material.Filled.TrendingUp">Long-term screener</MudNavLink>
-    <MudNavLink Href="/advice" Icon="@Icons.Material.Filled.History">Advice feed</MudNavLink>
-    <MudNavLink Href="/costs" Icon="@Icons.Material.Filled.Paid">AI cost</MudNavLink>
-    <MudNavLink Href="/watchlist" Icon="@Icons.Material.Filled.Visibility">Watchlist</MudNavLink>
-    <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink>
+    @foreach (var d in NavDestinations.All)
+    {
+        <MudNavLink Href="@d.Href" Match="@(d.Href == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)" Icon="@d.Icon">@d.Label</MudNavLink>
+    }
 </MudNavMenu>

@@ -6,9 +6,9 @@
 <MudDialog @bind-Visible="_visible" Options="@(new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true })">
     <TitleContent>@(_editing.Id == 0 ? "Add realized sale" : $"Edit {_editing.Ticker} sale")</TitleContent>
     <DialogContent>
-        <MudForm @ref="_form" Model="@_editing">
-            <MudTextField @bind-Value="_editing.Ticker" Label="Ticker" Required="true" RequiredError="Ticker is required." Immediate="true" />
-            <MudTextField @bind-Value="_editing.Name" Label="Name" Immediate="true" />
+        <MudForm @ref="_form" Model="@_editing" Validation="@(_validator.ValidateValue())">
+            <MudTextField @bind-Value="_editing.Ticker" For="@(() => _editing.Ticker)" Label="Ticker" Immediate="true" />
+            <MudTextField @bind-Value="_editing.Name" For="@(() => _editing.Name)" Label="Name" Immediate="true" HelperText="Defaults to the ticker." />
             <MudSelect T="AssetClass" @bind-Value="_editing.AssetClass" Label="Asset class">
                 @foreach (var ac in Enum.GetValues<AssetClass>()) { <MudSelectItem Value="ac">@ac</MudSelectItem> }
             </MudSelect>
@@ -21,14 +21,14 @@
                 <MudSelectItem Value="@("CAD")">CAD — Canadian dollar</MudSelectItem>
                 <MudSelectItem Value="@("AUD")">AUD — Australian dollar</MudSelectItem>
             </MudSelect>
-            <MudNumericField @bind-Value="_editing.Quantity" Label="Quantity sold" Min="0m" Immediate="true" />
-            <MudNumericField @bind-Value="_editing.Proceeds" Label="Proceeds (what you sold for, total)" Min="0m" Immediate="true"
+            <MudNumericField @bind-Value="_editing.Quantity" For="@(() => _editing.Quantity)" Label="Quantity sold" Min="0m" Immediate="true" />
+            <MudNumericField @bind-Value="_editing.Proceeds" For="@(() => _editing.Proceeds)" Label="Proceeds (what you sold for, total)" Min="0m" Immediate="true"
                              HelperText="Total amount received for the sale, in the currency above." />
-            <MudNumericField @bind-Value="_editing.CostBasis" Label="Cost basis (what you paid, total)" Min="0m" Immediate="true"
+            <MudNumericField @bind-Value="_editing.CostBasis" For="@(() => _editing.CostBasis)" Label="Cost basis (what you paid, total)" Min="0m" Immediate="true"
                              HelperText="Total cost of the shares sold. Realized P/L = proceeds − cost." />
             <MudDatePicker @bind-Date="_realizedDate" Label="Sale date" />
             <MudText Typo="Typo.body2" Class="mt-2">
-                Realized P/L: <b style="@(Pnl >= 0 ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)")">@Pnl.ToString("C2") @_editing.Currency</b>
+                Realized P/L: <b style="@Fmt.UpDownStyle(Pnl)">@Pnl.ToString("C2") @_editing.Currency</b>
             </MudText>
         </MudForm>
     </DialogContent>
@@ -45,6 +45,7 @@
     private RealizedLot _editing = new();
     private DateTime? _realizedDate;
     private MudForm? _form;
+    private readonly RealizedLotValidator _validator = new();
 
     private decimal Pnl => _editing.Proceeds - _editing.CostBasis;
 
@@ -66,13 +67,10 @@
 
     private async Task Save()
     {
-        if (string.IsNullOrWhiteSpace(_editing.Ticker))
-        {
-            Snackbar.Add("Ticker is required.", Severity.Warning);
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(_editing.Name) && !string.IsNullOrWhiteSpace(_editing.Ticker))
+            _editing.Name = _editing.Ticker.Trim().ToUpperInvariant();
+        if (!await _validator.ValidateOrWarnAsync(_editing, _form, Snackbar)) return;
         _editing.Ticker = _editing.Ticker.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(_editing.Name)) _editing.Name = _editing.Ticker;
         if (_realizedDate is { } d) _editing.RealizedAtUtc = DateTime.SpecifyKind(d, DateTimeKind.Utc);
 
         try

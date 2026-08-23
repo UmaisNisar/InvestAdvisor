@@ -50,7 +50,7 @@
                         <div class="ia-notif-text">
                             <MudText Typo="Typo.body2" Style="@(n.ReadUtc is null ? "font-weight:600;" : null)">@n.Title</MudText>
                             <MudText Typo="Typo.caption" Color="Color.Surface" Class="ia-notif-body">@n.Body</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Default">@Ago(n.CreatedUtc)</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Default">@Fmt.AgoOrDate(n.CreatedUtc)</MudText>
                         </div>
                     </div>
                 </div>
@@ -175,16 +175,6 @@
         NotificationSeverity.Error => Color.Error,
         _ => Color.Info,
     };
-
-    private static string Ago(DateTime utc)
-    {
-        var d = DateTime.UtcNow - utc;
-        if (d.TotalSeconds < 60) return "just now";
-        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
-        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
-        if (d.TotalDays < 7) return $"{(int)d.TotalDays}d ago";
-        return utc.ToLocalTime().ToString("MMM d");
-    }
 
     public void Dispose() => Center.NotificationsChanged -= OnNotificationsChanged;
 }

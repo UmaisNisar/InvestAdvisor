@@ -37,6 +37,8 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Provider/LLM/SMTP defaults shared by both hosts; this file keeps only host-specific keys. -->
+    <None Include="../appsettings.Shared.json" Link="appsettings.Shared.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

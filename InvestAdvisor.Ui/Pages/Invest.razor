@@ -25,7 +25,7 @@ else
 {
     <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-3">
         My read of today's data and your profile — research leads, not advice; you decide.<br />
-        Generated @_rec.GeneratedAtUtc.ToString("MMM d, HH:mm 'UTC'") (@Ago(_rec.GeneratedAtUtc)) · refreshes once daily, next @Until(_rec.GeneratedAtUtc.Date.AddDays(1))
+        Generated @_rec.GeneratedAtUtc.ToString("MMM d, HH:mm 'UTC'") (@Fmt.Ago(_rec.GeneratedAtUtc)) · refreshes once daily, next @Fmt.Until(_rec.GeneratedAtUtc.Date.AddDays(1))
     </MudText>
     <MudText Typo="Typo.body1" Class="mb-4">@_rec.Summary</MudText>
 
@@ -84,20 +84,4 @@ else
         finally { _loaded = true; }
     }
 
-    private static string Ago(DateTime utc)
-    {
-        var d = DateTime.UtcNow - utc;
-        if (d < TimeSpan.Zero) d = TimeSpan.Zero;
-        if (d.TotalMinutes < 60) return $"{(int)d.TotalMinutes}m ago";
-        if (d.TotalHours < 24) return $"{(int)d.TotalHours}h ago";
-        return $"{(int)d.TotalDays}d ago";
-    }
-
-    private static string Until(DateTime utc)
-    {
-        var d = utc - DateTime.UtcNow;
-        if (d <= TimeSpan.Zero) return "due now";
-        if (d.TotalHours < 24) return $"in {(int)d.TotalHours}h";
-        return $"in {(int)d.TotalDays}d";
-    }
 }

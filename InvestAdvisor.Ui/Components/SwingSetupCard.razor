@@ -24,15 +24,15 @@
     <MudGrid Class="mt-1" Spacing="2">
         <MudItem xs="6" sm="3">
             <MudText Typo="Typo.caption" Color="Color.Surface">Entry</MudText>
-            <MudText Typo="Typo.body2" Style="font-weight:600">@Money(Setup.EntryLow)–@Money(Setup.EntryHigh)</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600">@Fmt.Price(Setup.EntryLow)–@Fmt.Price(Setup.EntryHigh)</MudText>
         </MudItem>
         <MudItem xs="6" sm="3">
             <MudText Typo="Typo.caption" Color="Color.Surface">Stop</MudText>
-            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-error)">@Money(Setup.StopLoss)</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-error)">@Fmt.Price(Setup.StopLoss)</MudText>
         </MudItem>
         <MudItem xs="6" sm="3">
             <MudText Typo="Typo.caption" Color="Color.Surface">Target (@Setup.RewardRiskRatio.ToString("0.0"):1)</MudText>
-            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-success)">@Money(Setup.Target)</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-success)">@Fmt.Price(Setup.Target)</MudText>
         </MudItem>
         <MudItem xs="6" sm="3">
             <MudTooltip Text="Suggested size so a stop-out loses ~1% of capital. Caps at 25%.">
@@ -50,7 +50,6 @@
 @code {
     [Parameter, EditorRequired] public SwingSetupView Setup { get; set; } = default!;
 
-    private static string Money(decimal v) => v.ToString("0.00");
 
     // Conviction tag. Deep-oversold dips are the higher-conviction "A" setups (filled chip); the
     // gentler pullback-to-the-50-day-MA is a lower-conviction "B" setup (outlined chip).

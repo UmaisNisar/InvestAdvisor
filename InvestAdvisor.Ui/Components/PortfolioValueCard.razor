@@ -32,8 +32,8 @@
                 @if (PeriodChange is { } pc)
                 {
                     <MudIcon Icon="@(pc.Chg >= 0 ? Icons.Material.Filled.ArrowUpward : Icons.Material.Filled.ArrowDownward)"
-                             Size="Size.Small" Style="@ChangeColor(pc.Chg)" />
-                    <MudText Typo="Typo.body2" Style="@ChangeColor(pc.Chg)">
+                             Size="Size.Small" Style="@Fmt.UpDownStyle(pc.Chg)" />
+                    <MudText Typo="Typo.body2" Style="@Fmt.UpDownStyle(pc.Chg)">
                         @if (_masked)
                         {
                             @Masked
@@ -120,7 +120,7 @@
             <MudTooltip Text="Paper gain/loss vs. what you paid (cost basis). 'Unrealized' = you still hold it; nothing is sold.">
                 <MudText Typo="Typo.caption" Color="Color.Surface">Unrealized P/L</MudText>
             </MudTooltip>
-            <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.UnrealizedPnlUsd)">
+            <MudText Typo="Typo.h6" Style="@Fmt.UpDownStyle(Snapshot.Totals.UnrealizedPnlUsd)">
                 @if (_masked)
                 {
                     @Masked
@@ -151,7 +151,7 @@
             <MudTooltip Text="Change since the previous close.">
                 <MudText Typo="Typo.caption" Color="Color.Surface">Today</MudText>
             </MudTooltip>
-            <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.TodaysChangeUsd)">
+            <MudText Typo="Typo.h6" Style="@Fmt.UpDownStyle(Snapshot.Totals.TodaysChangeUsd)">
                 @if (_masked)
                 {
                     @Masked
@@ -169,7 +169,7 @@
                 <MudTooltip Text="Locked-in gain/loss from positions you've sold (from your Activity import). Stays on the books after the holding is gone.">
                     <MudText Typo="Typo.caption" Color="Color.Surface">Realized P/L</MudText>
                 </MudTooltip>
-                <MudText Typo="Typo.h6" Style="@ChangeColor(Snapshot.Totals.RealizedPnlUsd)">
+                <MudText Typo="Typo.h6" Style="@Fmt.UpDownStyle(Snapshot.Totals.RealizedPnlUsd)">
                     @if (_masked)
                     {
                         @Masked
@@ -245,8 +245,6 @@
     private string[] CurrencyOptions => Snapshot.RatesToUsd.Keys
         .OrderBy(c => c == "USD" ? 0 : 1).ThenBy(c => c, StringComparer.Ordinal).ToArray();
 
-    private static string Money(decimal v) => "$" + v.ToString("N2");
-    private static string ChangeColor(decimal v) => v >= 0 ? "color:#66bb6a" : "color:#ef5350";
 
     private string PeriodLabel => _range switch
     {
@@ -277,7 +275,7 @@
     protected override async Task OnInitializedAsync()
     {
         _currency = Snapshot.DisplayCurrency;
-        _heroText = Money(HeroValue);
+        _heroText = Fmt.Money(HeroValue);
         await LoadChart();
     }
 
@@ -313,7 +311,7 @@
         _masked = !_masked;
         if (!_masked)
         {
-            _heroText = Money(HeroValue);       // fresh static text; JS picks up from here
+            _heroText = Fmt.Money(HeroValue);       // fresh static text; JS picks up from here
             _animatedTo = null;
         }
         try { await JS.InvokeVoidAsync("localStorage.setItem", "ia-mask", _masked ? "on" : "off"); }
@@ -389,7 +387,7 @@
                 Animations = new Animations { Enabled = false },
                 Toolbar = new Toolbar { Show = false },
             },
-            Colors = new List<string> { up ? "#66bb6a" : "#ef5350" },
+            Colors = new List<string> { up ? Fmt.UpHex : Fmt.DownHex },
             Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 },
             Markers = new Markers { Size = 0 },
             Xaxis = new XAxis { Type = XAxisType.Datetime },

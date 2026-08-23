@@ -1,5 +1,7 @@
 using InvestAdvisor.Core.Abstractions;
+using FluentValidation;
 using InvestAdvisor.Core.Entities;
+using InvestAdvisor.Core.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
@@ -29,15 +31,5 @@ public sealed class WatchlistService(
         entity.PriceTargetHigh = input.PriceTargetHigh;
     }
 
-    protected override void Validate(WatchlistItem w)
-    {
-        if (string.IsNullOrWhiteSpace(w.Ticker))
-            throw new ArgumentException("Ticker is required.");
-        if (w.PriceTargetLow is < 0m)
-            throw new ArgumentException("PriceTargetLow must be ≥ 0.");
-        if (w.PriceTargetHigh is < 0m)
-            throw new ArgumentException("PriceTargetHigh must be ≥ 0.");
-        if (w.PriceTargetLow is { } lo && w.PriceTargetHigh is { } hi && lo > hi)
-            throw new ArgumentException("PriceTargetLow must be ≤ PriceTargetHigh.");
-    }
+    protected override IValidator<WatchlistItem> Validator { get; } = new WatchlistItemValidator();
 }

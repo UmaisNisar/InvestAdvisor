@@ -1,0 +1,46 @@
+@* Right-anchored detail drawer shell: owns the open/close plumbing, moves keyboard focus into
+   the drawer when it opens so Escape closes it, and scrolls its own content. Hosts render
+   whatever they like inside. *@
+
+<MudDrawer Open="Open" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Width="@Width"
+           ClipMode="DrawerClipMode.Never" Variant="DrawerVariant.Temporary" Elevation="6">
+  <div tabindex="-1" @ref="_focusRoot" @onkeydown="OnKeyDown" style="outline:none;height:100%;overflow-y:auto">
+    @ChildContent
+  </div>
+</MudDrawer>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public string Width { get; set; } = "640px";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ElementReference _focusRoot;
+    private bool _wasOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            try { await _focusRoot.FocusAsync(); } catch { /* element not ready; ignore */ }
+        }
+        else if (!Open)
+        {
+            _wasOpen = false;
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAsync();
+    }
+
+    public Task CloseAsync() => OpenChanged.InvokeAsync(false);
+
+    private async Task OnOpenChanged(bool open)
+    {
+        Open = open;
+        await OpenChanged.InvokeAsync(open);
+    }
+}

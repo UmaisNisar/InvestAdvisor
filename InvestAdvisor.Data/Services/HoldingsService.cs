@@ -1,6 +1,8 @@
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
+using FluentValidation;
 using InvestAdvisor.Core.Models;
+using InvestAdvisor.Core.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
@@ -35,17 +37,5 @@ public sealed class HoldingsService(
         entity.UpdatedAtUtc = nowUtc;
     }
 
-    protected override void Validate(Holding h)
-    {
-        if (string.IsNullOrWhiteSpace(h.Ticker))
-            throw new ArgumentException("Ticker is required.");
-        if (string.IsNullOrWhiteSpace(h.Name))
-            throw new ArgumentException("Name is required.");
-        if (h.Quantity < 0m)
-            throw new ArgumentException("Quantity must be ≥ 0.");
-        if (h.AvgCost < 0m)
-            throw new ArgumentException("AvgCost must be ≥ 0.");
-        if (h.TargetAllocationPct is < 0m or > 100m)
-            throw new ArgumentException("TargetAllocationPct must be between 0 and 100.");
-    }
+    protected override IValidator<Holding> Validator { get; } = new HoldingValidator();
 }

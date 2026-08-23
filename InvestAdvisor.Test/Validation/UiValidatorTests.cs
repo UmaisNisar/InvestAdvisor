@@ -1,7 +1,7 @@
 using FluentValidation.TestHelper;
 using InvestAdvisor.Core.Agent;
 using InvestAdvisor.Core.Entities;
-using InvestAdvisor.Ui.Validation;
+using InvestAdvisor.Core.Validation;
 using Xunit;
 
 namespace InvestAdvisor.Test.Validation;

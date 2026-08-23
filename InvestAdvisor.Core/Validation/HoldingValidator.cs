@@ -1,15 +1,16 @@
 using FluentValidation;
 using InvestAdvisor.Core.Entities;
 
-namespace InvestAdvisor.Ui.Validation;
+namespace InvestAdvisor.Core.Validation;
 
-public class HoldingValidator : MudCompatibleValidator<Holding>
+public class HoldingValidator : AbstractValidator<Holding>
 {
     public HoldingValidator()
     {
         RuleFor(x => x.Ticker).ValidTicker();
 
         RuleFor(x => x.Name)
+            .NotEmpty().WithMessage("Name is required.")
             .MaximumLength(200).WithMessage("Name is too long (max 200 characters).");
 
         RuleFor(x => x.Currency)
