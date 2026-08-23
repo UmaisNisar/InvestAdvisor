@@ -1,9 +1,9 @@
 using InvestAdvisor.Core.Models;
 
-namespace InvestAdvisor.Core.Momentum;
+namespace InvestAdvisor.Core.Trading;
 
-/// <summary>Aggregate outcome of replaying the momentum rule over history. R = multiples of risk.</summary>
-public sealed record MomentumBacktestSummary(
+/// <summary>Aggregate outcome of replaying a strategy's rule over history. R = multiples of risk.</summary>
+public sealed record BacktestSummary(
     int TotalTrades,
     int Wins,
     int Losses,
@@ -17,44 +17,39 @@ public sealed record MomentumBacktestSummary(
     DateTime? ToUtc)
 {
     /// <summary>Empty result — no qualifying trades in the sample.</summary>
-    public static readonly MomentumBacktestSummary Empty =
-        new(0, 0, 0, 0m, 0m, 0m, 0m, 0m, 0m, null, null);
+    public static readonly BacktestSummary Empty = new(0, 0, 0, 0m, 0m, 0m, 0m, 0m, 0m, null, null);
 
     /// <summary>
-    /// The validation gate — deliberately <b>stricter</b> than the swing engine's. Breakout entries
-    /// slip worse than mean-reversion fills and momentum win rates are lower, so a thin profit factor
-    /// that survives gentle costs can still be break-even live. A real edge here needs a meaningful
-    /// sample, positive expectancy, and a profit factor with genuine cushion (≥1.3). Below this, setups
-    /// stay "paper only — not yet validated".
+    /// The validation gate. A real edge needs a meaningful sample, positive expectancy, and — the key
+    /// discriminator — a profit factor clearly above break-even (a rule at PF 1.02 is noise and must
+    /// NOT validate; ~1.2+ over thousands of trades is a genuine, if modest, edge). Each strategy sets
+    /// its own <paramref name="minProfitFactor"/>: breakouts slip worse than mean-reversion fills, so
+    /// momentum demands more cushion. Below the gate, setups stay "paper only — not yet validated".
     /// </summary>
-    public bool HasEdge(int minTrades = 50, decimal minProfitFactor = 1.3m) =>
+    public bool HasEdge(decimal minProfitFactor, int minTrades = 50) =>
         TotalTrades >= minTrades && ExpectancyR > 0m && ProfitFactor >= minProfitFactor;
 }
 
 /// <summary>
-/// Pure walk-forward backtest of the momentum rule. For each ticker it steps bar by bar; whenever the
+/// Pure walk-forward backtest of a strategy's rule. For each ticker it steps bar by bar; whenever the
 /// signal qualifies on the bars seen <i>so far</i>, it enters at the <b>next</b> bar's open (no
-/// lookahead) and exits at the ATR stop, the reward:risk target, or after the holding window —
-/// whichever comes first. Outcomes are in R (multiples of per-trade risk) so size and price level
-/// don't distort the aggregate. A higher round-trip cost than the swing engine is deducted, because
-/// chasing a breakout pays more slippage than fading a dip.
+/// lookahead) and exits at the ATR stop, the target (or trailing stop), or after the holding window —
+/// whichever comes first. Outcomes are in R (multiples of the per-trade risk) so size and price level
+/// don't distort the aggregate. The strategy's round-trip cost is deducted so the edge has to clear
+/// real-world friction.
 /// </summary>
-public static class MomentumBacktester
+public static class Backtester
 {
-    /// <summary>Round-trip cost (commission + slippage) as a fraction of entry price — higher: breakouts slip.</summary>
-    private const decimal RoundTripCost = 0.0015m;
-
-    public static MomentumBacktestSummary Run(IReadOnlyList<MomentumInput> universe, MomentumParams? parameters = null)
+    public static BacktestSummary Run(IStrategy strategy, IReadOnlyList<StrategyInput> universe, StrategyParams p)
     {
-        var p = parameters ?? MomentumParams.Default;
         var rOutcomes = new List<decimal>();
         var holdingDaysTotal = 0;
         DateTime? from = null, to = null;
 
         foreach (var input in universe)
-            RunOne(input.Candles, p, rOutcomes, ref holdingDaysTotal, ref from, ref to);
+            RunOne(strategy, input.Candles, p, rOutcomes, ref holdingDaysTotal, ref from, ref to);
 
-        if (rOutcomes.Count == 0) return MomentumBacktestSummary.Empty;
+        if (rOutcomes.Count == 0) return BacktestSummary.Empty;
 
         var wins = rOutcomes.Count(r => r > 0m);
         var losses = rOutcomes.Count(r => r <= 0m);
@@ -62,7 +57,7 @@ public static class MomentumBacktester
         var grossLoss = -rOutcomes.Where(r => r < 0m).Sum();
         var avgR = rOutcomes.Average();
 
-        return new MomentumBacktestSummary(
+        return new BacktestSummary(
             TotalTrades: rOutcomes.Count,
             Wins: wins,
             Losses: losses,
@@ -77,34 +72,33 @@ public static class MomentumBacktester
     }
 
     private static void RunOne(
-        IReadOnlyList<Candle> candles, MomentumParams p, List<decimal> rOutcomes,
+        IStrategy strategy, IReadOnlyList<Candle> candles, StrategyParams p, List<decimal> rOutcomes,
         ref int holdingDaysTotal, ref DateTime? from, ref DateTime? to)
     {
-        var warmup = Math.Max(Math.Max(p.TrendSmaPeriod, p.BreakoutLookback), p.AtrPeriod) + 1;
+        var warmup = strategy.Warmup(p);
         if (candles.Count <= warmup + 1) return;
 
         var i = warmup;
         while (i < candles.Count - 1) // need at least one bar after `i` to enter
         {
-            var window = new ArraySegmentList(candles, i + 1); // bars [0..i]
-            var built = MomentumSignalBuilder.Build(new MomentumInput("", "", "", default, window), p);
-            if (built is null || !MomentumSignalBuilder.Qualifies(built.Value.Features, p))
+            var window = new PrefixList(candles, i + 1); // bars [0..i]
+            var built = TradePlanner.Build(strategy, new StrategyInput("", "", "", default, window), p);
+            if (built is null || !strategy.Qualifies(built.Value.Features, p))
             {
                 i++;
                 continue;
             }
 
-            var atr = built.Value.Features.Atr!.Value;
+            var atr = built.Value.Features.Atr;
             var entry = candles[i + 1].Open;
             var risk = p.StopAtrMultiple * atr;
             if (entry - risk <= 0m) { i++; continue; }
 
             var (exitPrice, exitIndex) = SimulateExit(candles, i + 1, entry, atr, p);
 
-            // R, net of round-trip cost. A stop-out lands at ≈ −1R; a trailed/target exit at its level.
-            var costPrice = entry * RoundTripCost;
-            var r = (exitPrice - entry - costPrice) / risk;
-            rOutcomes.Add(r);
+            // R, net of round-trip cost. A stop-out lands at ≈ −1R; a target/trailed exit at its level.
+            var costPrice = entry * p.RoundTripCost;
+            rOutcomes.Add((exitPrice - entry - costPrice) / risk);
             holdingDaysTotal += exitIndex - (i + 1) + 1;
 
             var entryTime = candles[i + 1].Time;
@@ -119,12 +113,12 @@ public static class MomentumBacktester
     /// <summary>
     /// Walks forward from <paramref name="entryIndex"/> up to <c>HoldingDays</c> sessions, returning the
     /// exit price/index. The stop is always checked before the target/trail on the same bar
-    /// (conservative). With <see cref="MomentumParams.UseTrailingStop"/> the fixed target is dropped and
-    /// the stop ratchets up to a chandelier trail once the move clears the activation threshold; the
-    /// trail only uses highs realized through the prior bar, so there is no intrabar lookahead.
+    /// (conservative). With <see cref="StrategyParams.UseTrailingStop"/> the fixed target is dropped
+    /// and the stop ratchets up to a chandelier trail once the move clears the activation threshold;
+    /// the trail only uses highs realized through the prior bar, so there is no intrabar lookahead.
     /// </summary>
     private static (decimal ExitPrice, int ExitIndex) SimulateExit(
-        IReadOnlyList<Candle> candles, int entryIndex, decimal entry, decimal atr, MomentumParams p)
+        IReadOnlyList<Candle> candles, int entryIndex, decimal entry, decimal atr, StrategyParams p)
     {
         var initialStop = entry - p.StopAtrMultiple * atr;
         var risk = entry - initialStop;
@@ -140,7 +134,6 @@ public static class MomentumBacktester
             if (candles[j].Low <= effectiveStop) return (effectiveStop, j);
             if (!p.UseTrailingStop && candles[j].High >= target) return (target, j);
 
-            // Update the running high, then (once activated) ratchet the trail up for the next bar.
             if (candles[j].High > highest) highest = candles[j].High;
             if (p.UseTrailingStop && highest >= activateAt)
             {
@@ -167,9 +160,9 @@ public static class MomentumBacktester
 
     /// <summary>
     /// Zero-allocation view of the first <c>count</c> candles of a list, so the walk-forward loop can
-    /// hand a prefix window to the shared builder without copying on every bar.
+    /// hand a prefix window to the planner without copying on every bar.
     /// </summary>
-    private sealed class ArraySegmentList(IReadOnlyList<Candle> source, int count) : IReadOnlyList<Candle>
+    private sealed class PrefixList(IReadOnlyList<Candle> source, int count) : IReadOnlyList<Candle>
     {
         public Candle this[int index] => index < count
             ? source[index]

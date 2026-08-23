@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Enums;
+using InvestAdvisor.Core.Trading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -67,7 +68,10 @@ public sealed class RunManager(
                     await RunDashboardAsync(tenantId, job, sp, ct);
                     break;
                 case RunKind.Swing:
-                    await RunSwingAsync(tenantId, job, sp, ct);
+                    await RunStrategyAsync(tenantId, job, sp, StrategyKind.Swing, ct);
+                    break;
+                case RunKind.Momentum:
+                    await RunStrategyAsync(tenantId, job, sp, StrategyKind.Momentum, ct);
                     break;
             }
         }
@@ -116,20 +120,22 @@ public sealed class RunManager(
         bus.Publish(new RunCompletedEvent(adviceLogId, clock.UtcNow, RunTriggerKind.Manual.ToString()));
     }
 
-    private async Task RunSwingAsync(int tenantId, Job job, IServiceProvider sp, CancellationToken ct)
+    private async Task RunStrategyAsync(int tenantId, Job job, IServiceProvider sp, StrategyKind kind, CancellationToken ct)
     {
-        var swing = sp.GetRequiredService<ISwingService>();
+        var strategies = sp.GetRequiredService<IStrategyService>();
 
-        SetPhase(job, "Scanning the swing universe…");
-        var count = await swing.GenerateSetupsAsync(force: true, ct);
+        SetPhase(job, InitialPhase(job.State.Kind));
+        var count = await strategies.GenerateSetupsAsync(kind, force: true, ct);
 
         await notifications.AddAsync(tenantId, new NotificationDraft(
-            Title: "Swing scan complete",
+            Title: $"{Label(job.State.Kind)} complete",
             Body: count > 0
                 ? $"{count} qualifying setup{(count == 1 ? "" : "s")} found."
-                : "No qualifying setups right now — check the watchlist.",
+                : kind == StrategyKind.Swing
+                    ? "No qualifying setups right now — check the watchlist."
+                    : "No qualifying breakouts right now.",
             Severity: count > 0 ? NotificationSeverity.Success : NotificationSeverity.Info,
-            LinkUrl: "/swing"), ct);
+            LinkUrl: kind == StrategyKind.Swing ? "/swing" : "/momentum"), ct);
     }
 
     private void SetPhase(Job job, string phase)
@@ -152,6 +158,7 @@ public sealed class RunManager(
     {
         RunKind.Dashboard => "Analyzing your holdings…",
         RunKind.Swing => "Scanning the swing universe…",
+        RunKind.Momentum => "Scanning the high-volatility universe…",
         _ => "Working…",
     };
 
@@ -159,6 +166,7 @@ public sealed class RunManager(
     {
         RunKind.Dashboard => "Dashboard run",
         RunKind.Swing => "Swing scan",
+        RunKind.Momentum => "Momentum scan",
         _ => "Run",
     };
 }

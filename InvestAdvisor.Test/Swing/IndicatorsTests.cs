@@ -1,6 +1,6 @@
 using FluentAssertions;
 using InvestAdvisor.Core.Models;
-using InvestAdvisor.Core.Swing;
+using InvestAdvisor.Core.Trading;
 using Xunit;
 
 namespace InvestAdvisor.Test.Swing;

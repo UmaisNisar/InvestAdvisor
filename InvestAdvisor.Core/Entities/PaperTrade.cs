@@ -1,4 +1,4 @@
-using InvestAdvisor.Core.Swing;
+using InvestAdvisor.Core.Trading;
 
 namespace InvestAdvisor.Core.Entities;
 
@@ -12,14 +12,17 @@ public enum PaperTradeStatus
 }
 
 /// <summary>
-/// A swing setup the scanner generated, logged as a paper trade so its real out-of-sample outcome
-/// can be measured before any live money is risked. The most recent open rows are "today's setups";
+/// A setup a strategy generated, logged as a paper trade so its real out-of-sample outcome can be
+/// measured before any live money is risked. The most recent open rows are "today's setups";
 /// resolved rows form the track record. Universe-wide (not per-tenant) — it derives from public
-/// market data identical for every user.
+/// market data identical for every user. One table for every strategy, discriminated by
+/// <see cref="Strategy"/>; the nullable signal-context columns are whichever readings that
+/// strategy records at entry.
 /// </summary>
 public class PaperTrade
 {
     public long Id { get; set; }
+    public StrategyKind Strategy { get; set; }
     public string Ticker { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public DateTime GeneratedAtUtc { get; set; }
@@ -34,18 +37,22 @@ public class PaperTrade
     public decimal RewardRiskRatio { get; set; }
     public int HoldingDays { get; set; }
     public decimal PositionSizePct { get; set; }
+    /// <summary>Projected gain to target, as a percent.</summary>
+    public decimal TargetGainPct { get; set; }
     public decimal CompositeScore { get; set; }
     public string Rationale { get; set; } = string.Empty;
 
     /// <summary>Which trigger produced this setup — drives the conviction tag on the card.</summary>
-    public SwingSetupKind Kind { get; set; } = SwingSetupKind.None;
+    public SetupKind Kind { get; set; } = SetupKind.None;
 
     // Signal context at entry — kept so each resolved trade is a labelled example of which
-    // conditions did/didn't pay off, the dataset for tuning the strategy over time.
+    // conditions did/didn't pay off, the dataset for tuning a strategy over time.
     public decimal? SignalRsi { get; set; }
-    public decimal? RegimeDistancePct { get; set; }
-    public decimal? PullbackPct { get; set; }
     public decimal? RelativeVolume { get; set; }
+    public decimal? RegimeDistancePct { get; set; }   // swing
+    public decimal? PullbackPct { get; set; }         // swing
+    public decimal? AtrPercent { get; set; }          // momentum
+    public decimal? BreakoutStrength { get; set; }    // momentum
 
     // Outcome, filled in once later bars resolve the trade.
     public PaperTradeStatus Status { get; set; } = PaperTradeStatus.Open;

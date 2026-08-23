@@ -1,28 +1,28 @@
 using FluentAssertions;
 using InvestAdvisor.Core.Enums;
 using InvestAdvisor.Core.Models;
-using InvestAdvisor.Core.Swing;
+using InvestAdvisor.Core.Trading;
 using Xunit;
 
 namespace InvestAdvisor.Test.Swing;
 
 public class SwingBacktesterTests
 {
-    private static SwingInput Input(IReadOnlyList<Candle> candles) =>
+    private static StrategyInput Input(IReadOnlyList<Candle> candles) =>
         new("TEST", "Test Co.", "Tech", AssetClass.Equity, candles);
 
     [Fact]
     public void Flat_market_yields_no_trades()
     {
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.Flat(300)) });
-        result.Should().Be(SwingBacktestSummary.Empty);
+        var result = Backtester.Run(SwingStrategy.Instance, new[] { Input(SwingTestData.Flat(300)) }, SwingParams.Default);
+        result.Should().Be(BacktestSummary.Empty);
         result.TotalTrades.Should().Be(0);
     }
 
     [Fact]
     public void Uptrend_with_recurring_dips_produces_trades_with_consistent_aggregates()
     {
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.RegimeUpWithDips(520)) });
+        var result = Backtester.Run(SwingStrategy.Instance, new[] { Input(SwingTestData.RegimeUpWithDips(520)) }, SwingParams.Default);
 
         result.TotalTrades.Should().BeGreaterThan(0);
         (result.Wins + result.Losses).Should().Be(result.TotalTrades);
@@ -39,7 +39,7 @@ public class SwingBacktesterTests
         var p = closes[^1];
         for (var i = 0; i < 10; i++) { p *= 0.92m; closes.Add(p); } // sustained collapse
 
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.FromCloses(closes)) });
+        var result = Backtester.Run(SwingStrategy.Instance, new[] { Input(SwingTestData.FromCloses(closes)) }, SwingParams.Default);
 
         result.TotalTrades.Should().BeGreaterThan(0);
         result.Losses.Should().BeGreaterThanOrEqualTo(1);
@@ -50,7 +50,7 @@ public class SwingBacktesterTests
     {
         // No single trade loses much more than 1R or wins much more than the reward:risk target.
         var p = SwingParams.Default;
-        var result = SwingBacktester.Run(new[] { Input(SwingTestData.RegimeUpWithDips(520)) }, p);
+        var result = Backtester.Run(SwingStrategy.Instance, new[] { Input(SwingTestData.RegimeUpWithDips(520)) }, p);
 
         result.AverageR.Should().BeInRange(-1.2m, p.RewardRiskRatio + 0.2m);
     }
@@ -59,24 +59,24 @@ public class SwingBacktesterTests
     public void HasEdge_rejects_break_even_noise_even_with_a_large_sample()
     {
         // The exact shape the live run produced: 1430 trades, +0.008R, PF 1.02 — statistically nothing.
-        var breakEven = new SwingBacktestSummary(
+        var breakEven = new BacktestSummary(
             TotalTrades: 1430, Wins: 725, Losses: 705, WinRatePct: 50.7m,
             AverageR: 0.008m, ExpectancyR: 0.008m, ProfitFactor: 1.02m,
             MaxDrawdownR: 47.5m, AverageHoldingDays: 2.4m, FromUtc: null, ToUtc: null);
-        breakEven.HasEdge().Should().BeFalse();
+        breakEven.HasEdge(SwingParams.Default.MinProfitFactor).Should().BeFalse();
     }
 
     [Fact]
     public void HasEdge_accepts_a_real_edge_and_rejects_too_small_a_sample()
     {
-        var realEdge = new SwingBacktestSummary(
+        var realEdge = new BacktestSummary(
             TotalTrades: 120, Wins: 60, Losses: 60, WinRatePct: 50m,
             AverageR: 0.20m, ExpectancyR: 0.20m, ProfitFactor: 1.4m,
             MaxDrawdownR: 8m, AverageHoldingDays: 2.5m, FromUtc: null, ToUtc: null);
-        realEdge.HasEdge().Should().BeTrue();
+        realEdge.HasEdge(SwingParams.Default.MinProfitFactor).Should().BeTrue();
 
         // Same per-trade edge but only 20 trades — not enough to trust.
-        (realEdge with { TotalTrades = 20 }).HasEdge().Should().BeFalse();
+        (realEdge with { TotalTrades = 20 }).HasEdge(SwingParams.Default.MinProfitFactor).Should().BeFalse();
     }
 
     [Fact]
@@ -84,10 +84,10 @@ public class SwingBacktesterTests
     {
         // The shape the expanded-universe live backtest produced: small per-trade R but a solid
         // profit factor over thousands of trades — a genuine, modest edge, not noise.
-        var modest = new SwingBacktestSummary(
+        var modest = new BacktestSummary(
             TotalTrades: 2856, Wins: 1591, Losses: 1265, WinRatePct: 55.7m,
             AverageR: 0.031m, ExpectancyR: 0.031m, ProfitFactor: 1.18m,
             MaxDrawdownR: 16m, AverageHoldingDays: 2.6m, FromUtc: null, ToUtc: null);
-        modest.HasEdge().Should().BeTrue();
+        modest.HasEdge(SwingParams.Default.MinProfitFactor).Should().BeTrue();
     }
 }

@@ -1,32 +1,34 @@
 @page "/swing"
-@using InvestAdvisor.Core.Swing
-@inject ISwingQueries Queries
+@page "/momentum"
+@using InvestAdvisor.Core.Trading
+@inject IStrategyQueries Queries
 @inject IRunManager Runs
 @inject ITenantContext Tenant
 @inject IRuntimeSettingsStore Settings
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 @implements IDisposable
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-1" Style="flex-wrap:wrap">
-    <MudTooltip Text="Short-horizon (2–3 day) setups: buy liquid US + TSX names that are in an up-trend (above their 200-day average) but short-term oversold — a pullback to buy, then ride the bounce. Each idea is risk-bounded: entry, stop, target and size. Research, not advice.">
-        <MudText Typo="Typo.h4">Swing setups</MudText>
+    <MudTooltip Text="@P.TitleTooltip">
+        <MudText Typo="Typo.h4">@P.Title</MudText>
     </MudTooltip>
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Style="flex-wrap:wrap">
-        <MudTooltip Text="Risk dial. Higher = looser oversold trigger, more setup types, bigger position sizing and more names surfaced (more trades, lower conviction each). Lower = stricter and smaller. Changing it re-scans.">
-            <MudSelect T="SwingRiskLevel" Value="_risk" ValueChanged="OnRiskChanged" Label="Risk" Dense="true"
+        <MudTooltip Text="@P.RiskTooltip">
+            <MudSelect T="RiskLevel" Value="_risk" ValueChanged="OnRiskChanged" Label="Risk" Dense="true"
                        Variant="Variant.Outlined" Disabled="_running" Style="min-width:120px">
-                <MudSelectItem Value="SwingRiskLevel.Low">Low</MudSelectItem>
-                <MudSelectItem Value="SwingRiskLevel.Medium">Medium</MudSelectItem>
-                <MudSelectItem Value="SwingRiskLevel.High">High</MudSelectItem>
+                <MudSelectItem Value="RiskLevel.Low">Low</MudSelectItem>
+                <MudSelectItem Value="RiskLevel.Medium">Medium</MudSelectItem>
+                <MudSelectItem Value="RiskLevel.High">High</MudSelectItem>
             </MudSelect>
         </MudTooltip>
-        <MudTooltip Text="Re-scan the universe now and refresh today's setups at current levels. Resolves any open paper trades too. Takes up to a minute (fetches bars for every name).">
+        <MudTooltip Text="@P.RescanTooltip">
             <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary" Variant="Variant.Filled"
                        OnClick="RunNow" Disabled="_running" Style="white-space:nowrap">
                 @(_running ? "Scanning…" : "Re-scan now")
             </MudButton>
         </MudTooltip>
-        <MudButton Href="/screener" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.TrendingUp" Style="white-space:nowrap">Long-term screener →</MudButton>
+        <MudButton Href="@P.CrossLink.Href" Variant="Variant.Text" Color="Color.Primary" StartIcon="@P.CrossLink.Icon" Style="white-space:nowrap">@P.CrossLink.Label</MudButton>
     </MudStack>
 </MudStack>
 
@@ -40,44 +42,41 @@ else
     @if (_data!.Validated)
     {
         <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true" Class="mb-3">
-            Backtest shows a positive edge on @_data.Backtest!.TotalTrades historical trades. Still probabilistic — size with the stop, never bet the farm.
+            Backtest shows a positive edge on @_data.Backtest!.TotalTrades historical trades (profit factor @_data.Backtest.ProfitFactor.ToString("0.00")). @P.ValidatedNote
         </MudAlert>
     }
     else
     {
         <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
-            <b>Paper only — not yet validated.</b> These setups have not cleared the backtest + paper-trade gate
-            (a real edge — profit factor ≥1.15 over a meaningful sample, not break-even noise). Treat them as
-            practice: paper-trade them and watch the track record below before risking real money. Short-horizon
-            trading loses money for most people.
+            <b>Paper only — not yet validated.</b> @P.PaperOnlyNote
         </MudAlert>
     }
 
     <MudText Typo="Typo.caption" Color="Color.Surface" Class="mb-3">
         @if (_data.SetupsGeneratedAtUtc is { } d)
         {
-            @($"Generated {d:MMM d} · universe of {_data.UniverseSize} liquid names · refreshes daily")
+            @($"Generated {d:MMM d} · universe of {_data.UniverseSize} {P.UniverseNoun} · refreshes daily")
         }
         else
         {
-            @($"Universe of {_data.UniverseSize} liquid names · the scanner produces setups once a day — check back shortly")
+            @($"Universe of {_data.UniverseSize} {P.UniverseNoun} · the scanner produces setups once a day — check back shortly")
         }
     </MudText>
 
     <MudGrid>
         <MudItem xs="12" md="7">
-            <MudText Typo="Typo.h6" GutterBottom="true">Today's setups</MudText>
+            <MudText Typo="Typo.h6" GutterBottom="true">@P.SetupsHeading</MudText>
             @if (_data.Setups.Count == 0)
             {
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                    No qualifying setups at <b>@_risk</b> risk right now — nothing is on a buyable pullback (up-trend + oversold). The scanner waits rather than chasing strength. Try a higher risk level, or watch the names below that are closest to triggering.
+                    No qualifying setups at <b>@_risk</b> risk right now — @P.NoSetupsNote
                 </MudAlert>
             }
             else
             {
                 @foreach (var s in _data.Setups)
                 {
-                    <SwingSetupCard Setup="s" />
+                    <SetupCard Setup="s" Strategy="P.Kind" />
                 }
             }
         </MudItem>
@@ -106,31 +105,7 @@ else
             </MudPaper>
 
             <MudText Typo="Typo.h6" GutterBottom="true">Backtest</MudText>
-            <MudPaper Class="pa-4" Elevation="1">
-                @if (_data.Backtest is { } bt)
-                {
-                    <MudText Typo="Typo.caption" Color="Color.Surface">
-                        Replay of the same rule over history@(bt.FromUtc is { } f && bt.ToUtc is { } t ? $" ({f:MMM yyyy}–{t:MMM yyyy})" : "").
-                    </MudText>
-                    <MudSimpleTable Dense="true" Hover="false" Class="mt-2" Style="background:transparent">
-                        <tbody>
-                            <tr><td>Trades</td><td align="right">@bt.TotalTrades</td></tr>
-                            <tr><td>Win rate</td><td align="right">@bt.WinRatePct.ToString("0.0")%</td></tr>
-                            <tr><td>Expectancy</td><td align="right">@bt.ExpectancyR.ToString("+0.000;-0.000;0.000")R</td></tr>
-                            <tr><td>Profit factor</td><td align="right">@bt.ProfitFactor.ToString("0.00")</td></tr>
-                            <tr><td>Max drawdown</td><td align="right">@bt.MaxDrawdownR.ToString("0.0")R</td></tr>
-                            <tr><td>Avg hold</td><td align="right">@bt.AverageHoldingDays.ToString("0.0") d</td></tr>
-                        </tbody>
-                    </MudSimpleTable>
-                    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-2">
-                        Backtests overstate live results (no liquidity/slippage beyond a flat cost, survivorship in the universe). A sanity check, not a promise.
-                    </MudText>
-                }
-                else
-                {
-                    <MudText Typo="Typo.caption" Color="Color.Surface">Backtest hasn't run yet — it executes on the worker's first cycle.</MudText>
-                }
-            </MudPaper>
+            <BacktestPanel Backtest="_data.Backtest" Caveat="@P.BacktestCaveat" />
         </MudItem>
     </MudGrid>
 
@@ -143,14 +118,14 @@ else
         <MudPaper Elevation="1" Class="pa-1">
             <MudSimpleTable Dense="true" Hover="true" Style="background:transparent">
                 <thead>
-                    <tr><th>Ticker</th><th style="text-align:right">Price</th><th style="text-align:right">RSI(3)</th><th style="text-align:right">vs 200-MA</th><th>What it needs</th></tr>
+                    <tr><th>Ticker</th><th style="text-align:right">Price</th><th style="text-align:right">RSI</th><th style="text-align:right">vs 200-MA</th><th>What it needs</th></tr>
                 </thead>
                 <tbody>
                     @foreach (var w in _data.Watchlist)
                     {
                         <tr>
                             <td><code>@w.Ticker</code> <MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">@w.Name</MudText></td>
-                            <td style="text-align:right">@w.Close.ToString("0.00")</td>
+                            <td style="text-align:right">@Fmt.Price(w.Close)</td>
                             <td style="text-align:right">@(w.Rsi?.ToString("0") ?? "—")</td>
                             <td style="text-align:right">@((w.RegimeDistancePct * 100m)?.ToString("+0.0;-0.0") ?? "—")%</td>
                             <td><MudText Typo="Typo.caption" Color="Color.Surface">@w.Note</MudText></td>
@@ -163,37 +138,56 @@ else
 
     <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" Class="mt-4">
         Educational research only, not financial advice. No broker is connected — you place any trade yourself.
-        Always honour the stop. Higher risk = more setups but lower conviction each — it is a trade-off, not free.
+        @P.Disclaimer
     </MudAlert>
 }
 
 @code {
-    private SwingDashboard? _data;
+    private StrategyPresentation P = StrategyPresentation.Swing;
+    private StrategyDashboard? _data;
     private bool _loaded;
     // The scan runs in the singleton IRunManager so it survives navigation; this mirrors its state.
     private int _tid = -1;
-    private ActiveRun? _swingRun;
-    private bool _running => _swingRun is not null;
-    private SwingRiskLevel _risk = SwingRiskLevel.Medium;
+    private ActiveRun? _run;
+    private bool _running => _run is not null;
+    private RiskLevel _risk = RiskLevel.Medium;
 
     protected override async Task OnInitializedAsync()
     {
         Runs.RunStateChanged += OnRunStateChanged;
-        try { _tid = await Tenant.GetTenantIdAsync(); _swingRun = Runs.GetActive(_tid, RunKind.Swing); }
+        Nav.LocationChanged += OnLocationChanged;
+        await LoadForCurrentRouteAsync();
+    }
+
+    // Both routes map to this one component, so switching between /swing and /momentum keeps the
+    // instance alive — reload the dashboard for the new strategy rather than relying on re-init.
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        var next = StrategyPresentation.ForRoute(new Uri(e.Location).AbsolutePath);
+        if (next.Kind == P.Kind) return;
+        await InvokeAsync(async () => { await LoadForCurrentRouteAsync(); StateHasChanged(); });
+    }
+
+    private async Task LoadForCurrentRouteAsync()
+    {
+        P = StrategyPresentation.ForRoute(new Uri(Nav.Uri).AbsolutePath);
+        _loaded = false;
+        try { _tid = await Tenant.GetTenantIdAsync(); _run = Runs.GetActive(_tid, P.RunKind); }
         catch { /* no authenticated user */ }
         try
         {
-            _data = await Queries.GetDashboardAsync();
+            _data = await Queries.GetDashboardAsync(P.Kind);
             _risk = _data.RiskLevel;
         }
         finally { _loaded = true; }
     }
 
-    private async Task OnRiskChanged(SwingRiskLevel level)
+    private async Task OnRiskChanged(RiskLevel level)
     {
         if (level == _risk || _running) return;
         _risk = level;
-        await Settings.UpdateAsync(s => s.SwingRiskLevel = level);
+        var kind = P.Kind;
+        await Settings.UpdateAsync(s => { if (kind == StrategyKind.Swing) s.SwingRiskLevel = level; else s.MomentumRiskLevel = level; });
         Snackbar.Add($"Risk set to {level} — re-scanning…", Severity.Info);
         RunNow();
     }
@@ -201,22 +195,26 @@ else
     private void RunNow()
     {
         if (_tid < 0) return;
-        if (!Runs.Start(_tid, RunKind.Swing))
+        if (!Runs.Start(_tid, P.RunKind))
             Snackbar.Add("A scan is already in progress.", Severity.Info);
         // Progress + completion are driven by IRunManager.RunStateChanged.
     }
 
-    // Fired by IRunManager on every phase change / start / finish for this tenant's swing scan.
+    // Fired by IRunManager on every phase change / start / finish for this tenant's scan.
     private async void OnRunStateChanged(object? sender, RunStateChangedEvent e)
     {
-        if (e.TenantId != _tid || e.Kind != RunKind.Swing) return;
-        _swingRun = e.Active;
+        if (e.TenantId != _tid || e.Kind != P.RunKind) return;
+        _run = e.Active;
         if (e.Active is null) // scan ended — refresh today's setups
         {
-            try { _data = await Queries.GetDashboardAsync(); _risk = _data.RiskLevel; } catch { /* leave last view */ }
+            try { _data = await Queries.GetDashboardAsync(P.Kind); _risk = _data.RiskLevel; } catch { /* leave last view */ }
         }
         await InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose() => Runs.RunStateChanged -= OnRunStateChanged;
+    public void Dispose()
+    {
+        Runs.RunStateChanged -= OnRunStateChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }

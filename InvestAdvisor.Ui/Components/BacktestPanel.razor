@@ -1,0 +1,32 @@
+@* The backtest gate for a strategy: the latest replay's aggregates, or a "hasn't run" note. *@
+
+<MudPaper Class="pa-4" Elevation="1">
+    @if (Backtest is { } bt)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Surface">
+            Replay of the same rule over history@(bt.FromUtc is { } f && bt.ToUtc is { } t ? $" ({f:MMM yyyy}–{t:MMM yyyy})" : "").
+        </MudText>
+        <MudSimpleTable Dense="true" Hover="false" Class="mt-2" Style="background:transparent">
+            <tbody>
+                <tr><td>Trades</td><td align="right">@bt.TotalTrades</td></tr>
+                <tr><td>Win rate</td><td align="right">@bt.WinRatePct.ToString("0.0")%</td></tr>
+                <tr><td>Expectancy</td><td align="right">@bt.ExpectancyR.ToString("+0.000;-0.000;0.000")R</td></tr>
+                <tr><td>Profit factor</td><td align="right">@bt.ProfitFactor.ToString("0.00")</td></tr>
+                <tr><td>Max drawdown</td><td align="right">@bt.MaxDrawdownR.ToString("0.0")R</td></tr>
+                <tr><td>Avg hold</td><td align="right">@bt.AverageHoldingDays.ToString("0.0") d</td></tr>
+            </tbody>
+        </MudSimpleTable>
+        <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-2">
+            @Caveat R = multiples of the per-trade risk (distance to stop).
+        </MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.caption" Color="Color.Surface">Backtest hasn't run yet — it executes on the worker's first cycle.</MudText>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public BacktestView? Backtest { get; set; }
+    [Parameter] public string Caveat { get; set; } = string.Empty;
+}

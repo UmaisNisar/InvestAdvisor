@@ -124,6 +124,7 @@ public sealed class PaperTradeConfiguration : IEntityTypeConfiguration<PaperTrad
     {
         b.ToTable("PaperTrade");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Strategy).HasConversion<int>();
         b.Property(x => x.Ticker).HasMaxLength(16).IsRequired();
         b.Property(x => x.Name).HasMaxLength(128);
         b.Property(x => x.Rationale).HasMaxLength(512);
@@ -131,29 +132,30 @@ public sealed class PaperTradeConfiguration : IEntityTypeConfiguration<PaperTrad
         b.Property(x => x.Kind).HasConversion<int>();
         foreach (var prop in new[] { nameof(PaperTrade.EntryLow), nameof(PaperTrade.EntryHigh),
                      nameof(PaperTrade.EntryReference), nameof(PaperTrade.StopLoss), nameof(PaperTrade.Target),
-                     nameof(PaperTrade.RewardRiskRatio), nameof(PaperTrade.PositionSizePct),
+                     nameof(PaperTrade.RewardRiskRatio), nameof(PaperTrade.PositionSizePct), nameof(PaperTrade.TargetGainPct),
                      nameof(PaperTrade.CompositeScore), nameof(PaperTrade.ExitPrice), nameof(PaperTrade.RealizedR),
-                     nameof(PaperTrade.SignalRsi), nameof(PaperTrade.RegimeDistancePct),
-                     nameof(PaperTrade.PullbackPct), nameof(PaperTrade.RelativeVolume) })
+                     nameof(PaperTrade.SignalRsi), nameof(PaperTrade.RelativeVolume), nameof(PaperTrade.RegimeDistancePct),
+                     nameof(PaperTrade.PullbackPct), nameof(PaperTrade.AtrPercent), nameof(PaperTrade.BreakoutStrength) })
             b.Property(prop).HasPrecision(18, 4);
-        b.HasIndex(x => x.Status);
-        b.HasIndex(x => x.GeneratedAtUtc);
-        // One open setup per ticker per session — the guard that makes a daily scan idempotent.
-        b.HasIndex(x => new { x.Ticker, x.GeneratedAtUtc }).IsUnique();
+        b.HasIndex(x => new { x.Strategy, x.Status });
+        b.HasIndex(x => new { x.Strategy, x.GeneratedAtUtc });
+        // One open setup per strategy per ticker per session — the guard that makes a daily scan idempotent.
+        b.HasIndex(x => new { x.Strategy, x.Ticker, x.GeneratedAtUtc }).IsUnique();
     }
 }
 
-public sealed class SwingBacktestResultConfiguration : IEntityTypeConfiguration<SwingBacktestResult>
+public sealed class BacktestResultConfiguration : IEntityTypeConfiguration<BacktestResult>
 {
-    public void Configure(EntityTypeBuilder<SwingBacktestResult> b)
+    public void Configure(EntityTypeBuilder<BacktestResult> b)
     {
-        b.ToTable("SwingBacktestResult");
+        b.ToTable("BacktestResult");
         b.HasKey(x => x.Id);
-        foreach (var prop in new[] { nameof(SwingBacktestResult.WinRatePct), nameof(SwingBacktestResult.AverageR),
-                     nameof(SwingBacktestResult.ExpectancyR), nameof(SwingBacktestResult.ProfitFactor),
-                     nameof(SwingBacktestResult.MaxDrawdownR), nameof(SwingBacktestResult.AverageHoldingDays) })
+        b.Property(x => x.Strategy).HasConversion<int>();
+        foreach (var prop in new[] { nameof(BacktestResult.WinRatePct), nameof(BacktestResult.AverageR),
+                     nameof(BacktestResult.ExpectancyR), nameof(BacktestResult.ProfitFactor),
+                     nameof(BacktestResult.MaxDrawdownR), nameof(BacktestResult.AverageHoldingDays) })
             b.Property(prop).HasPrecision(18, 4);
-        b.HasIndex(x => x.GeneratedAtUtc);
+        b.HasIndex(x => new { x.Strategy, x.GeneratedAtUtc });
     }
 }
 
@@ -163,12 +165,13 @@ public sealed class SwingWatchItemConfiguration : IEntityTypeConfiguration<Swing
     {
         b.ToTable("SwingWatchItem");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Strategy).HasConversion<int>();
         b.Property(x => x.Ticker).HasMaxLength(16).IsRequired();
         b.Property(x => x.Name).HasMaxLength(128);
         b.Property(x => x.Note).HasMaxLength(256);
         foreach (var prop in new[] { nameof(SwingWatchItem.Close), nameof(SwingWatchItem.CompositeScore),
                      nameof(SwingWatchItem.Rsi), nameof(SwingWatchItem.RegimeDistancePct), nameof(SwingWatchItem.TrendDistancePct) })
             b.Property(prop).HasPrecision(18, 4);
-        b.HasIndex(x => x.GeneratedAtUtc);
+        b.HasIndex(x => new { x.Strategy, x.GeneratedAtUtc });
     }
 }

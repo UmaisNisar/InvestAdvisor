@@ -1,32 +1,32 @@
 using FluentAssertions;
 using InvestAdvisor.Core.Enums;
-using InvestAdvisor.Core.Swing;
+using InvestAdvisor.Core.Trading;
 using Xunit;
 
 namespace InvestAdvisor.Test.Swing;
 
 public class SwingSignalBuilderTests
 {
-    private static SwingInput Input(IReadOnlyList<Core.Models.Candle> candles) =>
+    private static StrategyInput Input(IReadOnlyList<Core.Models.Candle> candles) =>
         new("TEST", "Test Co.", "Tech", AssetClass.Equity, candles);
 
     [Fact]
     public void Build_returns_null_without_a_full_regime_window()
     {
         // Fewer than 200 bars → can't compute the regime SMA → no plan.
-        SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip(bars: 120)), SwingParams.Default).Should().BeNull();
+        TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeUpThenDip(bars: 120)), SwingParams.Default).Should().BeNull();
     }
 
     [Fact]
     public void Build_returns_null_when_there_is_no_volatility_to_size_a_stop()
     {
-        SwingSignalBuilder.Build(Input(SwingTestData.Flat(260)), SwingParams.Default).Should().BeNull();
+        TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.Flat(260)), SwingParams.Default).Should().BeNull();
     }
 
     [Fact]
     public void Build_produces_a_stop_below_and_a_target_above_the_entry()
     {
-        var built = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), SwingParams.Default);
+        var built = TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeUpThenDip()), SwingParams.Default);
         built.Should().NotBeNull();
         var setup = built!.Value.Setup;
 
@@ -38,8 +38,8 @@ public class SwingSignalBuilderTests
     [Fact]
     public void Stop_and_target_track_the_ATR_multiples()
     {
-        var p = SwingParams.Default with { AtrStopMultiple = 2.5m, TargetAtrMultiple = 1.5m };
-        var setup = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Setup;
+        var p = SwingParams.Default with { StopAtrMultiple = 2.5m, TargetAtrMultiple = 1.5m };
+        var setup = TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Setup;
 
         var risk = setup.EntryReference - setup.StopLoss;
         var reward = setup.Target - setup.EntryReference;
@@ -51,7 +51,7 @@ public class SwingSignalBuilderTests
     public void Position_size_scales_inversely_with_stop_distance_and_caps_at_the_max()
     {
         var p = SwingParams.Default with { RiskPerTradePct = 1m, MaxPositionPct = 25m };
-        var setup = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Setup;
+        var setup = TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Setup;
 
         var expected = Math.Min(25m, 1m / setup.StopDistancePct * 100m);
         setup.PositionSizePct.Should().BeApproximately(expected, 0.05m);
@@ -64,24 +64,24 @@ public class SwingSignalBuilderTests
         var p = SwingParams.Default;
 
         // Up-trend + sharp recent dip → above the 200-day SMA AND oversold → qualifies.
-        var dip = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Features;
+        var dip = (SwingFeatures)TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeUpThenDip()), p)!.Value.Features;
         dip.AboveRegime.Should().BeTrue();
-        SwingSignalBuilder.Qualifies(dip, p).Should().BeTrue();
+        SwingStrategy.Instance.Qualifies(dip, p).Should().BeTrue();
 
         // Up-trend but no pullback (not oversold) → must NOT qualify (we don't chase strength).
-        var noDip = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpNoDip()), p)!.Value.Features;
-        SwingSignalBuilder.Qualifies(noDip, p).Should().BeFalse();
+        var noDip = TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeUpNoDip()), p)!.Value.Features;
+        SwingStrategy.Instance.Qualifies(noDip, p).Should().BeFalse();
 
         // Down-trend (below the 200-day SMA) → regime filter blocks it even if oversold.
-        var down = SwingSignalBuilder.Build(Input(SwingTestData.RegimeDown()), p)!.Value.Features;
+        var down = (SwingFeatures)TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeDown()), p)!.Value.Features;
         down.AboveRegime.Should().BeFalse();
-        SwingSignalBuilder.Qualifies(down, p).Should().BeFalse();
+        SwingStrategy.Instance.Qualifies(down, p).Should().BeFalse();
     }
 
     [Fact]
     public void Setup_kind_tags_a_deep_oversold_dip()
     {
-        var setup = SwingSignalBuilder.Build(Input(SwingTestData.RegimeUpThenDip()), SwingParams.Default)!.Value.Setup;
-        setup.Kind.Should().Be(SwingSetupKind.DeepOversold);
+        var setup = TradePlanner.Build(SwingStrategy.Instance, Input(SwingTestData.RegimeUpThenDip()), SwingParams.Default)!.Value.Setup;
+        setup.Kind.Should().Be(SetupKind.Primary);
     }
 }
