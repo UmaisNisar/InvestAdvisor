@@ -25,8 +25,7 @@ public static class HostExtensions
         {
             services.AddHostedService<InvestAdvisorWorker>();
             services.AddHostedService<ScreenerWorker>();
-            services.AddHostedService<SwingWorker>();
-            services.AddHostedService<MomentumWorker>();
+            services.AddHostedService<StrategyWorker>();
         }
         services.AddHostedService<HoldingsImportWorker>();
         return services;

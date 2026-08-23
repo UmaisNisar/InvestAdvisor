@@ -181,21 +181,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScreenerScoringService, ScreenerScoringService>();
         services.AddScoped<IDailyRecommendationService, DailyRecommendationService>();
 
-        // Swing (short-horizon) module: pure scorer + orchestration (read models registered below).
-        services.AddSingleton<ISwingScoringService, SwingScoringService>();
-        services.AddScoped<ISwingService, SwingService>();
-
-        // Momentum (high-volatility breakout) module: pure scorer + orchestration.
-        services.AddSingleton<IMomentumScoringService, InvestAdvisor.Core.Momentum.MomentumScoringService>();
-        services.AddScoped<IMomentumService, MomentumService>();
+        // Short-horizon trading strategies (swing + momentum): one orchestration service, one read model.
+        services.AddScoped<IStrategyService, StrategyService>();
 
         services.AddScoped<INotificationChannel, EmailNotificationChannel>();
         services.AddScoped<INotificationChannel, InAppNotificationChannel>();
 
         services.AddScoped<IPortfolioQueries, PortfolioQueries>();
         services.AddScoped<IScreenerQueries, ScreenerQueries>();
-        services.AddScoped<ISwingQueries, SwingQueries>();
-        services.AddScoped<IMomentumQueries, MomentumQueries>();
+        services.AddScoped<IStrategyQueries, StrategyQueries>();
         services.AddScoped<IHoldingsService, HoldingsService>();
         services.AddScoped<IHoldingsImportService, HoldingsImportService>();
         services.AddScoped<IActivityImportService, ActivityImportService>();

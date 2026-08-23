@@ -1,6 +1,6 @@
 @page "/invest"
 @inject IScreenerQueries Screener
-@inject ISwingQueries Swing
+@inject IStrategyQueries Strategies
 
 @* flex-wrap + nowrap on the link: on phones the title wraps while the link stays whole,
    instead of the link breaking into "Full" / "screener →". *@
@@ -50,7 +50,7 @@ else
                     }
                     @foreach (var s in _swing.Setups.Take(3))
                     {
-                        <SwingSetupCard Setup="s" />
+                        <SetupCard Setup="s" Strategy="InvestAdvisor.Core.Trading.StrategyKind.Swing" />
                     }
                 }
             </MudPaper>
@@ -71,7 +71,7 @@ else
 
 @code {
     private DailyRecommendationView? _rec;
-    private SwingDashboard? _swing;
+    private StrategyDashboard? _swing;
     private bool _loaded;
 
     protected override async Task OnInitializedAsync()
@@ -79,7 +79,7 @@ else
         try
         {
             _rec = await Screener.GetDailyRecommendationAsync();
-            _swing = await Swing.GetDashboardAsync();
+            _swing = await Strategies.GetDashboardAsync(InvestAdvisor.Core.Trading.StrategyKind.Swing);
         }
         finally { _loaded = true; }
     }

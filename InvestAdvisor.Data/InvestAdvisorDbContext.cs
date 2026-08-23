@@ -27,14 +27,10 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<DailyRecommendation> DailyRecommendations => Set<DailyRecommendation>();
     public DbSet<SentimentRun> SentimentRuns => Set<SentimentRun>();
 
-    // Swing (short-horizon trading) entities.
+    // Short-horizon trading strategies (swing + momentum share these, discriminated by Strategy).
     public DbSet<PaperTrade> PaperTrades => Set<PaperTrade>();
-    public DbSet<SwingBacktestResult> SwingBacktestResults => Set<SwingBacktestResult>();
+    public DbSet<BacktestResult> BacktestResults => Set<BacktestResult>();
     public DbSet<SwingWatchItem> SwingWatchItems => Set<SwingWatchItem>();
-
-    // Momentum (high-volatility breakout) entities.
-    public DbSet<MomentumCandidate> MomentumCandidates => Set<MomentumCandidate>();
-    public DbSet<MomentumBacktestResult> MomentumBacktestResults => Set<MomentumBacktestResult>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

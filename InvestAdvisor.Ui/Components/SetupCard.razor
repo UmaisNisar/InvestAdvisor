@@ -1,0 +1,57 @@
+@* One trade setup from any strategy: the plan with its risk bounds. Never a bare "buy" — entry,
+   stop, target and size are always shown together so the worst case is visible before entry. *@
+@using InvestAdvisor.Core.Trading
+
+<MudPaper Class="pa-3 mb-2" Elevation="1" Outlined="true">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600">
+            <code>@Setup.Ticker</code>
+            <MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">&nbsp;@Setup.Name</MudText>
+        </MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            @if (Setup.Kind != SetupKind.None)
+            {
+                <MudTooltip Text="@P.KindTooltip(Setup.Kind)">
+                    <MudChip T="string" Size="Size.Small" Variant="@(Setup.Kind == SetupKind.Primary ? Variant.Filled : Variant.Outlined)" Color="Color.Default">@P.KindLabel(Setup.Kind)</MudChip>
+                </MudTooltip>
+            }
+            <MudTooltip Text="@P.ScoreTooltip">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">@Setup.CompositeScore.ToString("0")</MudChip>
+            </MudTooltip>
+        </MudStack>
+    </MudStack>
+
+    <MudGrid Class="mt-1" Spacing="2">
+        <MudItem xs="6" sm="3">
+            <MudText Typo="Typo.caption" Color="Color.Surface">Entry</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600">@Fmt.Price(Setup.EntryLow)–@Fmt.Price(Setup.EntryHigh)</MudText>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudText Typo="Typo.caption" Color="Color.Surface">Stop</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--ia-down)">@Fmt.Price(Setup.StopLoss)</MudText>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudTooltip Text="@($"Reward:risk {Setup.RewardRiskRatio:0.0}:1 — projected gain to target ~{Setup.TargetGainPct:0.0}%.")">
+                <MudText Typo="Typo.caption" Color="Color.Surface">Target (+@Setup.TargetGainPct.ToString("0.0")%)</MudText>
+                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--ia-up)">@Fmt.Price(Setup.Target)</MudText>
+            </MudTooltip>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudTooltip Text="@P.SizeTooltip">
+                <MudText Typo="Typo.caption" Color="Color.Surface">Size</MudText>
+                <MudText Typo="Typo.body2" Style="font-weight:600">@Setup.PositionSizePct.ToString("0.0")%</MudText>
+            </MudTooltip>
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-1">
+        @Setup.Rationale Hold ~@Setup.HoldingDays sessions.
+    </MudText>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public SetupView Setup { get; set; } = default!;
+    [Parameter, EditorRequired] public StrategyKind Strategy { get; set; }
+
+    private StrategyPresentation P => StrategyPresentation.For(Strategy);
+}

@@ -1,96 +1,101 @@
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
-using InvestAdvisor.Core.Swing;
+using InvestAdvisor.Core.Trading;
+using InvestAdvisor.Data.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Queries;
 
 /// <summary>
-/// Read models for the Swing page. Today's setups are the most recently generated open paper
-/// trades; the track record is computed from resolved ones; the gate comes from the latest backtest.
+/// Read models for a strategy page. Today's setups are the most recently generated open paper
+/// trades of that strategy; the track record is computed from its resolved ones; the gate comes
+/// from its latest backtest.
 /// </summary>
-public sealed class SwingQueries(
+public sealed class StrategyQueries(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    IRuntimeSettingsStore settingsStore) : ISwingQueries
+    IRuntimeSettingsStore settingsStore) : IStrategyQueries
 {
-    public async Task<SwingDashboard> GetDashboardAsync(CancellationToken ct = default)
+    public async Task<StrategyDashboard> GetDashboardAsync(StrategyKind kind, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var riskLevel = (await settingsStore.GetAsync(ct)).SwingRiskLevel;
-        var universeSize = await db.Stocks.AsNoTracking().CountAsync(s => s.IsActive && s.IsSwingUniverse, ct);
+        var settings = await settingsStore.GetAsync(ct);
+        var riskLevel = kind == StrategyKind.Swing ? settings.SwingRiskLevel : settings.MomentumRiskLevel;
+        var universeSize = await db.Stocks.AsNoTracking()
+            .CountAsync(s => s.IsActive && (kind == StrategyKind.Swing ? s.IsSwingUniverse : s.IsMomentumUniverse), ct);
+
+        var trades = db.PaperTrades.AsNoTracking().Where(t => t.Strategy == kind);
 
         // Today's setups = the open trades from the latest generation date.
-        var latestDate = await db.PaperTrades.AsNoTracking()
+        var latestDate = await trades
             .Where(t => t.Status == PaperTradeStatus.Open)
             .OrderByDescending(t => t.GeneratedAtUtc)
             .Select(t => (DateTime?)t.GeneratedAtUtc)
             .FirstOrDefaultAsync(ct);
 
         var setups = latestDate is null
-            ? new List<SwingSetupView>()
-            : (await db.PaperTrades.AsNoTracking()
+            ? new List<SetupView>()
+            : (await trades
                     .Where(t => t.Status == PaperTradeStatus.Open && t.GeneratedAtUtc == latestDate)
                     .OrderByDescending(t => t.CompositeScore)
                     .ToListAsync(ct))
-                .Select(t => new SwingSetupView(
+                .Select(t => new SetupView(
                     t.Ticker, t.Name, t.EntryLow, t.EntryHigh, t.StopLoss, t.Target,
-                    t.RewardRiskRatio, t.HoldingDays, t.PositionSizePct, t.CompositeScore,
+                    t.RewardRiskRatio, t.HoldingDays, t.PositionSizePct, t.TargetGainPct, t.CompositeScore,
                     t.Kind, t.Rationale, t.GeneratedAtUtc))
                 .ToList();
 
-        var openCount = await db.PaperTrades.AsNoTracking().CountAsync(t => t.Status == PaperTradeStatus.Open, ct);
-        var resolved = await db.PaperTrades.AsNoTracking()
+        var openCount = await trades.CountAsync(t => t.Status == PaperTradeStatus.Open, ct);
+        var resolved = await trades
             .Where(t => t.Status != PaperTradeStatus.Open && t.RealizedR != null)
             .Select(t => t.RealizedR!.Value)
             .ToListAsync(ct);
 
-        SwingTrackRecord? track = null;
+        TrackRecordView? track = null;
         if (resolved.Count > 0 || openCount > 0)
         {
             var wins = resolved.Count(r => r > 0m);
-            var losses = resolved.Count(r => r <= 0m);
-            track = new SwingTrackRecord(
+            track = new TrackRecordView(
                 Resolved: resolved.Count,
                 Open: openCount,
                 Wins: wins,
-                Losses: losses,
+                Losses: resolved.Count - wins,
                 WinRatePct: resolved.Count == 0 ? 0m : Math.Round((decimal)wins / resolved.Count * 100m, 1),
                 TotalR: Math.Round(resolved.Sum(), 2),
                 AverageR: resolved.Count == 0 ? 0m : Math.Round(resolved.Average(), 3));
         }
 
         // Watchlist = the latest near-setups snapshot (closest-to-triggering names).
-        var watchDate = await db.SwingWatchItems.AsNoTracking()
+        var watchItems = db.SwingWatchItems.AsNoTracking().Where(w => w.Strategy == kind);
+        var watchDate = await watchItems
             .OrderByDescending(w => w.GeneratedAtUtc)
             .Select(w => (DateTime?)w.GeneratedAtUtc)
             .FirstOrDefaultAsync(ct);
         var watchlist = watchDate is null
-            ? new List<SwingWatchView>()
-            : (await db.SwingWatchItems.AsNoTracking()
+            ? new List<WatchView>()
+            : (await watchItems
                     .Where(w => w.GeneratedAtUtc == watchDate)
                     .OrderBy(w => w.Rsi)
                     .ToListAsync(ct))
-                .Select(w => new SwingWatchView(w.Ticker, w.Name, w.Close, w.Rsi, w.RegimeDistancePct, w.Note))
+                .Select(w => new WatchView(w.Ticker, w.Name, w.Close, w.Rsi, w.RegimeDistancePct, w.Note))
                 .ToList();
 
-        var bt = await db.SwingBacktestResults.AsNoTracking()
+        var bt = await db.BacktestResults.AsNoTracking()
+            .Where(x => x.Strategy == kind)
             .OrderByDescending(x => x.GeneratedAtUtc)
             .FirstOrDefaultAsync(ct);
 
-        SwingBacktestView? backtest = null;
+        BacktestView? backtest = null;
         var validated = false;
         if (bt is not null)
         {
-            var summary = new SwingBacktestSummary(bt.TotalTrades, bt.Wins, bt.Losses, bt.WinRatePct,
-                bt.AverageR, bt.ExpectancyR, bt.ProfitFactor, bt.MaxDrawdownR, bt.AverageHoldingDays,
-                bt.FromUtc, bt.ToUtc);
-            validated = summary.HasEdge();
-            backtest = new SwingBacktestView(
+            var minProfitFactor = StrategyService.StrategyFor(kind).ParamsFor(riskLevel).MinProfitFactor;
+            validated = bt.ToSummary().HasEdge(minProfitFactor);
+            backtest = new BacktestView(
                 bt.GeneratedAtUtc, bt.TotalTrades, bt.WinRatePct, bt.ExpectancyR, bt.ProfitFactor,
                 bt.MaxDrawdownR, bt.AverageHoldingDays, bt.FromUtc, bt.ToUtc, validated);
         }
 
-        return new SwingDashboard(universeSize, riskLevel, latestDate, validated, setups, watchlist, track, backtest);
+        return new StrategyDashboard(kind, universeSize, riskLevel, latestDate, validated, setups, watchlist, track, backtest);
     }
 }

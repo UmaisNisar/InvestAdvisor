@@ -1,23 +1,17 @@
 using InvestAdvisor.Core.Models;
+using InvestAdvisor.Test.TestHelpers;
 
 namespace InvestAdvisor.Test.Momentum;
 
 /// <summary>Builders for synthetic candle series with known shapes, used across the momentum tests.</summary>
 internal static class MomentumTestData
 {
-    private static readonly DateTime Start = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-    /// <summary>A bar built from a close, with a fixed-fraction high/low band and given volume.</summary>
+    /// <summary>Momentum bars use a ±4% band (high volatility).</summary>
     public static Candle Bar(int dayIndex, decimal close, decimal bandPct = 0.04m, long volume = 1_000_000) =>
-        new(Start.AddDays(dayIndex), close, close * (1 + bandPct), close * (1 - bandPct), close, volume);
+        CandleBuilder.Bar(dayIndex, close, bandPct, volume);
 
-    /// <summary>Flat series — every close identical (zero volatility, zero ATR).</summary>
-    public static IReadOnlyList<Candle> Flat(int count, decimal price = 100m, long volume = 1_000_000)
-    {
-        var list = new List<Candle>(count);
-        for (var i = 0; i < count; i++) list.Add(new Candle(Start.AddDays(i), price, price, price, price, volume));
-        return list;
-    }
+    public static IReadOnlyList<Candle> Flat(int count, decimal price = 100m, long volume = 1_000_000) =>
+        CandleBuilder.Flat(count, price, volume);
 
     /// <summary>
     /// A high-volatility up-trend that coils into a tight base, then breaks the prior high on a volume
@@ -38,7 +32,7 @@ internal static class MomentumTestData
         for (var i = 0; i < baseBars; i++) list.Add(Bar(day++, level, baseBand, baseVolume));
 
         var bClose = level * (1 + breakoutPct);
-        list.Add(new Candle(Start.AddDays(day), level, bClose * 1.005m, level * 0.995m, bClose, breakoutVolume));
+        list.Add(new Candle(CandleBuilder.Start.AddDays(day), level, bClose * 1.005m, level * 0.995m, bClose, breakoutVolume));
         return list;
     }
 
@@ -62,7 +56,7 @@ internal static class MomentumTestData
         {
             for (var i = 0; i < baseBars; i++) list.Add(Bar(day++, level, baseBand, baseVolume));
             var bClose = level * (1 + breakoutPct);
-            list.Add(new Candle(Start.AddDays(day++), level, bClose * 1.005m, level * 0.995m, bClose, breakoutVolume));
+            list.Add(new Candle(CandleBuilder.Start.AddDays(day++), level, bClose * 1.005m, level * 0.995m, bClose, breakoutVolume));
             // A couple of digestion bars at the new level before the next coil.
             level = bClose;
             list.Add(Bar(day++, level, trendBand, baseVolume));
@@ -91,7 +85,7 @@ internal static class MomentumTestData
         for (var i = 0; i < baseBars; i++) list.Add(Bar(day++, level, baseBand, baseVolume));
 
         var bClose = level * (1 + breakoutPct);
-        list.Add(new Candle(Start.AddDays(day++), level, bClose * 1.005m, level * 0.995m, bClose, breakoutVolume));
+        list.Add(new Candle(CandleBuilder.Start.AddDays(day++), level, bClose * 1.005m, level * 0.995m, bClose, breakoutVolume));
 
         var p = bClose;
         for (var i = 0; i < runDays; i++) { p *= 1 + runStep; list.Add(Bar(day++, p, 0.02m, baseVolume)); }      // run up

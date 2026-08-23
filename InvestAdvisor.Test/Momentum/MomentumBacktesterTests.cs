@@ -1,28 +1,28 @@
 using FluentAssertions;
 using InvestAdvisor.Core.Enums;
 using InvestAdvisor.Core.Models;
-using InvestAdvisor.Core.Momentum;
+using InvestAdvisor.Core.Trading;
 using Xunit;
 
 namespace InvestAdvisor.Test.Momentum;
 
 public class MomentumBacktesterTests
 {
-    private static MomentumInput Input(IReadOnlyList<Candle> candles) =>
+    private static StrategyInput Input(IReadOnlyList<Candle> candles) =>
         new("TEST", "Test Co.", "Tech", AssetClass.Equity, candles);
 
     [Fact]
     public void Flat_market_yields_no_trades()
     {
-        var result = MomentumBacktester.Run(new[] { Input(MomentumTestData.Flat(300)) });
-        result.Should().Be(MomentumBacktestSummary.Empty);
+        var result = Backtester.Run(MomentumStrategy.Instance, new[] { Input(MomentumTestData.Flat(300)) }, MomentumParams.Default);
+        result.Should().Be(BacktestSummary.Empty);
         result.TotalTrades.Should().Be(0);
     }
 
     [Fact]
     public void Repeated_breakouts_produce_trades_with_consistent_aggregates()
     {
-        var result = MomentumBacktester.Run(new[] { Input(MomentumTestData.RepeatedBreakouts()) });
+        var result = Backtester.Run(MomentumStrategy.Instance, new[] { Input(MomentumTestData.RepeatedBreakouts()) }, MomentumParams.Default);
 
         result.TotalTrades.Should().BeGreaterThan(0);
         (result.Wins + result.Losses).Should().Be(result.TotalTrades);
@@ -35,7 +35,7 @@ public class MomentumBacktesterTests
     public void Every_outcome_stays_within_the_R_bounds_of_the_rule()
     {
         var p = MomentumParams.Default;
-        var result = MomentumBacktester.Run(new[] { Input(MomentumTestData.RepeatedBreakouts()) }, p);
+        var result = Backtester.Run(MomentumStrategy.Instance, new[] { Input(MomentumTestData.RepeatedBreakouts()) }, p);
 
         // No single trade loses much more than 1R or wins much more than the reward:risk target.
         result.AverageR.Should().BeInRange(-1.2m, p.RewardRiskRatio + 0.2m);
@@ -45,11 +45,11 @@ public class MomentumBacktesterTests
     public void Trailing_stop_lets_a_winner_run_past_the_fixed_target()
     {
         var data = new[] { Input(MomentumTestData.BreakoutThenRun()) };
-        var fixedP = MomentumParams.For(MomentumRiskLevel.High);
+        var fixedP = MomentumParams.For(RiskLevel.High);
         var trailP = fixedP with { UseTrailingStop = true, HoldingDays = 12, TrailAtrMultiple = 2.5m, TrailActivateR = 1.0m };
 
-        var btFixed = MomentumBacktester.Run(data, fixedP);
-        var btTrail = MomentumBacktester.Run(data, trailP);
+        var btFixed = Backtester.Run(MomentumStrategy.Instance, data, fixedP);
+        var btTrail = Backtester.Run(MomentumStrategy.Instance, data, trailP);
 
         btFixed.TotalTrades.Should().BeGreaterThan(0);
         btTrail.TotalTrades.Should().BeGreaterThan(0);
@@ -61,28 +61,28 @@ public class MomentumBacktesterTests
     [Fact]
     public void HasEdge_rejects_break_even_noise_even_with_a_large_sample()
     {
-        var breakEven = new MomentumBacktestSummary(
+        var breakEven = new BacktestSummary(
             TotalTrades: 1430, Wins: 600, Losses: 830, WinRatePct: 42m,
             AverageR: 0.01m, ExpectancyR: 0.01m, ProfitFactor: 1.05m,
             MaxDrawdownR: 50m, AverageHoldingDays: 2.4m, FromUtc: null, ToUtc: null);
-        breakEven.HasEdge().Should().BeFalse();
+        breakEven.HasEdge(MomentumParams.Default.MinProfitFactor).Should().BeFalse();
     }
 
     [Fact]
     public void HasEdge_demands_a_stricter_profit_factor_than_the_swing_engine()
     {
         // A PF of 1.2 — which the swing engine's 1.15 gate would pass — must NOT pass momentum's 1.3 bar.
-        var thin = new MomentumBacktestSummary(
+        var thin = new BacktestSummary(
             TotalTrades: 400, Wins: 160, Losses: 240, WinRatePct: 40m,
             AverageR: 0.08m, ExpectancyR: 0.08m, ProfitFactor: 1.2m,
             MaxDrawdownR: 20m, AverageHoldingDays: 2.5m, FromUtc: null, ToUtc: null);
-        thin.HasEdge().Should().BeFalse();
+        thin.HasEdge(MomentumParams.Default.MinProfitFactor).Should().BeFalse();
 
         // A genuine momentum edge: lower win rate, but a profit factor with real cushion.
         var real = thin with { ProfitFactor = 1.45m, AverageR = 0.18m, ExpectancyR = 0.18m };
-        real.HasEdge().Should().BeTrue();
+        real.HasEdge(MomentumParams.Default.MinProfitFactor).Should().BeTrue();
 
         // Same edge, too small a sample — not enough to trust.
-        (real with { TotalTrades = 20 }).HasEdge().Should().BeFalse();
+        (real with { TotalTrades = 20 }).HasEdge(MomentumParams.Default.MinProfitFactor).Should().BeFalse();
     }
 }

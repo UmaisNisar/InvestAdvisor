@@ -8,4 +8,7 @@ public enum RunKind
 
     /// <summary>Swing "Re-scan now": rescan the swing universe for setups.</summary>
     Swing = 1,
+
+    /// <summary>Momentum "Re-scan now": rescan the high-volatility universe for breakouts.</summary>
+    Momentum = 2,
 }
