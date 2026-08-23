@@ -9,7 +9,7 @@ namespace InvestAdvisor.Maui.HostServices;
 /// <summary>
 /// MAUI has no generic host, so the background engine (DB migration + the registered
 /// IHostedServices) is started explicitly when the window opens and stopped when it closes —
-/// the same lifecycle the Photino host drove around Photino's Run().
+/// the same lifecycle the web host gets from the generic host.
 /// </summary>
 public sealed class EngineRunner(IServiceProvider services, ILogger<EngineRunner> logger)
 {

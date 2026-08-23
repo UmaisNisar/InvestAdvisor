@@ -7,8 +7,8 @@ namespace InvestAdvisor.Data.Queries;
 
 /// <summary>
 /// Builds the Screener read models. Recomputes the composite ranking live (so it reflects the
-/// current factor weights), attaches each stock's latest LLM analysis, exposes a universe
-/// valuation gauge, and surfaces top picks chosen by composite strength (not daily movement).
+/// current factor weights), exposes a universe valuation gauge, and surfaces top picks chosen
+/// by composite strength (not daily movement).
 /// </summary>
 public sealed class ScreenerQueries(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
@@ -21,16 +21,12 @@ public sealed class ScreenerQueries(
         if (ranked.Count == 0)
             return new ScreenerView(0, null, null, Array.Empty<ScreenerEntry>(), Array.Empty<ScreenerEntry>());
 
-        Dictionary<string, StockAnalysisView> analyses;
-        await using (var db = await dbFactory.CreateDbContextAsync(ct))
-            analyses = await LoadLatestAnalysesAsync(db, ct);
-
         var maxAsOf = ranked.Select(s => s.Snapshot.DataAsOfUtc)
             .Where(d => d.HasValue).Select(d => d!.Value)
             .DefaultIfEmpty().Max();
         DateTime? asOf = maxAsOf == default ? null : maxAsOf;
 
-        ScreenerEntry Entry(StockScore s, int idx) => new(idx + 1, s, analyses.GetValueOrDefault(s.Ticker));
+        static ScreenerEntry Entry(StockScore s, int idx) => new(idx + 1, s);
 
         var opportunities = ranked.Take(topCount).Select((s, i) => Entry(s, i)).ToList();
         var start = Math.Max(0, ranked.Count - bottomCount);
@@ -53,7 +49,6 @@ public sealed class ScreenerQueries(
             latest.GeneratedAtUtc,
             latest.Summary,
             latest.Caution,
-            DeserPicks(latest.StocksJson),
             DeserPicks(latest.EtfsJson),
             DeserPicks(latest.CryptoJson));
     }
@@ -112,29 +107,5 @@ public sealed class ScreenerQueries(
         if (pes.Count == 0) return null;
         var mid = pes.Count / 2;
         return pes.Count % 2 == 1 ? pes[mid] : (pes[mid - 1] + pes[mid]) / 2m;
-    }
-
-    private static async Task<Dictionary<string, StockAnalysisView>> LoadLatestAnalysesAsync(
-        InvestAdvisorDbContext db, CancellationToken ct)
-    {
-        var rows = await db.StockAnalyses.AsNoTracking()
-            .OrderByDescending(a => a.GeneratedAtUtc)
-            .ToListAsync(ct);
-        var map = new Dictionary<string, StockAnalysisView>(StringComparer.OrdinalIgnoreCase);
-        foreach (var r in rows)
-        {
-            if (map.ContainsKey(r.Ticker)) continue;
-            map[r.Ticker] = new StockAnalysisView(
-                r.GeneratedAtUtc, r.Summary, r.Thesis,
-                Deser(r.BullishFactorsJson), Deser(r.BearishFactorsJson), Deser(r.KeyRisksJson),
-                r.Conviction, r.ConvictionLabel);
-        }
-        return map;
-    }
-
-    private static IReadOnlyList<string> Deser(string json)
-    {
-        try { return JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>(); }
-        catch { return Array.Empty<string>(); }
     }
 }

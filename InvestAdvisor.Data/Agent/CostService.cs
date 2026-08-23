@@ -7,7 +7,7 @@ namespace InvestAdvisor.Data.Agent;
 
 /// <summary>
 /// Computes AI spend by aggregating the model + token columns already stored on every run row
-/// (<c>AdviceLog</c>, <c>DailyRecommendation</c>, <c>StockAnalysis</c>) through <see cref="ModelPricing"/>.
+/// (<c>AdviceLog</c>, <c>DailyRecommendation</c>, <c>SentimentRun</c>) through <see cref="ModelPricing"/>.
 /// No dedicated cost table — the run rows are the history.
 /// </summary>
 public sealed class CostService(
@@ -17,7 +17,6 @@ public sealed class CostService(
 {
     private const string SourcePortfolio = "Portfolio agent";
     private const string SourceDailyRec = "Daily recommendation";
-    private const string SourceStock = "Stock analysis";
     private const string SourceSentiment = "Sentiment scoring";
 
     private readonly record struct Row(DateTime Ts, string Source, string Trigger, string Model, long Input, long Output);
@@ -42,13 +41,6 @@ public sealed class CostService(
             .ToListAsync(ct);
         foreach (var r in recs)
             rows.Add(new Row(r.GeneratedAtUtc, SourceDailyRec, "—", r.Model, r.InputTokens, r.OutputTokens));
-
-        var stocks = await db.StockAnalyses.AsNoTracking()
-            .Where(s => s.GeneratedAtUtc >= sinceUtc)
-            .Select(s => new { s.GeneratedAtUtc, s.Model, s.InputTokens, s.OutputTokens })
-            .ToListAsync(ct);
-        foreach (var s in stocks)
-            rows.Add(new Row(s.GeneratedAtUtc, SourceStock, "—", s.Model, s.InputTokens, s.OutputTokens));
 
         var sentiment = await db.SentimentRuns.AsNoTracking()
             .Where(s => s.GeneratedAtUtc >= sinceUtc)

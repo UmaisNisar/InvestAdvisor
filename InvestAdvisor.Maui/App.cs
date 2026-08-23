@@ -13,7 +13,7 @@ public class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
-        // Migrate + start workers before the UI renders, like the Photino host did. Task.Run
+        // Migrate + start workers before the UI renders. Task.Run
         // escapes the UI SynchronizationContext so blocking here can't deadlock.
         Task.Run(_engine.StartAsync).GetAwaiter().GetResult();
 

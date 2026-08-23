@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <!-- Phase 1 targets the desktop platforms the Photino host covered. iOS/Android come
+    <!-- Phase 1 targets desktop platforms. iOS/Android come
          later and only need extra TFMs + Platforms folders — the host composition and the
          shared Ui RCL already work per-platform. -->
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
@@ -21,7 +21,7 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
 
-    <!-- Plain unpackaged desktop exe — no MSIX, runs from bin like the Photino host did. -->
+    <!-- Plain unpackaged desktop exe — no MSIX, runs from bin. -->
     <WindowsPackageType>None</WindowsPackageType>
 
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>

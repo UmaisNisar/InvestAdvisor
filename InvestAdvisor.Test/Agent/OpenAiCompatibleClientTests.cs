@@ -93,36 +93,19 @@ public class OpenAiCompatibleClientTests
     }
 
     [Fact]
-    public async Task AnalyzeStockAsync_maps_fields_and_tokens()
-    {
-        var args = """
-        {"summary":"Sum","thesis":"Th","bullishFactors":["b1"],"bearishFactors":["x1"],
-         "keyRisks":["r1"],"conviction":80,"convictionLabel":"high"}
-        """;
-        var (sut, _) = BuildSut(ToolCallResponse("emit_stock_analysis", args));
-
-        var result = await sut.AnalyzeStockAsync(GeminiEndpoint, "gemini-2.5-flash", "sys", "{}");
-
-        result.Summary.Should().Be("Sum");
-        result.BullishFactors.Should().ContainSingle().Which.Should().Be("b1");
-        result.Conviction.Should().Be(80);
-        result.ConvictionLabel.Should().Be("high");
-        result.InputTokens.Should().Be(321);
-        result.OutputTokens.Should().Be(45);
-    }
-
-    [Fact]
     public async Task RecommendAllocationAsync_parses_picks()
     {
         var args = """
         {"summary":"s","caution":"c",
-         "stocks":[{"ticker":"shop.to","reason":"strong"}],"etfs":[],"crypto":[]}
+         "etfs":[{"ticker":"xiu.to","reason":"strong"}],"crypto":[]}
         """;
         var (sut, _) = BuildSut(ToolCallResponse("emit_daily_recommendation", args));
 
         var result = await sut.RecommendAllocationAsync(GeminiEndpoint, "gemini-2.5-flash", "sys", "{}");
 
-        result.Stocks.Should().ContainSingle().Which.Ticker.Should().Be("SHOP.TO");
+        result.Etfs.Should().ContainSingle().Which.Ticker.Should().Be("XIU.TO");
+        result.InputTokens.Should().Be(321);
+        result.OutputTokens.Should().Be(45);
     }
 
     [Fact]

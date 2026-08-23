@@ -8,7 +8,7 @@ namespace InvestAdvisor.Ui.Theme;
 /// in light mode that invert to near-white in dark mode, so the green/red market data is
 /// the only color on screen. Semantic states keep the refreshed system colors, and surfaces,
 /// labels and separators follow Apple's dynamic gray ramp. Defined once here so both hosts
-/// (Photino desktop + Blazor Server) share it.
+/// (MAUI desktop + Blazor Server) share it.
 /// </summary>
 public static class AppTheme
 {

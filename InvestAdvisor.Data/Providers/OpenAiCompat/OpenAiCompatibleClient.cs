@@ -62,39 +62,6 @@ public sealed class OpenAiCompatibleClient(
             ParseFallbackUsed: fallbackUsed);
     }
 
-    public async Task<StockAnalysisResult> AnalyzeStockAsync(
-        LlmEndpoint endpoint,
-        string model,
-        string systemPrompt,
-        string stockContextJson,
-        CancellationToken ct = default)
-    {
-        var body = BuildBody(model, systemPrompt,
-            LlmEnvelope.StockUserPreamble + stockContextJson,
-            EmitStockAnalysisToolSchema.AsToolNode(), EmitStockAnalysisToolSchema.ToolName);
-        var (parsed, rawBody, latencyMs) = await SendAsync(endpoint, body, ct);
-
-        using var payload = ExtractPayload(parsed, EmitStockAnalysisToolSchema.ToolName);
-        var (s, fallbackUsed) = LlmResponseParsing.Parse(
-            payload.ToolInput, payload.Text, rawBody, EmitStockAnalysisToolSchema.ToolName,
-            LlmResponseParsing.DeserializeStock);
-
-        return new StockAnalysisResult(
-            Summary: s.Summary,
-            Thesis: s.Thesis,
-            BullishFactors: s.Bullish,
-            BearishFactors: s.Bearish,
-            KeyRisks: s.Risks,
-            Conviction: s.Conviction,
-            ConvictionLabel: s.ConvictionLabel,
-            RawResponseBody: rawBody,
-            Model: parsed.Model ?? model,
-            InputTokens: parsed.Usage?.PromptTokens ?? 0,
-            OutputTokens: parsed.Usage?.CompletionTokens ?? 0,
-            LatencyMs: latencyMs,
-            ParseFallbackUsed: fallbackUsed);
-    }
-
     public async Task<DailyRecommendationResult> RecommendAllocationAsync(
         LlmEndpoint endpoint,
         string model,
@@ -115,7 +82,6 @@ public sealed class OpenAiCompatibleClient(
         return new DailyRecommendationResult(
             Summary: rec.Summary,
             Caution: rec.Caution,
-            Stocks: rec.Stocks,
             Etfs: rec.Etfs,
             Crypto: rec.Crypto,
             RawResponseBody: rawBody,

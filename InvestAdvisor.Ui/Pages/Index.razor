@@ -448,7 +448,7 @@ else
         if (_rec is null) return string.Empty;
         static string Join(IReadOnlyList<RecommendationPick> p) =>
             p.Count == 0 ? "none" : string.Join(", ", p.Select(x => x.Ticker));
-        return $"Stocks: {Join(_rec.Stocks)}  ·  ETFs: {Join(_rec.Etfs)}  ·  Crypto: {Join(_rec.Crypto)}";
+        return $"ETFs: {Join(_rec.Etfs)}  ·  Crypto: {Join(_rec.Crypto)}";
     }
 
     private async Task Reload()

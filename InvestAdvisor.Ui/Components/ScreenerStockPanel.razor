@@ -1,4 +1,4 @@
-@* One expandable row on the Screener page: score + factor breakdown + the AI bull/bear/thesis. *@
+@* One expandable row on the Screener page: score + factor breakdown. *@
 
 <MudExpansionPanel>
     <TitleContent>
@@ -14,14 +14,6 @@
                     <MudText Typo="Typo.caption" Inline="true" Color="Color.Surface">&nbsp;@Entry.Score.Name · @Entry.Score.Sector</MudText>
                 </MudText>
             </div>
-            @if (Entry.Analysis is { } a)
-            {
-                <MudTooltip Text="The AI's qualitative confidence in its read of the data (0–100). Not a guarantee or a price target.">
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="ConvictionColor(a.ConvictionLabel)">
-                        @a.ConvictionLabel · @a.Conviction/100
-                    </MudChip>
-                </MudTooltip>
-            }
         </div>
     </TitleContent>
 
@@ -43,42 +35,6 @@
             <div style="width:34px;text-align:right"><MudText Typo="Typo.caption">@(f.Value?.ToString("0") ?? "—")</MudText></div>
         </div>
     }
-
-    @if (Entry.Analysis is { } an)
-    {
-        <MudDivider Class="my-3" />
-        <MudText Typo="Typo.body2" Class="mb-2">@an.Summary</MudText>
-        <MudText Typo="Typo.subtitle2">Thesis</MudText>
-        <MudText Typo="Typo.body2" Class="mb-3">@an.Thesis</MudText>
-        <MudGrid>
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.subtitle2" Color="Color.Success">Bullish</MudText>
-                <ul style="margin:4px 0;padding-left:18px">
-                    @foreach (var x in an.BullishFactors) { <li><MudText Typo="Typo.caption">@x</MudText></li> }
-                </ul>
-            </MudItem>
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.subtitle2" Color="Color.Error">Bearish</MudText>
-                <ul style="margin:4px 0;padding-left:18px">
-                    @foreach (var x in an.BearishFactors) { <li><MudText Typo="Typo.caption">@x</MudText></li> }
-                </ul>
-            </MudItem>
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.subtitle2" Color="Color.Warning">Key risks</MudText>
-                <ul style="margin:4px 0;padding-left:18px">
-                    @foreach (var x in an.KeyRisks) { <li><MudText Typo="Typo.caption">@x</MudText></li> }
-                </ul>
-            </MudItem>
-        </MudGrid>
-        <MudText Typo="Typo.caption" Color="Color.Surface" Class="mt-2">
-            Conviction is a qualitative read of the data, not investment advice · generated @an.GeneratedAtUtc.ToString("yyyy-MM-dd HH:mm 'UTC'")
-        </MudText>
-    }
-    else
-    {
-        <MudDivider Class="my-3" />
-        <MudText Typo="Typo.caption" Color="Color.Surface">No AI write-up for this name — ranked on the factor scores above (AI analysis runs on equities only).</MudText>
-    }
     </ChildContent>
 </MudExpansionPanel>
 
@@ -98,11 +54,4 @@
     }
 
     private static Color ScoreColor(decimal s) => s >= 60m ? Color.Success : s >= 45m ? Color.Default : Color.Error;
-
-    private static Color ConvictionColor(string label) => label switch
-    {
-        "high" => Color.Success,
-        "medium" => Color.Info,
-        _ => Color.Default,
-    };
 }

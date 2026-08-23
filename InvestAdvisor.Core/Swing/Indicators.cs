@@ -23,23 +23,6 @@ public static class Indicators
     }
 
     /// <summary>
-    /// Exponential moving average of the whole series, returning the final (most recent) value.
-    /// Seeded with the SMA of the first <paramref name="period"/> values, then smoothed with
-    /// k = 2/(period+1) — the standard EMA recurrence.
-    /// </summary>
-    public static decimal? Ema(IReadOnlyList<decimal> values, int period)
-    {
-        if (period <= 0 || values.Count < period) return null;
-        decimal k = 2m / (period + 1);
-        // Seed with the SMA of the first `period` values.
-        decimal ema = 0m;
-        for (var i = 0; i < period; i++) ema += values[i];
-        ema /= period;
-        for (var i = period; i < values.Count; i++) ema = values[i] * k + ema * (1 - k);
-        return ema;
-    }
-
-    /// <summary>
     /// Wilder's RSI over the closing series, 0–100. Needs <paramref name="period"/>+1 closes.
     /// Returns 100 when there are no losses in the window (pure up-move).
     /// </summary>
@@ -125,14 +108,6 @@ public static class Indicators
         if (sum <= 0L) return null;
         var avg = (decimal)sum / lookback;
         return avg == 0m ? null : candles[^1].Volume / avg;
-    }
-
-    /// <summary>Overnight gap: (latest open − prior close) / prior close, as a fraction.</summary>
-    public static decimal? Gap(IReadOnlyList<Candle> candles)
-    {
-        if (candles.Count < 2) return null;
-        var prevClose = candles[^2].Close;
-        return prevClose == 0m ? null : (candles[^1].Open - prevClose) / prevClose;
     }
 
     /// <summary>Simple price return over the last <paramref name="sessions"/> bars, as a fraction.</summary>

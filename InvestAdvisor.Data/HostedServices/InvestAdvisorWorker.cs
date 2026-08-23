@@ -27,7 +27,7 @@ public sealed class InvestAdvisorWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("InvestAdvisor worker starting.");
-        // Settle briefly so the host gets through Photino startup before we hit the network.
+        // Settle briefly so the host finishes starting up before we hit the network.
         try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
         catch (OperationCanceledException) { return; }
 

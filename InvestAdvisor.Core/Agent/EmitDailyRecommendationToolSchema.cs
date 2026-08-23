@@ -18,24 +18,11 @@ public static class EmitDailyRecommendationToolSchema
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["summary", "stocks", "etfs", "crypto", "caution"],
+        "required": ["summary", "etfs", "crypto", "caution"],
         "properties": {
           "summary": {
             "type": "string",
             "description": "2-4 sentence overall read of today's setup and how aggressive or cautious to be, tailored to the investor's profile."
-          },
-          "stocks": {
-            "type": "array",
-            "description": "Stocks to consider buying today, chosen only from the supplied stock candidates. 0-4 items.",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["ticker", "reason"],
-              "properties": {
-                "ticker": { "type": "string", "description": "Ticker, exactly as supplied in the candidates." },
-                "reason": { "type": "string", "description": "One sentence, grounded in the supplied data." }
-              }
-            }
           },
           "etfs": {
             "type": "array",
@@ -45,8 +32,8 @@ public static class EmitDailyRecommendationToolSchema
               "additionalProperties": false,
               "required": ["ticker", "reason"],
               "properties": {
-                "ticker": { "type": "string" },
-                "reason": { "type": "string" }
+                "ticker": { "type": "string", "description": "Ticker, exactly as supplied in the candidates." },
+                "reason": { "type": "string", "description": "One sentence, grounded in the supplied data." }
               }
             }
           },

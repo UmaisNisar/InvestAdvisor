@@ -13,14 +13,9 @@ namespace InvestAdvisor.Data.Providers;
 /// </summary>
 internal static class LlmResponseParsing
 {
-    internal readonly record struct StockFields(
-        string Summary, string Thesis,
-        IReadOnlyList<string> Bullish, IReadOnlyList<string> Bearish, IReadOnlyList<string> Risks,
-        int Conviction, string ConvictionLabel);
-
     internal readonly record struct RecFields(
         string Summary, string Caution,
-        IReadOnlyList<RecommendedPick> Stocks, IReadOnlyList<RecommendedPick> Etfs, IReadOnlyList<RecommendedPick> Crypto);
+        IReadOnlyList<RecommendedPick> Etfs, IReadOnlyList<RecommendedPick> Crypto);
 
     /// <summary>
     /// Resolves the structured payload: prefers the forced tool-call input; otherwise extracts the
@@ -94,43 +89,6 @@ internal static class LlmResponseParsing
             Positions: positions);
     }
 
-    internal static StockFields DeserializeStock(JsonElement input)
-    {
-        string Str(string name) =>
-            input.TryGetProperty(name, out var e) && e.ValueKind == JsonValueKind.String ? (e.GetString() ?? "") : "";
-
-        IReadOnlyList<string> Arr(string name)
-        {
-            if (!input.TryGetProperty(name, out var e) || e.ValueKind != JsonValueKind.Array)
-                return Array.Empty<string>();
-            var list = new List<string>(e.GetArrayLength());
-            foreach (var item in e.EnumerateArray())
-                if (item.ValueKind == JsonValueKind.String)
-                {
-                    var s = item.GetString();
-                    if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
-                }
-            return list;
-        }
-
-        var conviction = 50;
-        if (input.TryGetProperty("conviction", out var cv))
-        {
-            if (cv.ValueKind == JsonValueKind.Number && cv.TryGetInt32(out var ci)) conviction = ci;
-            else if (cv.ValueKind == JsonValueKind.String && int.TryParse(cv.GetString(), out var cs)) conviction = cs;
-        }
-        conviction = Math.Clamp(conviction, 0, 100);
-
-        var label = Str("convictionLabel").ToLowerInvariant();
-        if (label is not ("low" or "medium" or "high"))
-            label = conviction >= 67 ? "high" : conviction >= 34 ? "medium" : "low";
-
-        return new StockFields(
-            Str("summary"), Str("thesis"),
-            Arr("bullishFactors"), Arr("bearishFactors"), Arr("keyRisks"),
-            conviction, label);
-    }
-
     internal static RecFields DeserializeRecommendation(JsonElement input)
     {
         string Str(string name) =>
@@ -151,7 +109,7 @@ internal static class LlmResponseParsing
             return list;
         }
 
-        return new RecFields(Str("summary"), Str("caution"), Picks("stocks"), Picks("etfs"), Picks("crypto"));
+        return new RecFields(Str("summary"), Str("caution"), Picks("etfs"), Picks("crypto"));
     }
 
     internal static IReadOnlyList<SentimentScore> DeserializeSentiment(JsonElement input)

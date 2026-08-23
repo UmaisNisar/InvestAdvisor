@@ -10,10 +10,6 @@ internal static class LlmEnvelope
         "Here is the current structured context for the portfolio as JSON. " +
         "Call the emit_analysis tool exactly once to return your structured response.\n\n";
 
-    public const string StockUserPreamble =
-        "Analyze this single stock from the structured data below. " +
-        "Call the emit_stock_analysis tool exactly once.\n\n";
-
     public const string RecommendationUserPreamble =
         "From the ranked candidates below, choose where to invest today in each " +
         "asset class. Call the emit_daily_recommendation tool exactly once.\n\n";

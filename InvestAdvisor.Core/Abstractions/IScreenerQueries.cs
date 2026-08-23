@@ -33,28 +33,16 @@ public sealed record ScreenerView(
 
 public sealed record ScreenerEntry(
     int Rank,
-    StockScore Score,
-    StockAnalysisView? Analysis);
+    StockScore Score);
 
 public sealed record DailyRecommendationView(
     DateTime GeneratedAtUtc,
     string Summary,
     string Caution,
-    IReadOnlyList<RecommendationPick> Stocks,
     IReadOnlyList<RecommendationPick> Etfs,
     IReadOnlyList<RecommendationPick> Crypto);
 
 public sealed record RecommendationPick(string Ticker, string Name, string Reason, decimal? PriceAtRecommendation = null);
-
-public sealed record StockAnalysisView(
-    DateTime GeneratedAtUtc,
-    string Summary,
-    string Thesis,
-    IReadOnlyList<string> BullishFactors,
-    IReadOnlyList<string> BearishFactors,
-    IReadOnlyList<string> KeyRisks,
-    int Conviction,
-    string ConvictionLabel);
 
 public sealed record ScreenerValidation(
     DateTime FromUtc,

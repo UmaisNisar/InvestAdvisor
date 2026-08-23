@@ -1,7 +1,6 @@
 @inherits LayoutComponentBase
 @inject IPortfolioQueries Queries
 @implements IDisposable
-@inject IRunEventBus Bus
 @inject ITenantContext Tenant
 @inject IJSRuntime JS
 
@@ -120,11 +119,6 @@
             : t.Symbol.EndsWith(".AX", StringComparison.OrdinalIgnoreCase) ? "AUD" : "USD",
     });
 
-    protected override void OnInitialized()
-    {
-        Bus.RunCompleted += OnRunCompleted;
-    }
-
     protected override async Task OnInitializedAsync()
     {
         try { _email = (await Tenant.GetCurrentAsync()).Email; }
@@ -163,14 +157,8 @@
         if (RootComponent is not null) await RootComponent.ToggleDarkModeAsync();
     }
 
-    private void OnRunCompleted(object? sender, RunCompletedEvent e)
-    {
-        // Each page subscribes itself; no global state to refresh here.
-    }
-
     public void Dispose()
     {
-        Bus.RunCompleted -= OnRunCompleted;
         if (_hotkeyRef is not null)
         {
             try { _ = JS.InvokeVoidAsync("iaHotkeys.unregister"); } catch { }
