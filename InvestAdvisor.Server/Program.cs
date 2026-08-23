@@ -56,7 +56,7 @@ builder.Services.Configure<HubOptions>(o => o.MaximumReceiveMessageSize = 1024 *
 // defaults to "on outside Development" — a local `dotnet run` won't burn credits unless you set
 // Scheduler:WorkerEnabled=true. The holdings importer has no LLM cost, so it always runs.
 var workersEnabled = builder.Configuration.GetValue(
-    $"{InvestAdvisor.Core.Options.SchedulerOptions.SectionName}:WorkerEnabled",
+    InvestAdvisor.Core.Options.SchedulerOptions.WorkerEnabledKey,
     !builder.Environment.IsDevelopment());
 if (workersEnabled)
 {

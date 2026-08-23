@@ -24,7 +24,7 @@ namespace InvestAdvisor.Data.Composition;
 
 /// <summary>
 /// Single composition root for InvestAdvisor's domain services. Called by both
-/// <c>InvestAdvisor.App</c> (Photino) and <c>InvestAdvisor.Server</c> (Blazor Server)
+/// <c>InvestAdvisor.Server</c> (Blazor Server) and <c>InvestAdvisor.Maui</c> (Blazor Hybrid)
 /// so they share identical wiring.
 /// </summary>
 public static class ServiceCollectionExtensions
@@ -34,8 +34,6 @@ public static class ServiceCollectionExtensions
         services.Configure<AnthropicOptions>(configuration.GetSection(AnthropicOptions.SectionName));
         services.Configure<LlmOptions>(configuration.GetSection(LlmOptions.SectionName));
         services.Configure<FinnhubOptions>(configuration.GetSection(FinnhubOptions.SectionName));
-        services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
-        services.Configure<TriggerOptions>(configuration.GetSection(TriggerOptions.SectionName));
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.Configure<StockTwitsOptions>(configuration.GetSection(StockTwitsOptions.SectionName));
         services.Configure<RedditOptions>(configuration.GetSection(RedditOptions.SectionName));
@@ -176,7 +174,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScreenerSyncService, ScreenerSyncService>();
         services.AddScoped<ISentimentScoringService, SentimentScoringService>();
         services.AddScoped<IScreenerScoringService, ScreenerScoringService>();
-        services.AddScoped<IStockAnalysisService, StockAnalysisService>();
         services.AddScoped<IDailyRecommendationService, DailyRecommendationService>();
 
         // Swing (short-horizon) module: pure scorer + orchestration (read models registered below).

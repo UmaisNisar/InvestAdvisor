@@ -9,10 +9,10 @@ using Microsoft.Extensions.Logging;
 namespace InvestAdvisor.Data.Agent;
 
 /// <summary>
-/// Builds the candidate set across all asset classes and runs ONE consolidated LLM call asking
-/// where to invest today. The call also sees the tenant's current portfolio (tickers +
-/// allocation shares) so picks account for what is already owned. This is the screener's only
-/// routine LLM spend (the per-stock analysis pass is intentionally not run). One
+/// Builds the ETF + crypto candidate set and runs ONE consolidated LLM call asking where to
+/// invest today (single-stock picks come from the swing/momentum engines, not the LLM). The call
+/// also sees the tenant's current portfolio (tickers + allocation shares) so picks account for
+/// what is already owned. This is the screener's only routine LLM spend. One
 /// <see cref="DailyRecommendation"/> per day; idempotent.
 /// </summary>
 public sealed class DailyRecommendationService(
@@ -24,7 +24,6 @@ public sealed class DailyRecommendationService(
     ISystemClock clock,
     ILogger<DailyRecommendationService>? logger = null) : IDailyRecommendationService
 {
-    private const int StockCandidates = 12;
     private const int EtfCandidates = 8;
     private const int CryptoCandidates = 8;
 
@@ -57,15 +56,13 @@ public sealed class DailyRecommendationService(
             && await TryCloneMatchingTenantRecAsync(tenantId, profile, todayUtc, ct))
             return true;
 
-        var rankedStocks = await scoring.RankAsync(AssetClass.Equity, ct);
-        var stocks = rankedStocks.Take(StockCandidates).ToList();
         var etfs = (await scoring.RankAsync(AssetClass.Etf, ct)).Take(EtfCandidates).ToList();
         var crypto = (await scoring.RankAsync(AssetClass.Crypto, ct)).Take(CryptoCandidates).ToList();
-        if (stocks.Count == 0 && etfs.Count == 0 && crypto.Count == 0) return false;
+        if (etfs.Count == 0 && crypto.Count == 0) return false;
 
-        // Median over the WHOLE ranked universe — the top candidates skew cheap by construction,
-        // so a median over just them would misstate the valuation backdrop.
-        var medianPe = MedianPe(rankedStocks);
+        // Valuation backdrop: median P/E over the whole equity universe (no LLM cost — the
+        // ranking is computed locally).
+        var medianPe = MedianPe(await scoring.RankAsync(AssetClass.Equity, ct));
         var contextJson = JsonSerializer.Serialize(new
         {
             profile = profile is null ? null : new
@@ -76,7 +73,6 @@ public sealed class DailyRecommendationService(
             },
             portfolio,
             valuationBackdrop = medianPe is { } pe ? $"equity universe median P/E {pe:0.0}" : null,
-            stocks = stocks.Select(Project),
             etfs = etfs.Select(Project),
             crypto = crypto.Select(Project),
         }, _json);
@@ -93,12 +89,10 @@ public sealed class DailyRecommendationService(
             return false;
         }
 
-        var stockNames = NameMap(stocks);
         var etfNames = NameMap(etfs);
         var cryptoNames = NameMap(crypto);
 
         // Price each pick now so score-vs-forward-return validation is possible later.
-        var stockPrices = await PriceMapAsync(result.Stocks, stockNames, AssetClass.Equity, ct);
         var etfPrices = await PriceMapAsync(result.Etfs, etfNames, AssetClass.Etf, ct);
         var cryptoPrices = await PriceMapAsync(result.Crypto, cryptoNames, AssetClass.Crypto, ct);
 
@@ -115,7 +109,6 @@ public sealed class DailyRecommendationService(
                 GeneratedAtUtc = clock.UtcNow,
                 Summary = result.Summary,
                 Caution = result.Caution,
-                StocksJson = SerializePicks(result.Stocks, stockNames, stockPrices),
                 EtfsJson = SerializePicks(result.Etfs, etfNames, etfPrices),
                 CryptoJson = SerializePicks(result.Crypto, cryptoNames, cryptoPrices),
                 Model = result.Model,
@@ -127,8 +120,8 @@ public sealed class DailyRecommendationService(
         }
 
         logger?.LogInformation(
-            "Daily recommendation generated: {Stocks} stocks, {Etfs} ETFs, {Crypto} crypto ({In}+{Out} tokens).",
-            result.Stocks.Count, result.Etfs.Count, result.Crypto.Count, result.InputTokens, result.OutputTokens);
+            "Daily recommendation generated: {Etfs} ETFs, {Crypto} crypto ({In}+{Out} tokens).",
+            result.Etfs.Count, result.Crypto.Count, result.InputTokens, result.OutputTokens);
         return true;
     }
 
@@ -224,7 +217,6 @@ public sealed class DailyRecommendationService(
             GeneratedAtUtc = clock.UtcNow,
             Summary = source.Summary,
             Caution = source.Caution,
-            StocksJson = source.StocksJson,
             EtfsJson = source.EtfsJson,
             CryptoJson = source.CryptoJson,
             Model = source.Model,

@@ -32,16 +32,6 @@ public sealed class LlmClientRouter(
             : await openAi.AnalyzeAsync(ResolveEndpoint(s), resolved, systemPrompt, runContextJson, ct);
     }
 
-    public async Task<StockAnalysisResult> AnalyzeStockAsync(
-        string systemPrompt, string stockContextJson, string? model = null, CancellationToken ct = default)
-    {
-        var s = await settingsStore.GetAsync(ct);
-        var resolved = Resolve(model, s.LlmModel);
-        return IsAnthropic(s)
-            ? await anthropic.AnalyzeStockAsync(systemPrompt, stockContextJson, resolved, ct)
-            : await openAi.AnalyzeStockAsync(ResolveEndpoint(s), resolved, systemPrompt, stockContextJson, ct);
-    }
-
     public async Task<DailyRecommendationResult> RecommendAllocationAsync(
         string systemPrompt, string candidatesContextJson, string? model = null, CancellationToken ct = default)
     {

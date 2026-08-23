@@ -54,37 +54,6 @@ public sealed class AnthropicClient(
             ParseFallbackUsed: fallbackUsed);
     }
 
-    public async Task<StockAnalysisResult> AnalyzeStockAsync(
-        string systemPrompt,
-        string stockContextJson,
-        string? model = null,
-        CancellationToken ct = default)
-    {
-        var resolvedModel = Resolve(model, _opts.Model);
-        var body = BuildBody(resolvedModel, systemPrompt,
-            LlmEnvelope.StockUserPreamble + stockContextJson, EmitStockAnalysisToolSchema.AsToolNode(),
-            EmitStockAnalysisToolSchema.ToolName);
-        var (parsed, rawBody, latencyMs) = await SendAsync(body, ct);
-        var (toolInput, text) = ExtractPayload(parsed, EmitStockAnalysisToolSchema.ToolName);
-        var (s, fallbackUsed) = LlmResponseParsing.Parse(
-            toolInput, text, rawBody, EmitStockAnalysisToolSchema.ToolName, LlmResponseParsing.DeserializeStock);
-
-        return new StockAnalysisResult(
-            Summary: s.Summary,
-            Thesis: s.Thesis,
-            BullishFactors: s.Bullish,
-            BearishFactors: s.Bearish,
-            KeyRisks: s.Risks,
-            Conviction: s.Conviction,
-            ConvictionLabel: s.ConvictionLabel,
-            RawResponseBody: rawBody,
-            Model: parsed.Model ?? resolvedModel,
-            InputTokens: parsed.Usage?.InputTokens ?? 0,
-            OutputTokens: parsed.Usage?.OutputTokens ?? 0,
-            LatencyMs: latencyMs,
-            ParseFallbackUsed: fallbackUsed);
-    }
-
     public async Task<DailyRecommendationResult> RecommendAllocationAsync(
         string systemPrompt,
         string candidatesContextJson,
@@ -104,7 +73,6 @@ public sealed class AnthropicClient(
         return new DailyRecommendationResult(
             Summary: rec.Summary,
             Caution: rec.Caution,
-            Stocks: rec.Stocks,
             Etfs: rec.Etfs,
             Crypto: rec.Crypto,
             RawResponseBody: rawBody,

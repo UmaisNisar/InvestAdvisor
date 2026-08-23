@@ -39,7 +39,7 @@ public static class MauiProgram
         // The desktop app is launched explicitly, so the credit-spending workers default on; set
         // Scheduler:WorkerEnabled=false to run the UI without the agent loop. The holdings
         // importer has no LLM cost, so it always runs — same split as the server host.
-        if (configuration.GetValue($"{InvestAdvisor.Core.Options.SchedulerOptions.SectionName}:WorkerEnabled", true))
+        if (configuration.GetValue(InvestAdvisor.Core.Options.SchedulerOptions.WorkerEnabledKey, true))
         {
             builder.Services.AddHostedService<InvestAdvisorWorker>();
             builder.Services.AddHostedService<ScreenerWorker>();
@@ -50,7 +50,6 @@ public static class MauiProgram
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
-        builder.Logging.AddDebug();
 #endif
 
         return builder.Build();
