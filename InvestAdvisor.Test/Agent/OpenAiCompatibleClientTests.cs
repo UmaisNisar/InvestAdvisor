@@ -17,8 +17,7 @@ public class OpenAiCompatibleClientTests
     private static (OpenAiCompatibleClient client, StubHttpMessageHandler handler) BuildSut(
         string responseBody, HttpStatusCode status = HttpStatusCode.OK)
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = responseBody, StatusCode = status };
-        var http = new HttpClient(handler);
+        var (http, handler) = HttpSut.Json(responseBody, status: status);
         var opts = Options.Create(new LlmOptions { MaxTokens = 1024 });
         return (new OpenAiCompatibleClient(http, opts), handler);
     }

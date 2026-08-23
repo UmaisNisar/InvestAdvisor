@@ -12,8 +12,7 @@ public class HackerNewsProviderTests
 {
     private static HackerNewsProvider BuildSut(string body, bool enabled = true, int minPoints = 0)
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = body };
-        var http = new HttpClient(handler) { BaseAddress = new Uri("https://hn.algolia.com/") };
+        var (http, handler) = HttpSut.Json(body, baseAddress: "https://hn.algolia.com/");
         return new HackerNewsProvider(http, Options.Create(new HackerNewsOptions { Enabled = enabled, MinPoints = minPoints }));
     }
 

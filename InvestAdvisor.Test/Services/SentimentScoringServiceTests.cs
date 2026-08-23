@@ -18,9 +18,7 @@ public class SentimentScoringServiceTests
         BuildSut(SqliteFixture db, bool paused = false, bool overBudget = false)
     {
         var llm = Substitute.For<ILlmClient>();
-        var store = Substitute.For<IRuntimeSettingsStore>();
-        store.GetAsync(Arg.Any<CancellationToken>())
-             .Returns(new ValueTask<RuntimeSettings>(new RuntimeSettings { AgentPaused = paused }));
+        var store = FakeSettingsStore.For(s => s.AgentPaused = paused);
         var cost = Substitute.For<ICostService>();
         cost.GetSpendHoldReasonAsync(Arg.Any<CancellationToken>())
             .Returns(paused ? "Agent is paused" : overBudget ? "Daily AI budget ($1) reached" : null);

@@ -10,8 +10,7 @@ public class YahooQuoteProviderTests
 {
     private static YahooQuoteProvider BuildSut(string responseBody)
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = responseBody };
-        var http = new HttpClient(handler) { BaseAddress = new Uri("https://query1.finance.yahoo.com/") };
+        var (http, handler) = HttpSut.Json(responseBody, baseAddress: "https://query1.finance.yahoo.com/");
         var clock = new FakeSystemClock(new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
         return new YahooQuoteProvider(http, clock);
     }
