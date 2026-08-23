@@ -14,7 +14,6 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<PriceSnapshot> PriceSnapshots => Set<PriceSnapshot>();
     public DbSet<NewsItem> NewsItems => Set<NewsItem>();
     public DbSet<AdviceLog> AdviceLogs => Set<AdviceLog>();
-    public DbSet<AlertDelivery> AlertDeliveries => Set<AlertDelivery>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
     // Screener (market-scanning) entities.
@@ -22,7 +21,6 @@ public sealed class InvestAdvisorDbContext(DbContextOptions<InvestAdvisorDbConte
     public DbSet<StockMetric> StockMetrics => Set<StockMetric>();
     public DbSet<AnalystRating> AnalystRatings => Set<AnalystRating>();
     public DbSet<InsiderTrade> InsiderTrades => Set<InsiderTrade>();
-    public DbSet<StockAnalysis> StockAnalyses => Set<StockAnalysis>();
     public DbSet<ScreenerScore> ScreenerScores => Set<ScreenerScore>();
     public DbSet<DailyRecommendation> DailyRecommendations => Set<DailyRecommendation>();
     public DbSet<SentimentRun> SentimentRuns => Set<SentimentRun>();

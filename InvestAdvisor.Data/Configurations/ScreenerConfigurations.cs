@@ -16,9 +16,9 @@ public sealed class StockConfiguration : IEntityTypeConfiguration<Stock>
         b.Property(x => x.AssetClass).HasConversion<int>();
         b.Property(x => x.ExternalId).HasMaxLength(64);
         b.HasIndex(x => x.Ticker).IsUnique();
-        b.HasIndex(x => x.AssetClass);
-        b.HasIndex(x => x.IsSwingUniverse);
-        b.HasIndex(x => x.IsMomentumUniverse);
+        b.HasIndex(x => new { x.IsActive, x.AssetClass });
+        b.HasIndex(x => new { x.IsActive, x.IsSwingUniverse });
+        b.HasIndex(x => new { x.IsActive, x.IsMomentumUniverse });
     }
 }
 
@@ -69,19 +69,6 @@ public sealed class InsiderTradeConfiguration : IEntityTypeConfiguration<Insider
     }
 }
 
-public sealed class StockAnalysisConfiguration : IEntityTypeConfiguration<StockAnalysis>
-{
-    public void Configure(EntityTypeBuilder<StockAnalysis> b)
-    {
-        b.ToTable("StockAnalysis");
-        b.HasKey(x => x.Id);
-        b.Property(x => x.Ticker).HasMaxLength(16).IsRequired();
-        b.Property(x => x.ConvictionLabel).HasMaxLength(16);
-        b.Property(x => x.CompositeScore).HasPrecision(18, 4);
-        b.HasIndex(x => new { x.Ticker, x.GeneratedAtUtc });
-    }
-}
-
 public sealed class DailyRecommendationConfiguration : IEntityTypeConfiguration<DailyRecommendation>
 {
     public void Configure(EntityTypeBuilder<DailyRecommendation> b)
@@ -89,7 +76,7 @@ public sealed class DailyRecommendationConfiguration : IEntityTypeConfiguration<
         b.ToTable("DailyRecommendation");
         b.HasKey(x => x.Id);
         b.Property(x => x.Model).HasMaxLength(64);
-        b.HasIndex(x => x.GeneratedAtUtc);
+        b.HasIndex(x => new { x.TenantId, x.GeneratedAtUtc });
     }
 }
 

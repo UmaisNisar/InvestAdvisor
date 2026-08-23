@@ -16,6 +16,6 @@ public sealed class WatchlistItemConfiguration : IEntityTypeConfiguration<Watchl
         b.Property(x => x.PriceTargetLow).HasPrecision(18, 4);
         b.Property(x => x.PriceTargetHigh).HasPrecision(18, 4);
 
-        b.HasIndex(x => new { x.Ticker, x.AssetClass }).IsUnique();
+        b.HasIndex(x => new { x.TenantId, x.Ticker, x.AssetClass }).IsUnique();
     }
 }

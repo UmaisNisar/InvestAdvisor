@@ -22,8 +22,8 @@ public sealed class AdviceLogConfiguration : IEntityTypeConfiguration<AdviceLog>
         b.Property(x => x.ParsedFlagsJson).IsRequired();
         b.Property(x => x.ParsedDriftAlertsJson).IsRequired();
         b.Property(x => x.ParsedConsiderationsJson).IsRequired();
+        b.Property(x => x.ParsedPositionsJson).IsRequired();
 
-        b.HasIndex(x => x.TimestampUtc).IsDescending(true);
-        b.HasIndex(x => x.ReplayOfAdviceLogId);
+        b.HasIndex(x => new { x.TenantId, x.TimestampUtc }).IsDescending(false, true);
     }
 }

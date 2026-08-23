@@ -42,8 +42,7 @@ public class EmailNotificationChannelTests
                          SmtpEnableSsl = true,
                      });
         var smtpOpts = Options.Create(new SmtpOptions { Password = "secret" });
-        var clock = new FakeSystemClock(DateTime.UtcNow);
-        return (new EmailNotificationChannel(settingsStore, smtpOpts, smtp, clock), smtp, settingsStore);
+        return (new EmailNotificationChannel(settingsStore, smtpOpts, smtp), smtp, settingsStore);
     }
 
     [Theory]
@@ -70,7 +69,6 @@ public class EmailNotificationChannelTests
 
         delivery.Status.Should().Be(DeliveryStatus.Sent);
         delivery.Channel.Should().Be("Email");
-        delivery.DeliveredAtUtc.Should().NotBeNull();
         await smtp.Received(1).SendAsync(Arg.Any<SmtpMessage>(), Arg.Any<CancellationToken>());
     }
 

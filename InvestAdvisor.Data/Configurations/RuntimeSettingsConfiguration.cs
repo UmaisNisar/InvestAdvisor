@@ -20,30 +20,11 @@ public sealed class RuntimeSettingsConfiguration : IEntityTypeConfiguration<Runt
         b.Property(x => x.SmtpFrom).HasMaxLength(255);
         b.Property(x => x.SmtpTo).HasMaxLength(255);
 
+        // The singleton row. Every other column takes the entity's C# default so there is exactly
+        // one place a default lives; the fixed UpdatedAtUtc keeps the seed deterministic for EF.
         b.HasData(new RuntimeSettings
         {
             Id = RuntimeSettings.SingletonId,
-            TickIntervalSeconds = 300,
-            MarketHoursOnly = true,
-            TimeZoneId = "America/New_York",
-            MaxRunsPerDay = 12,
-            MinSecondsBetweenRuns = 1800,
-            AgentPaused = false,
-            DailyBudgetUsd = 2m,
-            MaxSnapshotAgeForTriggerSeconds = 600,
-            MinPriceFreshnessSeconds = 60,
-            LlmProvider = "gemini",
-            LlmModel = "gemini-2.5-flash",
-            LlmRoutineModel = "gemini-2.5-flash-lite",
-            WeightValuation = 20,
-            WeightGrowth = 25,
-            WeightQuality = 10,
-            WeightAnalyst = 20,
-            WeightInsider = 10,
-            WeightMomentum = 15,
-            EmailEnabled = false,
-            SmtpPort = 587,
-            SmtpEnableSsl = true,
             UpdatedAtUtc = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
         });
     }

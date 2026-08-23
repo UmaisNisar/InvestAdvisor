@@ -9,7 +9,7 @@ public sealed record CostDay(DateTime Date, int Runs, decimal Usd);
 
 /// <summary>
 /// Cost history derived entirely from the persisted run rows (AdviceLog / DailyRecommendation /
-/// StockAnalysis): no separate cost table is needed since every run already stores model + tokens.
+/// SentimentRun): no separate cost table is needed since every run already stores model + tokens.
 /// </summary>
 public sealed record CostReport(
     decimal TodayUsd,
