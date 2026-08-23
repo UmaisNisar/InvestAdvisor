@@ -1,59 +1,27 @@
 using InvestAdvisor.Core.Abstractions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace InvestAdvisor.Data.HostedServices;
 
 /// <summary>
-/// Drives the high-vol momentum module independently of the other workers: each cycle it generates
-/// the day's breakout candidates, and once a day it re-runs the backtest gate. Bar fetches are HTTP
-/// and rate-limited, so this is intentionally a slow loop. No LLM spend, so it isn't behind the budget
-/// guard. Mirrors <see cref="SwingWorker"/>.
+/// Drives the high-vol momentum module: each cycle it generates the day's breakout candidates, and
+/// once a day it re-runs the backtest gate. Same shape as <see cref="SwingWorker"/>; no LLM spend.
 /// </summary>
-public sealed class MomentumWorker(
-    IServiceProvider services,
-    ILogger<MomentumWorker> logger) : BackgroundService
+public sealed class MomentumWorker(IServiceProvider services, ILogger<MomentumWorker> logger, ISystemClock clock)
+    : PeriodicWorker(services, logger, "Momentum worker", TimeSpan.FromSeconds(30), TimeSpan.FromHours(1))
 {
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
     private static readonly TimeSpan BacktestCadence = TimeSpan.FromHours(24);
+    private DateTime _lastBacktestUtc = DateTime.MinValue;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task OnStartupAsync(CancellationToken ct) => SeedUniverseAsync(ct);
+
+    protected override async Task TickAsync(CancellationToken ct)
     {
-        logger.LogInformation("Momentum worker starting.");
-        try { await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken); }
-        catch (OperationCanceledException) { return; }
-
-        // Ensure the momentum universe exists even if the screener/swing workers are disabled (idempotent).
-        try
+        if (clock.UtcNow - _lastBacktestUtc >= BacktestCadence)
         {
-            await using var scope = services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<IStockUniverseSeeder>().SeedAsync(stoppingToken);
+            await WithScopedAsync<IMomentumService>((s, c) => s.RunBacktestAsync(c), ct);
+            _lastBacktestUtc = clock.UtcNow;
         }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex) { logger.LogError(ex, "Momentum universe seeding failed."); }
-
-        DateTime lastBacktestUtc = DateTime.MinValue;
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                if (DateTime.UtcNow - lastBacktestUtc >= BacktestCadence)
-                {
-                    await using var scope = services.CreateAsyncScope();
-                    await scope.ServiceProvider.GetRequiredService<IMomentumService>().RunBacktestAsync(stoppingToken);
-                    lastBacktestUtc = DateTime.UtcNow;
-                }
-
-                await using (var scope = services.CreateAsyncScope())
-                    await scope.ServiceProvider.GetRequiredService<IMomentumService>().GenerateSetupsAsync(ct: stoppingToken);
-            }
-            catch (OperationCanceledException) { return; }
-            catch (Exception ex) { logger.LogError(ex, "Momentum tick failed; will retry next interval."); }
-
-            try { await Task.Delay(CheckInterval, stoppingToken); }
-            catch (OperationCanceledException) { return; }
-        }
+        await WithScopedAsync<IMomentumService>((s, c) => s.GenerateSetupsAsync(ct: c), ct);
     }
 }

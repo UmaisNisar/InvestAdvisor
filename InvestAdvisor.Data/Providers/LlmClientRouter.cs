@@ -22,41 +22,41 @@ public sealed class LlmClientRouter(
 {
     private readonly LlmOptions _opts = options.Value;
 
-    public async Task<LlmAnalysisResult> AnalyzeAsync(
-        string systemPrompt, string runContextJson, string? model = null, CancellationToken ct = default)
+    public Task<LlmAnalysisResult> AnalyzeAsync(
+        string systemPrompt, string runContextJson, string? model = null, CancellationToken ct = default) =>
+        DispatchAsync(model, routine: false,
+            m => anthropic.AnalyzeAsync(systemPrompt, runContextJson, m, ct),
+            (e, m) => openAi.AnalyzeAsync(e, m, systemPrompt, runContextJson, ct), ct);
+
+    public Task<DailyRecommendationResult> RecommendAllocationAsync(
+        string systemPrompt, string candidatesContextJson, string? model = null, CancellationToken ct = default) =>
+        DispatchAsync(model, routine: false,
+            m => anthropic.RecommendAllocationAsync(systemPrompt, candidatesContextJson, m, ct),
+            (e, m) => openAi.RecommendAllocationAsync(e, m, systemPrompt, candidatesContextJson, ct), ct);
+
+    public Task<SentimentBatchResult> ScoreSentimentAsync(
+        IReadOnlyList<string> items, string? model = null, CancellationToken ct = default) =>
+        DispatchAsync(model, routine: true,
+            m => anthropic.ScoreSentimentAsync(items, m, ct),
+            (e, m) => openAi.ScoreSentimentAsync(e, m, items, ct), ct);
+
+    /// <summary>
+    /// Reads the provider + model from settings (the routine model for cheap batch calls) and
+    /// dispatches to whichever concrete client is selected.
+    /// </summary>
+    private async Task<T> DispatchAsync<T>(
+        string? model, bool routine,
+        Func<string, Task<T>> viaAnthropic,
+        Func<LlmEndpoint, string, Task<T>> viaOpenAi,
+        CancellationToken ct)
     {
         var s = await settingsStore.GetAsync(ct);
-        var resolved = Resolve(model, s.LlmModel);
-        return IsAnthropic(s)
-            ? await anthropic.AnalyzeAsync(systemPrompt, runContextJson, resolved, ct)
-            : await openAi.AnalyzeAsync(ResolveEndpoint(s), resolved, systemPrompt, runContextJson, ct);
+        var settingsModel = routine ? s.LlmRoutineModel : s.LlmModel;
+        var resolved = string.IsNullOrWhiteSpace(model) ? settingsModel : model;
+        return string.Equals(s.LlmProvider, LlmProviders.Anthropic, StringComparison.OrdinalIgnoreCase)
+            ? await viaAnthropic(resolved)
+            : await viaOpenAi(ResolveEndpoint(s), resolved);
     }
-
-    public async Task<DailyRecommendationResult> RecommendAllocationAsync(
-        string systemPrompt, string candidatesContextJson, string? model = null, CancellationToken ct = default)
-    {
-        var s = await settingsStore.GetAsync(ct);
-        var resolved = Resolve(model, s.LlmModel);
-        return IsAnthropic(s)
-            ? await anthropic.RecommendAllocationAsync(systemPrompt, candidatesContextJson, resolved, ct)
-            : await openAi.RecommendAllocationAsync(ResolveEndpoint(s), resolved, systemPrompt, candidatesContextJson, ct);
-    }
-
-    public async Task<SentimentBatchResult> ScoreSentimentAsync(
-        IReadOnlyList<string> items, string? model = null, CancellationToken ct = default)
-    {
-        var s = await settingsStore.GetAsync(ct);
-        var resolved = Resolve(model, s.LlmRoutineModel);
-        return IsAnthropic(s)
-            ? await anthropic.ScoreSentimentAsync(items, resolved, ct)
-            : await openAi.ScoreSentimentAsync(ResolveEndpoint(s), resolved, items, ct);
-    }
-
-    private static string Resolve(string? model, string settingsModel) =>
-        string.IsNullOrWhiteSpace(model) ? settingsModel : model;
-
-    private static bool IsAnthropic(RuntimeSettings s) =>
-        string.Equals(s.LlmProvider, LlmProviders.Anthropic, StringComparison.OrdinalIgnoreCase);
 
     private LlmEndpoint ResolveEndpoint(RuntimeSettings s)
     {
