@@ -1,0 +1,36 @@
+@* One Settings tab: loading bar until the model arrives, then a padded paper holding an
+   optional intro, the validated form, optional trailing content and the Save button. *@
+@typeparam TModel where TModel : class
+
+<MudTabPanel Text="@Title">
+    @if (Model is null)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <MudPaper Class="pa-4" Elevation="0">
+            @Intro
+            <MudForm @ref="Form" Model="@Model" Validation="@Validation">
+                @ChildContent
+            </MudForm>
+            @Footer
+            <MudButton OnClick="@(() => OnSave.InvokeAsync(Form))" Color="Color.Primary" Variant="Variant.Filled" Class="mt-2">@SaveText</MudButton>
+        </MudPaper>
+    }
+</MudTabPanel>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public TModel? Model { get; set; }
+    [Parameter, EditorRequired] public Func<object, string, Task<IEnumerable<string>>>? Validation { get; set; }
+    [Parameter] public RenderFragment? Intro { get; set; }
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public string SaveText { get; set; } = "Save";
+    /// <summary>Receives the tab's form so the page can validate it before persisting.</summary>
+    [Parameter] public EventCallback<MudForm?> OnSave { get; set; }
+
+    /// <summary>The live form, for callers that validate outside the Save button.</summary>
+    public MudForm? Form { get; private set; }
+}

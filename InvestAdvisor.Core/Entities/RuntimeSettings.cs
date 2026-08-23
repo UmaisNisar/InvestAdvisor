@@ -78,4 +78,43 @@ public class RuntimeSettings
     public bool SmtpEnableSsl { get; set; } = true;
 
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Copies the fields the Settings page edits (scheduler, AI provider, weights, email,
+    /// auto-import). Deliberately excludes the fields other surfaces own — <see cref="DarkMode"/>
+    /// (theme toggle), <see cref="SwingRiskLevel"/>/<see cref="MomentumRiskLevel"/> (strategy
+    /// pages) — so a stale Settings form can't overwrite a change made elsewhere. One list, used
+    /// both to snapshot the cached row for editing and to write the edits back.
+    /// </summary>
+    public void CopySettingsPageFieldsFrom(RuntimeSettings r)
+    {
+        TickIntervalSeconds = r.TickIntervalSeconds;
+        MarketHoursOnly = r.MarketHoursOnly;
+        TimeZoneId = r.TimeZoneId;
+        MaxRunsPerDay = r.MaxRunsPerDay;
+        MinSecondsBetweenRuns = r.MinSecondsBetweenRuns;
+        AgentPaused = r.AgentPaused;
+        DailyBudgetUsd = r.DailyBudgetUsd;
+        MaxSnapshotAgeForTriggerSeconds = r.MaxSnapshotAgeForTriggerSeconds;
+        MinPriceFreshnessSeconds = r.MinPriceFreshnessSeconds;
+        LlmProvider = r.LlmProvider;
+        LlmModel = r.LlmModel;
+        LlmRoutineModel = r.LlmRoutineModel;
+        LlmCustomBaseUrl = r.LlmCustomBaseUrl;
+        WeightValuation = r.WeightValuation;
+        WeightGrowth = r.WeightGrowth;
+        WeightQuality = r.WeightQuality;
+        WeightAnalyst = r.WeightAnalyst;
+        WeightInsider = r.WeightInsider;
+        WeightMomentum = r.WeightMomentum;
+        WeightSentiment = r.WeightSentiment;
+        HoldingsCsvPath = r.HoldingsCsvPath;
+        HoldingsCsvUrl = r.HoldingsCsvUrl;
+        EmailEnabled = r.EmailEnabled;
+        SmtpHost = r.SmtpHost;
+        SmtpPort = r.SmtpPort;
+        SmtpFrom = r.SmtpFrom;
+        SmtpTo = r.SmtpTo;
+        SmtpEnableSsl = r.SmtpEnableSsl;
+    }
 }

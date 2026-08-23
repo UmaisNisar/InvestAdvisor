@@ -446,11 +446,8 @@ else
     {
         var h = FindHolding(v);
         if (h is null) return;
-        var confirmed = await Dialogs.ShowMessageBoxAsync(
-            "Delete holding",
-            $"Remove {h.Ticker} ({h.Name}) from your portfolio? This can't be undone.",
-            yesText: "Delete", cancelText: "Cancel");
-        if (confirmed != true) return;
+        if (!await Dialogs.ConfirmDeleteAsync("Delete holding",
+                $"Remove {h.Ticker} ({h.Name}) from your portfolio? This can't be undone.")) return;
         try
         {
             await HoldingsSvc.DeleteAsync(h.Id);

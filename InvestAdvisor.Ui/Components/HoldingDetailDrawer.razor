@@ -5,9 +5,7 @@
 @inject IPriceHistoryProvider History
 @inject ISnackbar Snackbar
 
-<MudDrawer Open="Open" OpenChanged="OnOpenChanged" Anchor="Anchor.End" Width="760px"
-           ClipMode="DrawerClipMode.Never" Variant="DrawerVariant.Temporary" Elevation="6">
-  <div tabindex="-1" @ref="_focusRoot" @onkeydown="OnKeyDown" style="outline:none;height:100%;overflow-y:auto">
+<DetailDrawer @ref="_drawer" Open="Open" OpenChanged="OpenChanged" Width="760px">
     @if (Holding is null)
     {
         <MudStack Class="pa-4"><MudProgressLinear Color="Color.Primary" Indeterminate="true" /></MudStack>
@@ -170,8 +168,7 @@
             </MudPaper>
         </MudStack>
     }
-  </div>
-</MudDrawer>
+</DetailDrawer>
 
 @code {
     [Parameter] public bool Open { get; set; }
@@ -225,8 +222,7 @@
     private PriceHistory? _history;
     private bool _loading;
     private string? _loadedTicker;       // the ticker the current _history belongs to
-    private ElementReference _focusRoot;
-    private bool _wasOpen;
+    private DetailDrawer? _drawer;
 
     // How much the closing price moved across the whole loaded window — the plain-English
     // "is it up or down over this period?" a beginner actually wants.
@@ -248,19 +244,6 @@
         {
             _range = HistoryRange.SixMonths;
             await LoadHistory();
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (Open && !_wasOpen)
-        {
-            _wasOpen = true;
-            try { await _focusRoot.FocusAsync(); } catch { /* element not ready; ignore */ }
-        }
-        else if (!Open)
-        {
-            _wasOpen = false;
         }
     }
 
@@ -293,18 +276,7 @@
         }
     }
 
-    private async Task OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") await Close();
-    }
-
-    private async Task Close() => await OpenChanged.InvokeAsync(false);
-
-    private async Task OnOpenChanged(bool open)
-    {
-        Open = open;
-        await OpenChanged.InvokeAsync(open);
-    }
+    private Task Close() => _drawer?.CloseAsync() ?? Task.CompletedTask;
 
     private static string RangeLabel(HistoryRange r) =>
         Ranges.FirstOrDefault(x => x.Range == r).Label ?? string.Empty;

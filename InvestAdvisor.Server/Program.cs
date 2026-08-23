@@ -5,6 +5,7 @@ using InvestAdvisor.Server.Auth;
 using InvestAdvisor.Server.Components;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Configuration.Json;
 using MudBlazor.Services;
 
 // Pin the app to en-US so currency/number formatting is consistent regardless of the host's
@@ -17,7 +18,12 @@ CultureInfo.DefaultThreadCurrentUICulture = appCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuration: appsettings + user-secrets (dev) + env vars + friendly env aliases.
+// Configuration: shared defaults + appsettings + user-secrets (dev) + env vars + friendly env
+// aliases. The shared file goes first so the host file, secrets and env vars all override it.
+builder.Configuration.Sources.Insert(0, new JsonConfigurationSource
+{
+    Path = "appsettings.Shared.json", Optional = true, ReloadOnChange = true,
+});
 builder.Configuration.AddInvestAdvisorEnvAliases();
 
 // Bind Kestrel to loopback only — Cloudflare Tunnel terminates TLS and forwards locally.

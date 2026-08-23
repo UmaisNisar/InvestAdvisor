@@ -1,0 +1,11 @@
+@* Plain Settings tab (no form/save skeleton). Exists so every tab on the Settings page sits at the
+   same component depth as SettingsTab — MudTabs orders panels by registration, which follows
+   render depth before document order. *@
+<MudTabPanel Text="@Title">
+    @ChildContent
+</MudTabPanel>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -115,15 +115,8 @@
         if (string.IsNullOrWhiteSpace(_editing.Ticker) && !string.IsNullOrWhiteSpace(_searchText))
             _editing.Ticker = _searchText;
 
-        // Validate the model directly (it may have just been mutated above), and run the form's
-        // validation too so the offending fields show their inline messages.
-        var validation = await _validator.ValidateAsync(_editing);
-        if (!validation.IsValid)
-        {
-            if (_form is not null) await _form.ValidateAsync();
-            Snackbar.Add(validation.Errors[0].ErrorMessage, Severity.Warning);
-            return;
-        }
+        // Validate the model directly (it may have just been mutated above); the form shows inline messages.
+        if (!await _validator.ValidateOrWarnAsync(_editing, _form, Snackbar)) return;
 
         _editing.Ticker = _editing.Ticker.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(_editing.Name)) _editing.Name = _editing.Ticker;

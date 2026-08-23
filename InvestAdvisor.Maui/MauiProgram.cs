@@ -51,6 +51,7 @@ public static class MauiProgram
     private static IConfiguration BuildConfiguration() =>
         new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.Shared.json", optional: true, reloadOnChange: false)
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
             .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: false)
             .AddUserSecrets(typeof(MauiProgram).Assembly, optional: true)
