@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Enums;
 using InvestAdvisor.Core.Options;
+using InvestAdvisor.Core.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,54 +13,45 @@ namespace InvestAdvisor.Data.Providers.Reddit;
 
 /// <summary>
 /// Searches investing subreddits for ticker mentions via Reddit's read-only OAuth (client-credentials
-/// grant). Fetches a bearer token on first use and caches it until expiry. Degrades to empty on any
-/// failure (including missing credentials), so it never stalls a refresh. Read-only: no posting.
+/// grant). Fetches a bearer token on first use and caches it until expiry. Read-only: no posting.
 /// </summary>
-public sealed class RedditProvider(
-    HttpClient http,
-    IOptions<RedditOptions> options,
-    ISystemClock clock,
-    ILogger<RedditProvider>? logger = null) : ISocialFeedProvider
+public sealed class RedditProvider : SocialFeedProviderBase
 {
     private const int Limit = 25;
-    private readonly RedditOptions _opts = options.Value;
-    private readonly SemaphoreSlim _tokenLock = new(1, 1);
-    private string? _token;
-    private DateTime _tokenExpiresUtc = DateTime.MinValue;
+    private readonly HttpClient _http;
+    private readonly RedditOptions _opts;
+    private readonly ILogger<RedditProvider>? _logger;
+    private readonly CachedBearerToken _token;
 
-    public NewsSource Channel => NewsSource.Reddit;
-
-    public async Task<IReadOnlyList<SocialPost>> GetTickerPostsAsync(string ticker, CancellationToken ct = default)
+    public RedditProvider(
+        HttpClient http,
+        IOptions<RedditOptions> options,
+        ISystemClock clock,
+        ILogger<RedditProvider>? logger = null) : base(logger, "Reddit")
     {
-        if (!_opts.IsConfigured || string.IsNullOrWhiteSpace(ticker)) return Array.Empty<SocialPost>();
+        _http = http;
+        _opts = options.Value;
+        _logger = logger;
+        _token = new CachedBearerToken(clock, AcquireTokenAsync, logger, "Reddit");
+    }
 
-        var token = await GetTokenAsync(ct);
+    public override NewsSource Channel => NewsSource.Reddit;
+    protected override bool Enabled => _opts.IsConfigured;
+
+    protected override async Task<IReadOnlyList<SocialPost>> FetchAsync(string symbol, CancellationToken ct)
+    {
+        var token = await _token.GetAsync(ct);
         if (token is null) return Array.Empty<SocialPost>();
 
-        var symbol = ticker.Trim().ToUpperInvariant();
         var url = $"{_opts.BaseUrl.TrimEnd('/')}/r/{_opts.Subreddits}/search?" +
                   $"q={Uri.EscapeDataString(symbol)}&restrict_sr=true&sort=new&limit={Limit}&t=week";
 
-        Listing? listing;
-        try
-        {
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Authorization = new AuthenticationHeaderValue("bearer", token);
-            req.Headers.UserAgent.ParseAdd(_opts.UserAgent);
-            using var resp = await http.SendAsync(req, ct);
-            if (!resp.IsSuccessStatusCode)
-            {
-                logger?.LogWarning("Reddit search for {Ticker} returned {Status}.", symbol, resp.StatusCode);
-                return Array.Empty<SocialPost>();
-            }
-            listing = await resp.Content.ReadFromJsonAsync<Listing>(ct);
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Reddit search failed for {Ticker}.", symbol);
-            return Array.Empty<SocialPost>();
-        }
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("bearer", token);
+        req.Headers.UserAgent.ParseAdd(_opts.UserAgent);
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return EmptyForStatus(symbol, resp.StatusCode);
+        var listing = await resp.Content.ReadFromJsonAsync<Listing>(ct);
 
         var children = listing?.Data?.Children;
         if (children is null || children.Length == 0) return Array.Empty<SocialPost>();
@@ -78,54 +70,33 @@ public sealed class RedditProvider(
             .ToArray();
     }
 
-    private static string Compose(Post p)
+    private static string Compose(Post p) =>
+        Strings.Truncate(string.IsNullOrWhiteSpace(p.SelfText) ? p.Title! : $"{p.Title}. {p.SelfText}", 1000);
+
+    private async Task<(string Token, TimeSpan Ttl)?> AcquireTokenAsync(CancellationToken ct)
     {
-        var body = string.IsNullOrWhiteSpace(p.SelfText) ? p.Title! : $"{p.Title}. {p.SelfText}";
-        return body!.Length > 1000 ? body[..1000] : body;
-    }
-
-    private async Task<string?> GetTokenAsync(CancellationToken ct)
-    {
-        if (_token is not null && clock.UtcNow < _tokenExpiresUtc) return _token;
-
-        await _tokenLock.WaitAsync(ct);
-        try
+        using var req = new HttpRequestMessage(HttpMethod.Post, _opts.TokenUrl)
         {
-            if (_token is not null && clock.UtcNow < _tokenExpiresUtc) return _token;
-
-            using var req = new HttpRequestMessage(HttpMethod.Post, _opts.TokenUrl)
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                Content = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["grant_type"] = "client_credentials",
-                }),
-            };
-            var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_opts.ClientId}:{_opts.ClientSecret}"));
-            req.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
-            req.Headers.UserAgent.ParseAdd(_opts.UserAgent);
+                ["grant_type"] = "client_credentials",
+            }),
+        };
+        var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_opts.ClientId}:{_opts.ClientSecret}"));
+        req.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        req.Headers.UserAgent.ParseAdd(_opts.UserAgent);
 
-            using var resp = await http.SendAsync(req, ct);
-            if (!resp.IsSuccessStatusCode)
-            {
-                logger?.LogWarning("Reddit token request failed: {Status}.", resp.StatusCode);
-                return null;
-            }
-
-            var tok = await resp.Content.ReadFromJsonAsync<TokenResponse>(ct);
-            if (tok is null || string.IsNullOrWhiteSpace(tok.AccessToken)) return null;
-
-            _token = tok.AccessToken;
-            // Refresh a minute early to avoid edge-of-expiry 401s.
-            _tokenExpiresUtc = clock.UtcNow.AddSeconds(Math.Max(0, tok.ExpiresIn - 60));
-            return _token;
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
         {
-            logger?.LogWarning(ex, "Reddit token request failed.");
+            _logger?.LogWarning("Reddit token request failed: {Status}.", resp.StatusCode);
             return null;
         }
-        finally { _tokenLock.Release(); }
+
+        var tok = await resp.Content.ReadFromJsonAsync<TokenResponse>(ct);
+        if (tok is null || string.IsNullOrWhiteSpace(tok.AccessToken)) return null;
+        // Refresh a minute early to avoid edge-of-expiry 401s.
+        return (tok.AccessToken, TimeSpan.FromSeconds(Math.Max(0, tok.ExpiresIn - 60)));
     }
 
     private sealed record TokenResponse(

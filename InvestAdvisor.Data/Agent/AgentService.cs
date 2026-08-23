@@ -26,23 +26,6 @@ public sealed class AgentService(
     ILogger<AgentService>? logger = null) : IAgentService
 {
 
-    private static readonly JsonSerializerOptions _camelIndented = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = true,
-    };
-
-    // The run context is sent to Anthropic on every run, so it is serialized compact: indentation
-    // is pure whitespace billed as input tokens. Parsed columns keep _camelIndented for readability
-    // in the Advice Feed, since those are stored/displayed, not sent to the model.
-    private static readonly JsonSerializerOptions _camelCompact = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false,
-    };
-
     public Task<long> RunNowAsync(int tenantId, string? note, CancellationToken ct = default)
         => RunAsync(tenantId, new RunTrigger(RunTriggerKind.Manual, note ?? "Manual run"), ct);
 
@@ -100,7 +83,7 @@ public sealed class AgentService(
         try
         {
             ctx = await assembler.BuildAsync(tenantId, trigger, ct);
-            inputJson = JsonSerializer.Serialize(ctx, _camelCompact);
+            inputJson = JsonSerializer.Serialize(ctx, JsonOptions.Camel);
         }
         catch (Exception ex)
         {
@@ -267,10 +250,10 @@ public sealed class AgentService(
             SystemPromptUsed = systemPromptUsed,
             RawResponseText = rawResponseBody,
             ParsedSummary = analysis.Summary,
-            ParsedFlagsJson = JsonSerializer.Serialize(analysis.Flags, _camelIndented),
-            ParsedDriftAlertsJson = JsonSerializer.Serialize(analysis.DriftAlerts, _camelIndented),
-            ParsedConsiderationsJson = JsonSerializer.Serialize(analysis.Considerations, _camelIndented),
-            ParsedPositionsJson = JsonSerializer.Serialize(analysis.Positions, _camelIndented),
+            ParsedFlagsJson = JsonSerializer.Serialize(analysis.Flags, JsonOptions.CamelIndented),
+            ParsedDriftAlertsJson = JsonSerializer.Serialize(analysis.DriftAlerts, JsonOptions.CamelIndented),
+            ParsedConsiderationsJson = JsonSerializer.Serialize(analysis.Considerations, JsonOptions.CamelIndented),
+            ParsedPositionsJson = JsonSerializer.Serialize(analysis.Positions, JsonOptions.CamelIndented),
             Model = model,
             InputTokens = inputTokens,
             OutputTokens = outputTokens,

@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Enums;
 using InvestAdvisor.Core.Models;
@@ -23,35 +22,21 @@ public sealed class FinnhubMarketDataProvider(
     IOptions<FinnhubOptions> options,
     ILogger<FinnhubMarketDataProvider>? logger = null) : IMarketDataProvider
 {
-    private readonly FinnhubOptions _opts = options.Value;
+    private readonly FinnhubApi _api = new(http, rateLimiter, options.Value, logger);
 
-    public async Task<Quote?> GetQuoteAsync(string ticker, AssetClass assetClass, CancellationToken ct = default)
+    public Task<Quote?> GetQuoteAsync(string ticker, AssetClass assetClass, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_opts.ApiKey))
-            throw new InvalidOperationException(
-                "Finnhub API key not configured. Set Finnhub:ApiKey via user-secrets or the FINNHUB_API_KEY env var.");
-
-        await rateLimiter.WaitAsync(ct);
+        _api.EnsureKey();
         return assetClass == AssetClass.Crypto
-            ? await GetCryptoQuoteAsync(ticker, ct)
-            : await GetEquityQuoteAsync(ticker, assetClass, ct);
+            ? GetCryptoQuoteAsync(ticker, ct)
+            : GetEquityQuoteAsync(ticker, assetClass, ct);
     }
 
     private async Task<Quote?> GetEquityQuoteAsync(string ticker, AssetClass assetClass, CancellationToken ct)
     {
         var symbol = symbolRouter.RouteSymbol(ticker, assetClass);
-        var url = $"/api/v1/quote?symbol={Uri.EscapeDataString(symbol)}&token={Uri.EscapeDataString(_opts.ApiKey)}";
-
-        FinnhubQuoteResponse? body;
-        try
-        {
-            body = await http.GetFromJsonAsync<FinnhubQuoteResponse>(url, ct);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Finnhub /quote failed for {Ticker}.", ticker);
-            return null;
-        }
+        var body = await _api.GetAsync<FinnhubQuoteResponse>(
+            $"quote?symbol={Uri.EscapeDataString(symbol)}", ticker, ct);
 
         if (body is null || body.Current == 0m)
         {
@@ -73,19 +58,9 @@ public sealed class FinnhubMarketDataProvider(
         var symbol = symbolRouter.RouteSymbol(ticker, AssetClass.Crypto);
         var to = new DateTimeOffset(clock.UtcNow).ToUnixTimeSeconds();
         var from = to - 5 * 24 * 60 * 60; // 5 days back, plenty for two daily closes
-        var url = $"/api/v1/crypto/candle?symbol={Uri.EscapeDataString(symbol)}" +
-                  $"&resolution=D&from={from}&to={to}&token={Uri.EscapeDataString(_opts.ApiKey)}";
-
-        FinnhubCryptoCandleResponse? body;
-        try
-        {
-            body = await http.GetFromJsonAsync<FinnhubCryptoCandleResponse>(url, ct);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Finnhub /crypto/candle failed for {Ticker} ({Symbol}).", ticker, symbol);
-            return null;
-        }
+        var body = await _api.GetAsync<FinnhubCryptoCandleResponse>(
+            $"crypto/candle?symbol={Uri.EscapeDataString(symbol)}&resolution=D&from={from}&to={to}",
+            $"{ticker} ({symbol})", ct);
 
         if (body is null || body.Status != "ok" || body.Close is null || body.Close.Length < 2)
         {

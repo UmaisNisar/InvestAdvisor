@@ -1,7 +1,6 @@
 using InvestAdvisor.Core.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace InvestAdvisor.Data.HostedServices;
@@ -12,32 +11,14 @@ namespace InvestAdvisor.Data.HostedServices;
 /// file changes — effectively a daily sync if the export refreshes daily. Does nothing when no path
 /// is set; manual import via the Settings button works independently.
 /// </summary>
-public sealed class HoldingsImportWorker(
-    IServiceProvider services,
-    ILogger<HoldingsImportWorker> logger) : BackgroundService
+public sealed class HoldingsImportWorker(IServiceProvider services, ILogger<HoldingsImportWorker> logger)
+    : PeriodicWorker(services, logger, "Holdings import worker", TimeSpan.FromSeconds(20), TimeSpan.FromHours(3))
 {
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(3);
     private DateTime _lastImportedFileTimeUtc = DateTime.MinValue;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task TickAsync(CancellationToken ct)
     {
-        try { await Task.Delay(TimeSpan.FromSeconds(20), stoppingToken); }
-        catch (OperationCanceledException) { return; }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try { await TryImportAsync(stoppingToken); }
-            catch (OperationCanceledException) { return; }
-            catch (Exception ex) { logger.LogWarning(ex, "Holdings auto-import tick failed."); }
-
-            try { await Task.Delay(CheckInterval, stoppingToken); }
-            catch (OperationCanceledException) { return; }
-        }
-    }
-
-    private async Task TryImportAsync(CancellationToken ct)
-    {
-        await using var scope = services.CreateAsyncScope();
+        await using var scope = Services.CreateAsyncScope();
         var settings = await scope.ServiceProvider.GetRequiredService<IRuntimeSettingsStore>().GetAsync(ct);
         var importer = scope.ServiceProvider.GetRequiredService<IHoldingsImportService>();
 
@@ -66,11 +47,11 @@ public sealed class HoldingsImportWorker(
                     var content = await File.ReadAllTextAsync(path, ct);
                     var result = await importer.ImportCsvAsync(ownerTenantId, content, ct: ct);
                     _lastImportedFileTimeUtc = writeTime;
-                    logger.LogInformation("Auto-imported holdings from file {Path}: {Added} added, {Updated} updated, {Skipped} skipped.",
+                    Logger.LogInformation("Auto-imported holdings from file {Path}: {Added} added, {Updated} updated, {Skipped} skipped.",
                         path, result.Added, result.Updated, result.Skipped);
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { logger.LogWarning(ex, "Could not import holdings file {Path}.", path); }
+                catch (Exception ex) { Logger.LogWarning(ex, "Could not import holdings file {Path}.", path); }
             }
         }
 
@@ -80,10 +61,10 @@ public sealed class HoldingsImportWorker(
         {
             var result = await importer.ImportFromUrlAsync(ownerTenantId, url, ct: ct);
             if (result.Errors.Count == 0)
-                logger.LogInformation("Auto-imported holdings from URL: {Added} added, {Updated} updated, {Skipped} skipped.",
+                Logger.LogInformation("Auto-imported holdings from URL: {Added} added, {Updated} updated, {Skipped} skipped.",
                     result.Added, result.Updated, result.Skipped);
             else
-                logger.LogWarning("Holdings URL import had an issue: {Err}", result.Errors[0]);
+                Logger.LogWarning("Holdings URL import had an issue: {Err}", result.Errors[0]);
         }
     }
 }

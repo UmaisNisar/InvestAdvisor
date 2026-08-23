@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using InvestAdvisor.Core.Abstractions;
-using InvestAdvisor.Core.Agent;
 using InvestAdvisor.Core.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -20,128 +19,53 @@ public readonly record struct LlmEndpoint(string BaseUrl, string ApiKey, string 
 /// <summary>
 /// Generic OpenAI-compatible chat-completions client. One implementation covers Google Gemini's
 /// OpenAI-compat endpoint (the free default), Groq, OpenRouter, Ollama, and anything else that
-/// speaks the same protocol — the router supplies the endpoint per call. Mirrors the Anthropic
-/// client: forces the relevant <c>emit_*</c> function via <c>tool_choice</c>, then parses through
-/// the shared <see cref="LlmResponseParsing"/> (tool-call happy path + balanced-JSON text fallback).
+/// speaks the same protocol — the router supplies the endpoint per call. Forces the relevant
+/// <c>emit_*</c> function via <c>tool_choice</c>; parsing is shared with the Anthropic client
+/// through <see cref="LlmClientBase{TContext}"/>.
 /// </summary>
 public sealed class OpenAiCompatibleClient(
     HttpClient http,
     IOptions<LlmOptions> options,
-    ILogger<OpenAiCompatibleClient>? logger = null)
+    ILogger<OpenAiCompatibleClient>? logger = null) : LlmClientBase<LlmEndpoint>
 {
     private readonly LlmOptions _opts = options.Value;
 
-    public async Task<LlmAnalysisResult> AnalyzeAsync(
-        LlmEndpoint endpoint,
-        string model,
-        string systemPrompt,
-        string runContextJson,
-        CancellationToken ct = default)
-    {
-        var body = BuildBody(model, systemPrompt,
-            LlmEnvelope.AnalysisUserPreamble + runContextJson,
-            EmitAnalysisToolSchema.AsToolNode(), EmitAnalysisToolSchema.ToolName);
-        var (parsed, rawBody, latencyMs) = await SendAsync(endpoint, body, ct);
-        var responseModel = parsed.Model ?? model;
-        var inputTokens = parsed.Usage?.PromptTokens ?? 0;
-        var outputTokens = parsed.Usage?.CompletionTokens ?? 0;
+    public Task<LlmAnalysisResult> AnalyzeAsync(
+        LlmEndpoint endpoint, string model, string systemPrompt, string runContextJson, CancellationToken ct = default) =>
+        AnalyzeCoreAsync(endpoint, model, systemPrompt, runContextJson, ct);
 
-        using var payload = ExtractPayload(parsed, EmitAnalysisToolSchema.ToolName);
-        var (analysis, fallbackUsed) = LlmResponseParsing.Parse(
-            payload.ToolInput, payload.Text, rawBody, EmitAnalysisToolSchema.ToolName,
-            el => LlmResponseParsing.DeserializeAnalysis(el, responseModel, inputTokens, outputTokens));
-        analysis = analysis with { Metrics = analysis.Metrics with { ParseFallbackUsed = fallbackUsed } };
+    public Task<DailyRecommendationResult> RecommendAllocationAsync(
+        LlmEndpoint endpoint, string model, string systemPrompt, string candidatesContextJson, CancellationToken ct = default) =>
+        RecommendCoreAsync(endpoint, model, systemPrompt, candidatesContextJson, ct);
 
-        return new LlmAnalysisResult(
-            Analysis: analysis,
-            RawResponseBody: rawBody,
-            Model: responseModel,
-            InputTokens: inputTokens,
-            OutputTokens: outputTokens,
-            LatencyMs: latencyMs,
-            ParseFallbackUsed: fallbackUsed);
-    }
+    public Task<SentimentBatchResult> ScoreSentimentAsync(
+        LlmEndpoint endpoint, string model, IReadOnlyList<string> items, CancellationToken ct = default) =>
+        ScoreSentimentCoreAsync(endpoint, model, items, ct);
 
-    public async Task<DailyRecommendationResult> RecommendAllocationAsync(
-        LlmEndpoint endpoint,
-        string model,
-        string systemPrompt,
-        string candidatesContextJson,
-        CancellationToken ct = default)
-    {
-        var body = BuildBody(model, systemPrompt,
-            LlmEnvelope.RecommendationUserPreamble + candidatesContextJson,
-            EmitDailyRecommendationToolSchema.AsToolNode(), EmitDailyRecommendationToolSchema.ToolName);
-        var (parsed, rawBody, latencyMs) = await SendAsync(endpoint, body, ct);
-
-        using var payload = ExtractPayload(parsed, EmitDailyRecommendationToolSchema.ToolName);
-        var (rec, fallbackUsed) = LlmResponseParsing.Parse(
-            payload.ToolInput, payload.Text, rawBody, EmitDailyRecommendationToolSchema.ToolName,
-            LlmResponseParsing.DeserializeRecommendation);
-
-        return new DailyRecommendationResult(
-            Summary: rec.Summary,
-            Caution: rec.Caution,
-            Etfs: rec.Etfs,
-            Crypto: rec.Crypto,
-            RawResponseBody: rawBody,
-            Model: parsed.Model ?? model,
-            InputTokens: parsed.Usage?.PromptTokens ?? 0,
-            OutputTokens: parsed.Usage?.CompletionTokens ?? 0,
-            LatencyMs: latencyMs,
-            ParseFallbackUsed: fallbackUsed);
-    }
-
-    public async Task<SentimentBatchResult> ScoreSentimentAsync(
-        LlmEndpoint endpoint,
-        string model,
-        IReadOnlyList<string> items,
-        CancellationToken ct = default)
-    {
-        var body = BuildBody(model, LlmEnvelope.SentimentSystemPrompt,
-            LlmEnvelope.BuildSentimentUserMessage(items),
-            EmitSentimentScoresToolSchema.AsToolNode(), EmitSentimentScoresToolSchema.ToolName);
-        var (parsed, rawBody, latencyMs) = await SendAsync(endpoint, body, ct);
-
-        using var payload = ExtractPayload(parsed, EmitSentimentScoresToolSchema.ToolName);
-        var (scores, fallbackUsed) = LlmResponseParsing.Parse(
-            payload.ToolInput, payload.Text, rawBody, EmitSentimentScoresToolSchema.ToolName,
-            LlmResponseParsing.DeserializeSentiment);
-
-        return new SentimentBatchResult(
-            Scores: scores,
-            RawResponseBody: rawBody,
-            Model: parsed.Model ?? model,
-            InputTokens: parsed.Usage?.PromptTokens ?? 0,
-            OutputTokens: parsed.Usage?.CompletionTokens ?? 0,
-            LatencyMs: latencyMs,
-            ParseFallbackUsed: fallbackUsed);
-    }
-
-    private JsonObject BuildBody(
-        string model, string systemPrompt, string userContent, JsonObject toolNode, string toolName) => new()
-    {
-        ["model"] = model,
-        ["max_tokens"] = _opts.MaxTokens,
-        ["messages"] = new JsonArray
-        {
-            new JsonObject { ["role"] = "system", ["content"] = systemPrompt },
-            new JsonObject { ["role"] = "user", ["content"] = userContent },
-        },
-        ["tools"] = new JsonArray { OpenAiToolConverter.ToFunctionTool(toolNode) },
-        ["tool_choice"] = new JsonObject
-        {
-            ["type"] = "function",
-            ["function"] = new JsonObject { ["name"] = toolName },
-        },
-    };
-
-    private async Task<(OpenAiChatResponse Parsed, string RawBody, int LatencyMs)> SendAsync(
-        LlmEndpoint endpoint, JsonObject body, CancellationToken ct)
+    protected override async Task<LlmReply> InvokeAsync(
+        LlmEndpoint endpoint, string model, string systemPrompt, string userContent,
+        JsonObject toolNode, string toolName, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(endpoint.BaseUrl))
             throw new InvalidOperationException(
                 $"{endpoint.ProviderLabel} base URL not configured. Set it in Settings → AI Provider.");
+
+        var body = new JsonObject
+        {
+            ["model"] = model,
+            ["max_tokens"] = _opts.MaxTokens,
+            ["messages"] = new JsonArray
+            {
+                new JsonObject { ["role"] = "system", ["content"] = systemPrompt },
+                new JsonObject { ["role"] = "user", ["content"] = userContent },
+            },
+            ["tools"] = new JsonArray { OpenAiToolConverter.ToFunctionTool(toolNode) },
+            ["tool_choice"] = new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = toolName },
+            },
+        };
 
         // Relative join must preserve any path segment in the base URL (Gemini's /v1beta/openai/),
         // so ensure a trailing slash and never lead with '/'.
@@ -150,7 +74,7 @@ public sealed class OpenAiCompatibleClient(
 
         using var request = new HttpRequestMessage(HttpMethod.Post, uri)
         {
-            Content = JsonContent.Create(body, options: new JsonSerializerOptions { WriteIndented = false }),
+            Content = JsonContent.Create(body, options: BodyJson),
         };
         if (!string.IsNullOrWhiteSpace(endpoint.ApiKey))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", endpoint.ApiKey);
@@ -171,22 +95,7 @@ public sealed class OpenAiCompatibleClient(
         var parsed = JsonSerializer.Deserialize<OpenAiChatResponse>(rawBody)
             ?? throw new AgentParseException($"{endpoint.ProviderLabel} response body deserialized to null.", rawBody);
 
-        return (parsed, rawBody, (int)sw.ElapsedMilliseconds);
-    }
-
-    /// <summary>
-    /// Holds the parsed tool-call arguments document alive while the caller deserializes from it.
-    /// </summary>
-    private readonly struct ResponsePayload(JsonDocument? argsDoc, JsonElement? toolInput, string text) : IDisposable
-    {
-        public JsonElement? ToolInput { get; } = toolInput;
-        public string Text { get; } = text;
-        public void Dispose() => argsDoc?.Dispose();
-    }
-
-    private static ResponsePayload ExtractPayload(OpenAiChatResponse response, string toolName)
-    {
-        var message = response.Choices.FirstOrDefault()?.Message;
+        var message = parsed.Choices.FirstOrDefault()?.Message;
         var text = message?.ContentText ?? string.Empty;
 
         // Prefer the forced function by name, but accept any single tool call — some providers
@@ -195,19 +104,15 @@ public sealed class OpenAiCompatibleClient(
                        string.Equals(c.Function?.Name, toolName, StringComparison.Ordinal))
                    ?? message?.ToolCalls?.FirstOrDefault();
 
+        JsonDocument? argsDoc = null;
         if (call?.Function?.Arguments is { Length: > 0 } args)
         {
-            try
-            {
-                var doc = JsonDocument.Parse(args);
-                return new ResponsePayload(doc, doc.RootElement, text);
-            }
-            catch (JsonException)
-            {
-                // Malformed arguments — fall through to the text fallback.
-            }
+            try { argsDoc = JsonDocument.Parse(args); }
+            catch (JsonException) { /* malformed arguments — fall through to the text fallback */ }
         }
 
-        return new ResponsePayload(null, null, text);
+        return new LlmReply(argsDoc?.RootElement, text, rawBody, parsed.Model ?? model,
+            parsed.Usage?.PromptTokens ?? 0, parsed.Usage?.CompletionTokens ?? 0,
+            (int)sw.ElapsedMilliseconds, Holder: argsDoc);
     }
 }

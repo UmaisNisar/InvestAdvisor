@@ -9,7 +9,7 @@ namespace InvestAdvisor.Core.Entities;
 /// export (the authoritative sell record), or entered by hand. Realized P&amp;L = <see cref="Proceeds"/>
 /// − <see cref="CostBasis"/>, both in <see cref="Currency"/>.
 /// </summary>
-public class RealizedLot
+public class RealizedLot : ITenantOwned
 {
     public int Id { get; set; }
     public int TenantId { get; set; }

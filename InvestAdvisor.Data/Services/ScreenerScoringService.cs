@@ -1,6 +1,8 @@
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Enums;
+using InvestAdvisor.Core.Scoring;
 using Microsoft.EntityFrameworkCore;
+using static InvestAdvisor.Core.Scoring.PercentileRanker;
 
 namespace InvestAdvisor.Data.Services;
 
@@ -171,17 +173,6 @@ public sealed class ScreenerScoringService(
                 r.AnalystTotal, r.BuyCount, r.BuyPct ?? 0m, r.TrendDelta ?? 0,
                 r.NetInsider ?? 0m, r.DataAsOfUtc));
 
-    // Null (not 0) when no weighted factor has data: a 0 would rank the stock as the worst in
-    // the universe and put data-gap names at the top of the "risks" list, where they'd burn
-    // LLM analysis spend on what is really a fetch failure.
-    private static decimal? Composite(params (decimal? Score, decimal Weight)[] parts)
-    {
-        decimal acc = 0m, wsum = 0m;
-        foreach (var (sc, w) in parts)
-            if (sc.HasValue) { acc += sc.Value * w; wsum += w; }
-        return wsum > 0m ? Math.Round(acc / wsum, 1) : null;
-    }
-
     private sealed class Raw
     {
         public string Ticker = "", Name = "", Sector = "";
@@ -191,30 +182,6 @@ public sealed class ScreenerScoringService(
         public DateTime? DataAsOfUtc;
     }
 
-    private static decimal? Scale(decimal? rank01) => rank01.HasValue ? Math.Round(rank01.Value * 100m, 1) : null;
-    private static decimal? Get(Dictionary<string, decimal> d, string t) => d.TryGetValue(t, out var v) ? v : null;
-
-    private static decimal? Avg(params decimal?[] vals)
-    {
-        var present = vals.Where(v => v.HasValue).Select(v => v!.Value).ToList();
-        return present.Count == 0 ? null : present.Average();
-    }
-
-    private static Dictionary<string, decimal> Rank(List<Raw> rows, Func<Raw, decimal?> sel, bool higherBetter)
-    {
-        var present = rows.Select(r => (r.Ticker, V: sel(r)))
-            .Where(x => x.V.HasValue).Select(x => (x.Ticker, V: x.V!.Value)).ToList();
-        var result = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        var n = present.Count;
-        if (n == 0) return result;
-        if (n == 1) { result[present[0].Ticker] = 0.5m; return result; }
-        foreach (var (ticker, v) in present)
-        {
-            var better = present.Count(p => higherBetter ? p.V < v : p.V > v);
-            var equal = present.Count(p => p.V == v);
-            var rank = (better + (equal - 1) / 2m) / (n - 1);
-            result[ticker] = Math.Clamp(rank, 0m, 1m);
-        }
-        return result;
-    }
+    private static Dictionary<string, decimal> Rank(List<Raw> rows, Func<Raw, decimal?> sel, bool higherBetter) =>
+        PercentileRanker.Rank(rows, r => r.Ticker, sel, higherBetter);
 }

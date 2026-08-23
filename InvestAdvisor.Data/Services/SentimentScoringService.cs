@@ -15,7 +15,6 @@ namespace InvestAdvisor.Data.Services;
 public sealed class SentimentScoringService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
     ILlmClient llm,
-    IRuntimeSettingsStore settingsStore,
     ICostService costService,
     ISystemClock clock,
     ILogger<SentimentScoringService>? logger = null) : ISentimentScoringService
@@ -27,15 +26,9 @@ public sealed class SentimentScoringService(
 
     public async Task<int> ScoreUnscoredAsync(CancellationToken ct = default)
     {
-        var settings = await settingsStore.GetAsync(ct);
-        if (settings.AgentPaused)
+        if (await costService.GetSpendHoldReasonAsync(ct) is { } hold)
         {
-            logger?.LogInformation("Agent paused; skipping sentiment scoring.");
-            return 0;
-        }
-        if (await costService.IsOverDailyBudgetAsync(ct))
-        {
-            logger?.LogWarning("Daily AI budget reached; skipping sentiment scoring.");
+            logger?.LogInformation("{Reason}; skipping sentiment scoring.", hold);
             return 0;
         }
 

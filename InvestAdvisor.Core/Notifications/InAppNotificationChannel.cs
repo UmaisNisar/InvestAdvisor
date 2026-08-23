@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Text;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
 using InvestAdvisor.Core.Enums;
@@ -14,12 +15,7 @@ public sealed class InAppNotificationChannel(INotificationCenter center) : INoti
 {
     public string ChannelName => "InApp";
 
-    public bool ShouldDispatch(AgentAnalysis analysis)
-    {
-        var hasFlag = analysis.Flags.Any(f => f.Severity >= FlagSeverity.Warn);
-        var hasDrift = analysis.DriftAlerts.Any(d => d.Severity == DriftSeverity.ActionSuggested);
-        return hasFlag || hasDrift;
-    }
+    public bool ShouldDispatch(AgentAnalysis analysis) => AlertPolicy.IsAlertWorthy(analysis);
 
     public async Task<AlertDelivery> SendAsync(
         AdviceLog adviceLog,
@@ -29,7 +25,7 @@ public sealed class InAppNotificationChannel(INotificationCenter center) : INoti
         var severity = MapSeverity(analysis);
         var body = string.IsNullOrWhiteSpace(analysis.Summary)
             ? "New advice is ready — open to review."
-            : Truncate(analysis.Summary, 280);
+            : Strings.Ellipsize(analysis.Summary, 280);
 
         await center.AddAsync(adviceLog.TenantId, new NotificationDraft(
             Title: BuildTitle(adviceLog, analysis),
@@ -72,6 +68,4 @@ public sealed class InAppNotificationChannel(INotificationCenter center) : INoti
         return NotificationSeverity.Info;
     }
 
-    private static string Truncate(string s, int max)
-        => s.Length <= max ? s : s[..max].TrimEnd() + "…";
 }

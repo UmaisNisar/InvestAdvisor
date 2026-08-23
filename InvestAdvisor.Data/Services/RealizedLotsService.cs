@@ -1,74 +1,47 @@
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
+using InvestAdvisor.Core.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
 
 public sealed class RealizedLotsService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    ITenantContext tenant) : IRealizedLotsService
+    ITenantContext tenant,
+    ISystemClock clock) : TenantScopedCrudService<RealizedLot>(dbFactory, tenant, clock), IRealizedLotsService
 {
-    public async Task<RealizedLot> CreateAsync(RealizedLot input, CancellationToken ct = default)
+    protected override DbSet<RealizedLot> Set(InvestAdvisorDbContext db) => db.RealizedLots;
+
+    protected override string NotFoundMessage(int id) => $"Realized lot {id} not found.";
+
+    protected override RealizedLot NewEntity(RealizedLot input, DateTime nowUtc)
     {
-        Validate(input);
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
         var entity = new RealizedLot
         {
-            TenantId = tid,
-            Ticker = input.Ticker.Trim().ToUpperInvariant(),
-            Name = input.Name.Trim(),
-            AssetClass = input.AssetClass,
-            AccountType = input.AccountType,
-            Quantity = input.Quantity,
-            Proceeds = input.Proceeds,
-            CostBasis = input.CostBasis,
-            Currency = NormalizeCurrency(input.Currency),
-            RealizedAtUtc = input.RealizedAtUtc == default ? DateTime.UtcNow : input.RealizedAtUtc,
+            RealizedAtUtc = nowUtc,
             SourceHash = string.Empty, // hand-entered lots never collide with imported rows
             ManualEntry = true,
-            CreatedAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = nowUtc,
         };
-        db.RealizedLots.Add(entity);
-        await db.SaveChangesAsync(ct);
+        Apply(entity, input, nowUtc);
         return entity;
     }
 
-    public async Task<RealizedLot> UpdateAsync(int id, RealizedLot input, CancellationToken ct = default)
+    // SourceHash and ManualEntry are preserved on update so an edited imported lot still de-dupes on re-import.
+    protected override void Apply(RealizedLot entity, RealizedLot input, DateTime nowUtc)
     {
-        Validate(input);
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.RealizedLots.SingleOrDefaultAsync(l => l.Id == id && l.TenantId == tid, ct)
-            ?? throw new InvalidOperationException($"Realized lot {id} not found.");
-        entity.Ticker = input.Ticker.Trim().ToUpperInvariant();
+        entity.Ticker = CleanTicker(input.Ticker);
         entity.Name = input.Name.Trim();
         entity.AssetClass = input.AssetClass;
         entity.AccountType = input.AccountType;
         entity.Quantity = input.Quantity;
         entity.Proceeds = input.Proceeds;
         entity.CostBasis = input.CostBasis;
-        entity.Currency = NormalizeCurrency(input.Currency);
-        entity.RealizedAtUtc = input.RealizedAtUtc == default ? entity.RealizedAtUtc : input.RealizedAtUtc;
-        // SourceHash and ManualEntry are preserved so an edited imported lot still de-dupes on re-import.
-        await db.SaveChangesAsync(ct);
-        return entity;
+        entity.Currency = Currency.Normalize(input.Currency);
+        if (input.RealizedAtUtc != default) entity.RealizedAtUtc = input.RealizedAtUtc;
     }
 
-    public async Task DeleteAsync(int id, CancellationToken ct = default)
-    {
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.RealizedLots.SingleOrDefaultAsync(l => l.Id == id && l.TenantId == tid, ct);
-        if (entity is null) return;
-        db.RealizedLots.Remove(entity);
-        await db.SaveChangesAsync(ct);
-    }
-
-    private static string NormalizeCurrency(string? c) =>
-        string.IsNullOrWhiteSpace(c) ? "USD" : c.Trim().ToUpperInvariant();
-
-    private static void Validate(RealizedLot l)
+    protected override void Validate(RealizedLot l)
     {
         if (string.IsNullOrWhiteSpace(l.Ticker))
             throw new ArgumentException("Ticker is required.");

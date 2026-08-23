@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Models;
 using System.Text.Json;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Agent;
@@ -26,15 +27,6 @@ public sealed class DailyRecommendationService(
 {
     private const int EtfCandidates = 8;
     private const int CryptoCandidates = 8;
-
-    // Compact: this JSON is the LLM request context, so indentation would just be billed
-    // whitespace. (SerializePicks below uses its own default serializer for stored columns.)
-    private static readonly JsonSerializerOptions _json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false,
-    };
 
     public async Task<bool> GenerateAsync(int tenantId, bool force = false, CancellationToken ct = default)
     {
@@ -75,7 +67,7 @@ public sealed class DailyRecommendationService(
             valuationBackdrop = medianPe is { } pe ? $"equity universe median P/E {pe:0.0}" : null,
             etfs = etfs.Select(Project),
             crypto = crypto.Select(Project),
-        }, _json);
+        }, JsonOptions.Camel);
 
         DailyRecommendationResult result;
         try
@@ -149,7 +141,7 @@ public sealed class DailyRecommendationService(
         }
 
         var rates = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 1m };
-        foreach (var c in holdings.Select(h => Cur(h.Currency)).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var c in holdings.Select(h => Currency.Normalize(h.Currency)).Distinct(StringComparer.OrdinalIgnoreCase))
             if (!rates.ContainsKey(c)) rates[c] = await fx.GetRateToUsdAsync(c, ct);
 
         var mvByTicker = new Dictionary<string, (string AssetClass, decimal Mv)>(StringComparer.OrdinalIgnoreCase);
@@ -157,7 +149,7 @@ public sealed class DailyRecommendationService(
         foreach (var h in holdings)
         {
             if (!priceByTicker.TryGetValue(h.Ticker, out var price)) continue;
-            var mv = h.Quantity * price * rates.GetValueOrDefault(Cur(h.Currency), 1m);
+            var mv = h.Quantity * price * rates.GetValueOrDefault(Currency.Normalize(h.Currency), 1m);
             total += mv;
             mvByTicker[h.Ticker] = mvByTicker.TryGetValue(h.Ticker, out var prev)
                 ? (prev.AssetClass, prev.Mv + mv)
@@ -253,8 +245,6 @@ public sealed class DailyRecommendationService(
         }
         return prices;
     }
-
-    private static string Cur(string? c) => string.IsNullOrWhiteSpace(c) ? "USD" : c.Trim().ToUpperInvariant();
 
     private static object Project(StockScore s) => new
     {

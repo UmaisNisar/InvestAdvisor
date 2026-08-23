@@ -1,3 +1,4 @@
+using InvestAdvisor.Core.Text;
 using System.Net;
 using System.Text;
 using InvestAdvisor.Core.Entities;
@@ -18,7 +19,7 @@ public static class DigestRenderer
         "The LLM analyzes data; you make every decision.";
 
     public static string BuildSubject(AdviceLog row) =>
-        $"InvestAdvisor [{row.Trigger}]: {Truncate(row.TriggerDetail, 80)}";
+        $"InvestAdvisor [{row.Trigger}]: {Strings.Ellipsize(row.TriggerDetail, 80)}";
 
     public static (string Html, string Plain) BuildBody(AdviceLog row, AgentAnalysis analysis)
     {
@@ -131,6 +132,4 @@ public static class DigestRenderer
     };
 
     private static string Encode(string s) => WebUtility.HtmlEncode(s ?? string.Empty);
-    private static string Truncate(string s, int max) =>
-        string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max] + "…";
 }
