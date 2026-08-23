@@ -25,16 +25,16 @@
     <MudGrid Class="mt-1" Spacing="2">
         <MudItem xs="6" sm="3">
             <MudText Typo="Typo.caption" Color="Color.Surface">Entry</MudText>
-            <MudText Typo="Typo.body2" Style="font-weight:600">@Money(Setup.EntryLow)–@Money(Setup.EntryHigh)</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600">@Fmt.Price(Setup.EntryLow)–@Fmt.Price(Setup.EntryHigh)</MudText>
         </MudItem>
         <MudItem xs="6" sm="3">
             <MudText Typo="Typo.caption" Color="Color.Surface">Stop</MudText>
-            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-error)">@Money(Setup.StopLoss)</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-error)">@Fmt.Price(Setup.StopLoss)</MudText>
         </MudItem>
         <MudItem xs="6" sm="3">
             <MudTooltip Text="@TargetTip">
                 <MudText Typo="Typo.caption" Color="Color.Surface">Target (+@Setup.TargetGainPct.ToString("0.0")%)</MudText>
-                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-success)">@Money(Setup.Target)</MudText>
+                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-success)">@Fmt.Price(Setup.Target)</MudText>
             </MudTooltip>
         </MudItem>
         <MudItem xs="6" sm="3">
@@ -53,7 +53,6 @@
 @code {
     [Parameter, EditorRequired] public MomentumSetupView Setup { get; set; } = default!;
 
-    private static string Money(decimal v) => v.ToString("0.00");
 
     private string TargetTip =>
         $"Reward:risk {Setup.RewardRiskRatio:0.0}:1 — projected gain to target ~{Setup.TargetGainPct:0.0}%.";

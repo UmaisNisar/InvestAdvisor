@@ -1,6 +1,8 @@
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
+using FluentValidation;
 using InvestAdvisor.Core.Models;
+using InvestAdvisor.Core.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
@@ -41,17 +43,5 @@ public sealed class RealizedLotsService(
         if (input.RealizedAtUtc != default) entity.RealizedAtUtc = input.RealizedAtUtc;
     }
 
-    protected override void Validate(RealizedLot l)
-    {
-        if (string.IsNullOrWhiteSpace(l.Ticker))
-            throw new ArgumentException("Ticker is required.");
-        if (string.IsNullOrWhiteSpace(l.Name))
-            throw new ArgumentException("Name is required.");
-        if (l.Quantity <= 0m)
-            throw new ArgumentException("Quantity must be > 0.");
-        if (l.Proceeds < 0m)
-            throw new ArgumentException("Proceeds must be ≥ 0.");
-        if (l.CostBasis < 0m)
-            throw new ArgumentException("Cost basis must be ≥ 0.");
-    }
+    protected override IValidator<RealizedLot> Validator { get; } = new RealizedLotValidator();
 }

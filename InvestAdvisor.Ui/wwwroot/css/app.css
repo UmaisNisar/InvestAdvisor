@@ -40,6 +40,10 @@ body {
    ============================================================ */
 
 :root {
+    /* Gain / loss colours, mirroring AppTheme.cs Success / Error so P&L reads in the app's own green and red. */
+    --ia-up: #34C759;
+    --ia-down: #FF383C;
+    --ia-bottomnav-height: 56px;
     --ia-glass-blur: blur(40px) saturate(190%);
     /* Bright top lip + faint bottom lip where light "catches" the glass;
        near-invisible on white light-mode surfaces, a clear highlight in dark mode. */
@@ -325,10 +329,6 @@ body {
 /* ============================================================
    Native-app feel (touch / iOS)
    ============================================================ */
-
-:root {
-    --ia-bottomnav-height: 56px;
-}
 
 /* No web-y blue tap flash; momentum scroll; lock the page's rubber-band overscroll. */
 html { -webkit-text-size-adjust: 100%; }
@@ -704,6 +704,7 @@ html:has(.mud-drawer-temporary.mud-drawer--open) {
 /* Saved in-app theme wins over the OS scheme (e.g. light app on a dark-mode OS). */
 html.ia-theme-light #ia-splash { background: #f2f2f7; color: #636366; }
 html.ia-theme-light .ia-splash-spinner { border-color: rgba(60, 60, 67, .18); border-top-color: #1c1c1e; }
+html.ia-theme-dark { --ia-up: #30D158; --ia-down: #FF453A; }
 html.ia-theme-dark #ia-splash { background: #000000; color: #8d8d93; }
 html.ia-theme-dark .ia-splash-spinner { border-color: rgba(235, 235, 245, .2); border-top-color: #f2f2f7; }
 

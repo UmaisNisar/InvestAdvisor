@@ -1,9 +1,9 @@
 using FluentValidation;
 using InvestAdvisor.Core.Entities;
 
-namespace InvestAdvisor.Ui.Validation;
+namespace InvestAdvisor.Core.Validation;
 
-public class ProfileValidator : MudCompatibleValidator<Profile>
+public class ProfileValidator : AbstractValidator<Profile>
 {
     public ProfileValidator()
     {

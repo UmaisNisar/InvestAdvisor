@@ -48,13 +48,13 @@
                 <MudStack Row="true" Spacing="6" Style="flex-wrap:wrap">
                     <div>
                         <MudText Typo="Typo.caption" Color="Color.Surface">Price</MudText>
-                        <MudText Typo="Typo.h6"><AnimatedNumber Value="Holding.Price" Prefix="@CurPrefix(Holding.Currency)" /></MudText>
+                        <MudText Typo="Typo.h6"><AnimatedNumber Value="Holding.Price" Prefix="@Fmt.CurPrefix(Holding.Currency)" /></MudText>
                     </div>
                     <div>
                         <MudTooltip Text="Change since yesterday's close.">
                             <MudText Typo="Typo.caption" Color="Color.Surface">Today</MudText>
                         </MudTooltip>
-                        <MudText Typo="Typo.h6" Style="@PnlColor(Holding.TodaysChangePct)">
+                        <MudText Typo="Typo.h6" Style="@Fmt.UpDownStyle(Holding.TodaysChangePct)">
                             <AnimatedNumber Value="Holding.TodaysChangePct" Signed="true" Suffix="%" />
                         </MudText>
                     </div>
@@ -62,7 +62,7 @@
                         <MudTooltip Text="Your gain or loss vs. what you paid (you still hold it — nothing sold).">
                             <MudText Typo="Typo.caption" Color="Color.Surface">Unrealized P/L</MudText>
                         </MudTooltip>
-                        <MudText Typo="Typo.h6" Style="@PnlColor(Holding.UnrealizedPnlPct)">
+                        <MudText Typo="Typo.h6" Style="@Fmt.UpDownStyle(Holding.UnrealizedPnlPct)">
                             <AnimatedNumber Value="Holding.UnrealizedPnlPct" Signed="true" Suffix="%" />
                         </MudText>
                     </div>
@@ -320,9 +320,4 @@
         Math.Round(v, Math.Abs(v) >= 1m ? 2 : 4, MidpointRounding.AwayFromZero);
 
     // Currency symbol for the native-currency price (e.g. "C$"), matching the dashboard's formatting.
-    private static string CurPrefix(string currency) =>
-        currency switch { "CAD" => "C$", "AUD" => "A$", _ => "$" };
-
-    private static string PnlColor(decimal? v) =>
-        v is null ? string.Empty : v >= 0 ? "color:#66bb6a" : "color:#ef5350";
 }

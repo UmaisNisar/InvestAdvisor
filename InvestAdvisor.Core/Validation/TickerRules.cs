@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using FluentValidation;
 
-namespace InvestAdvisor.Ui.Validation;
+namespace InvestAdvisor.Core.Validation;
 
 public static partial class TickerRules
 {

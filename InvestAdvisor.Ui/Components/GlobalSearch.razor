@@ -72,22 +72,10 @@
     private CancellationTokenSource? _searchCts;
     private IReadOnlyList<TickerSearchResult> _tickers = Array.Empty<TickerSearchResult>();
 
-    private sealed record NavTarget(string Label, string Href, string Icon);
+    // The palette doubles as a fast nav over the same destinations as the rail and bottom bar.
+    private static IReadOnlyList<NavDestination> AllNav => NavDestinations.All;
 
-    // The app's destinations, mirroring NavMenu, so the palette doubles as a fast nav.
-    private static readonly NavTarget[] AllNav =
-    {
-        new("Dashboard", "/", Icons.Material.Filled.Dashboard),
-        new("Where to invest", "/invest", Icons.Material.Filled.Lightbulb),
-        new("Swing setups", "/swing", Icons.Material.Filled.Bolt),
-        new("Long-term screener", "/screener", Icons.Material.Filled.TrendingUp),
-        new("Advice feed", "/advice", Icons.Material.Filled.History),
-        new("AI cost", "/costs", Icons.Material.Filled.Paid),
-        new("Watchlist", "/watchlist", Icons.Material.Filled.Visibility),
-        new("Settings", "/settings", Icons.Material.Filled.Settings),
-    };
-
-    private List<NavTarget> _navResults = AllNav.ToList();
+    private List<NavDestination> _navResults = AllNav.ToList();
 
     /// <summary>Open the palette (clears the previous query) and focus the field.</summary>
     public void Open()

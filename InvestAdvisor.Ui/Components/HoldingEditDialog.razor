@@ -28,7 +28,7 @@
             </MudAutocomplete>
         }
 
-        <MudForm @ref="_form" Model="@_editing" Validation="@(_validator.ValidateValue)">
+        <MudForm @ref="_form" Model="@_editing" Validation="@(_validator.ValidateValue())">
             <MudTextField @bind-Value="_editing.Ticker" For="@(() => _editing.Ticker)" Label="Ticker" Required="true"
                           RequiredError="Ticker is required." Immediate="true" OnKeyDown="OnKey" />
             <MudTextField @bind-Value="_editing.Name" For="@(() => _editing.Name)" Label="Name" Immediate="true" OnKeyDown="OnKey" />

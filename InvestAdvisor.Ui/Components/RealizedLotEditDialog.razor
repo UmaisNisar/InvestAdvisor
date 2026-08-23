@@ -28,7 +28,7 @@
                              HelperText="Total cost of the shares sold. Realized P/L = proceeds − cost." />
             <MudDatePicker @bind-Date="_realizedDate" Label="Sale date" />
             <MudText Typo="Typo.body2" Class="mt-2">
-                Realized P/L: <b style="@(Pnl >= 0 ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)")">@Pnl.ToString("C2") @_editing.Currency</b>
+                Realized P/L: <b style="@Fmt.UpDownStyle(Pnl)">@Pnl.ToString("C2") @_editing.Currency</b>
             </MudText>
         </MudForm>
     </DialogContent>

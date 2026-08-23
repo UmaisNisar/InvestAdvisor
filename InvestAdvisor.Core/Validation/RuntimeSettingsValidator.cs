@@ -2,9 +2,9 @@ using FluentValidation;
 using InvestAdvisor.Core.Agent;
 using InvestAdvisor.Core.Entities;
 
-namespace InvestAdvisor.Ui.Validation;
+namespace InvestAdvisor.Core.Validation;
 
-public class RuntimeSettingsValidator : MudCompatibleValidator<RuntimeSettings>
+public class RuntimeSettingsValidator : AbstractValidator<RuntimeSettings>
 {
     public RuntimeSettingsValidator()
     {

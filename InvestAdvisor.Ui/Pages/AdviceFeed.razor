@@ -40,7 +40,7 @@ else
                 }
             </MudTd>
             <MudTd DataLabel="Detail">@context.TriggerDetail</MudTd>
-            <MudTd DataLabel="Summary" Style="max-width:600px">@Truncate(context.Summary, 160)</MudTd>
+            <MudTd DataLabel="Summary" Style="max-width:600px">@Fmt.Truncate(context.Summary, 160)</MudTd>
             <MudTd DataLabel="Flags" Style="text-align:right">
                 @if (context.CriticalFlagCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Error">@context.CriticalFlagCount</MudChip> }
                 @if (context.WarnFlagCount > 0) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@context.WarnFlagCount</MudChip> }
@@ -128,9 +128,6 @@ else
         RunTriggerKind.Manual => Color.Default,
         _ => Color.Primary,
     };
-
-    private static string Truncate(string s, int max) =>
-        string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max] + "…";
 
     public void Dispose() => Bus.RunCompleted -= OnRunCompleted;
 }

@@ -31,7 +31,7 @@
         else
         {
             <MudPaper Class="pa-4" Elevation="0">
-                <MudForm @ref="_profileForm" Model="@_profile" Validation="@(_profileValidator.ValidateValue)">
+                <MudForm @ref="_profileForm" Model="@_profile" Validation="@(_profileValidator.ValidateValue())">
                     <MudTextField @bind-Value="_profile.GoalsText" For="@(() => _profile!.GoalsText)" Label="Goals" Lines="3" />
                     <MudSelect T="RiskTolerance" @bind-Value="_profile.RiskTolerance" Label="Risk tolerance">
                         @foreach (var r in Enum.GetValues<RiskTolerance>()) { <MudSelectItem Value="r">@r</MudSelectItem> }
@@ -57,7 +57,7 @@
         else
         {
             <MudPaper Class="pa-4" Elevation="0">
-                <MudForm @ref="_schedulerForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                <MudForm @ref="_schedulerForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue())">
                     <MudSwitch @bind-Value="_settings.AgentPaused" Label="Pause automated AI runs (worker stops triggering analyses; manual 'Run now' still works)" Color="Color.Warning" />
                     <MudNumericField @bind-Value="_settings.DailyBudgetUsd" For="@(() => _settings!.DailyBudgetUsd)" Label="Daily AI budget (USD)" Min="0" Step="0.5M" Format="F2"
                                      HelperText="Hard ceiling on AI spend per UTC day; worker runs pause when reached. Manual 'Run now' still works. 0 = unlimited." />
@@ -92,7 +92,7 @@
                     Which AI service powers the analyses. Google Gemini's free tier is the default —
                     it costs nothing (rate-limited per day). Changes apply to the next run, no restart needed.
                 </MudText>
-                <MudForm @ref="_aiForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                <MudForm @ref="_aiForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue())">
                     <MudSelect T="string" Value="_settings.LlmProvider" ValueChanged="OnProviderChanged" Label="Provider">
                         <MudSelectItem Value="@LlmProviders.Gemini">Google Gemini (free tier)</MudSelectItem>
                         <MudSelectItem Value="@LlmProviders.Anthropic">Anthropic Claude (paid)</MudSelectItem>
@@ -132,7 +132,7 @@
                     Relative importance of each factor in the screener's composite score. They don't
                     need to add up to 100 — the score normalizes by their total. Set a factor to 0 to ignore it.
                 </MudText>
-                <MudForm @ref="_weightsForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                <MudForm @ref="_weightsForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue())">
                     <MudNumericField @bind-Value="_settings.WeightGrowth" For="@(() => _settings!.WeightGrowth)" Label="Growth (revenue + EPS growth)" Min="0" Max="100" />
                     <MudNumericField @bind-Value="_settings.WeightValuation" For="@(() => _settings!.WeightValuation)" Label="Valuation (P/E + P/FCF, lower is better)" Min="0" Max="100" />
                     <MudNumericField @bind-Value="_settings.WeightAnalyst" For="@(() => _settings!.WeightAnalyst)" Label="Analyst (buy ratings + month-over-month trend)" Min="0" Max="100" />
@@ -154,7 +154,7 @@
         else
         {
             <MudPaper Class="pa-4" Elevation="0">
-                <MudForm @ref="_emailForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                <MudForm @ref="_emailForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue())">
                     <MudSwitch @bind-Value="_settings.EmailEnabled" Label="Email notifications enabled" Color="Color.Primary" />
                     <MudTextField @bind-Value="_settings.SmtpHost" For="@(() => _settings!.SmtpHost)" Label="SMTP host" />
                     <MudNumericField @bind-Value="_settings.SmtpPort" For="@(() => _settings!.SmtpPort)" Label="SMTP port" Min="1" Max="65535" />
@@ -202,7 +202,7 @@
                     </MudText>
                     @if (_settings is not null)
                     {
-                        <MudForm @ref="_importForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue)">
+                        <MudForm @ref="_importForm" Model="@_settings" Validation="@(_settingsValidator.ValidateValue())">
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
                                 <MudTextField @bind-Value="_settings.HoldingsCsvUrl" For="@(() => _settings!.HoldingsCsvUrl)" Label="Holdings CSV URL" Placeholder="https://docs.google.com/.../export?format=csv" Class="flex-grow-1" />
                                 <MudButton OnClick="ImportFromUrl" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CloudDownload">Import now</MudButton>
@@ -319,7 +319,7 @@
                         <MudTd DataLabel="Qty" Style="text-align:right">@context.Quantity</MudTd>
                         <MudTd DataLabel="Proceeds" Style="text-align:right">@context.Proceeds.ToString("C2") @context.Currency</MudTd>
                         <MudTd DataLabel="Cost" Style="text-align:right">@context.CostBasis.ToString("C2") @context.Currency</MudTd>
-                        <MudTd DataLabel="Realized P/L" Style="@($"text-align:right;font-weight:600;color:{(context.RealizedPnl >= 0 ? "var(--mud-palette-success)" : "var(--mud-palette-error)")}")">
+                        <MudTd DataLabel="Realized P/L" Style="@("text-align:right;" + PnlColorStyle(context.RealizedPnl))">
                             @(context.RealizedPnl >= 0 ? "+" : "")@context.RealizedPnl.ToString("C2") @context.Currency
                         </MudTd>
                         <MudTd DataLabel="">
@@ -359,8 +359,7 @@
     private decimal RealizedYtdUsd =>
         _realizedLots?.Where(l => l.RealizedAtUtc.Year == DateTime.UtcNow.Year).Sum(l => l.RealizedPnlUsd) ?? 0m;
     private static string RealizedMoney(decimal usd) => (usd >= 0 ? "+" : "") + usd.ToString("C2") + " USD";
-    private static string PnlColorStyle(decimal v) =>
-        $"font-weight:600;color:{(v >= 0 ? "var(--mud-palette-success)" : "var(--mud-palette-error)")}";
+    private static string PnlColorStyle(decimal v) => "font-weight:600;" + Fmt.UpDownStyle(v);
     private string RealizedTotalStyle => PnlColorStyle(RealizedTotalUsd);
     private string RealizedYtdStyle => PnlColorStyle(RealizedYtdUsd);
 
