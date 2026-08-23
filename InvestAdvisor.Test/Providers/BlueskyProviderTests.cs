@@ -34,8 +34,7 @@ public class BlueskyProviderTests
     [Fact]
     public async Task Unauthenticated_search_maps_posts_and_builds_permalink()
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = SearchBody };
-        var http = new HttpClient(handler);
+        var (http, handler) = HttpSut.Json(SearchBody);
         var sut = new BlueskyProvider(http, Options.Create(new BlueskyOptions { Enabled = true }),
             new FakeSystemClock(Now));
 
@@ -97,8 +96,7 @@ public class BlueskyProviderTests
     [Fact]
     public async Task Disabled_returns_empty_without_calling()
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = SearchBody };
-        var http = new HttpClient(handler);
+        var (http, handler) = HttpSut.Json(SearchBody);
         var sut = new BlueskyProvider(http, Options.Create(new BlueskyOptions { Enabled = false }),
             new FakeSystemClock(Now));
 

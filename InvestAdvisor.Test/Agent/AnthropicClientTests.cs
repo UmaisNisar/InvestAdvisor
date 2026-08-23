@@ -16,8 +16,7 @@ public class AnthropicClientTests
     private static (AnthropicClient client, StubHttpMessageHandler handler) BuildSut(
         string responseBody, HttpStatusCode status = HttpStatusCode.OK)
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = responseBody, StatusCode = status };
-        var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.anthropic.com/") };
+        var (http, handler) = HttpSut.Json(responseBody, status: status, baseAddress: "https://api.anthropic.com/");
         var opts = Options.Create(new AnthropicOptions
         {
             ApiKey = "test-key",

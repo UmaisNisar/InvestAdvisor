@@ -14,8 +14,7 @@ public class FinnhubMarketDataProviderTests
 {
     private static (FinnhubMarketDataProvider sut, StubHttpMessageHandler handler) BuildSut(string responseBody)
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = responseBody };
-        var http = new HttpClient(handler) { BaseAddress = new Uri("https://finnhub.io/") };
+        var (http, handler) = HttpSut.Json(responseBody, baseAddress: "https://finnhub.io/");
         var opts = Options.Create(new FinnhubOptions { ApiKey = "test", BaseUrl = "https://finnhub.io" });
         var limiter = Substitute.For<IRateLimiter>();
         limiter.WaitAsync(Arg.Any<CancellationToken>()).Returns(ValueTask.CompletedTask);

@@ -14,8 +14,7 @@ public class ScreenerScoringServiceTests
     private static ScreenerScoringService BuildSut(
         SqliteFixture db, RuntimeSettings settings, IReadOnlyDictionary<string, TickerSentiment> sentiment)
     {
-        var store = Substitute.For<IRuntimeSettingsStore>();
-        store.GetAsync(Arg.Any<CancellationToken>()).Returns(new ValueTask<RuntimeSettings>(settings));
+        var store = FakeSettingsStore.For(settings);
         var sentimentSvc = Substitute.For<ISentimentScoringService>();
         sentimentSvc.GetTickerSentimentAsync(Arg.Any<CancellationToken>()).Returns(sentiment);
         return new ScreenerScoringService(db.Factory, store, sentimentSvc);

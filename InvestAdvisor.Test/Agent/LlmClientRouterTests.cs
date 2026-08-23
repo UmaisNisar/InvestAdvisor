@@ -53,9 +53,7 @@ public class LlmClientRouterTests
         var openAiHandler = new StubHttpMessageHandler { ResponseBody = MinimalOpenAiResponse };
         var openAi = new OpenAiCompatibleClient(new HttpClient(openAiHandler), Options.Create(llmOpts));
 
-        var store = Substitute.For<IRuntimeSettingsStore>();
-        store.GetAsync(Arg.Any<CancellationToken>())
-             .Returns(new ValueTask<RuntimeSettings>(settings));
+        var store = FakeSettingsStore.For(settings);
 
         return (new LlmClientRouter(anthropic, openAi, store, Options.Create(llmOpts)),
                 anthropicHandler, openAiHandler);

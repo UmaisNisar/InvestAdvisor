@@ -21,13 +21,11 @@ public class ContextAssemblerTests
     {
         var db = new SqliteFixture();
         var clock = new FakeSystemClock(Now);
-        var store = Substitute.For<IRuntimeSettingsStore>();
-        store.GetAsync(Arg.Any<CancellationToken>())
-             .Returns(new ValueTask<RuntimeSettings>(new RuntimeSettings
+        var store = FakeSettingsStore.For(new RuntimeSettings
              {
                  Id = RuntimeSettings.SingletonId,
                  MinPriceFreshnessSeconds = minFreshnessSec,
-             }));
+             });
         var fx = Substitute.For<IFxRateProvider>();
         fx.GetRateToUsdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
           .Returns(ci => Task.FromResult(ci.Arg<string>().Equals("CAD", StringComparison.OrdinalIgnoreCase) ? cadToUsd : 1m));

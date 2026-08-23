@@ -11,8 +11,7 @@ public class YahooNewsProviderTests
 
     private static (YahooNewsProvider sut, StubHttpMessageHandler handler) BuildSut(string responseBody)
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = responseBody, MediaType = "application/xml" };
-        var http = new HttpClient(handler) { BaseAddress = new Uri("https://feeds.finance.yahoo.com/") };
+        var (http, handler) = HttpSut.Json(responseBody, baseAddress: "https://feeds.finance.yahoo.com/", mediaType: "application/xml");
         return (new YahooNewsProvider(http, new FakeSystemClock(Now)), handler);
     }
 

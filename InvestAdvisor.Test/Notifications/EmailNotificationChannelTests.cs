@@ -32,9 +32,7 @@ public class EmailNotificationChannelTests
         BuildSut(bool emailEnabled = true, string? host = "smtp.example.com")
     {
         var smtp = Substitute.For<ISmtpClient>();
-        var settingsStore = Substitute.For<IRuntimeSettingsStore>();
-        settingsStore.GetAsync(Arg.Any<CancellationToken>())
-                     .Returns(new ValueTask<RuntimeSettings>(new RuntimeSettings
+        var settingsStore = FakeSettingsStore.For(new RuntimeSettings
                      {
                          EmailEnabled = emailEnabled,
                          SmtpHost = host,
@@ -42,7 +40,7 @@ public class EmailNotificationChannelTests
                          SmtpTo = "me@example.com",
                          SmtpPort = 587,
                          SmtpEnableSsl = true,
-                     }));
+                     });
         var smtpOpts = Options.Create(new SmtpOptions { Password = "secret" });
         var clock = new FakeSystemClock(DateTime.UtcNow);
         return (new EmailNotificationChannel(settingsStore, smtpOpts, smtp, clock), smtp, settingsStore);

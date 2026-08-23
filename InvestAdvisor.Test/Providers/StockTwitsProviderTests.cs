@@ -12,8 +12,7 @@ public class StockTwitsProviderTests
 {
     private static StockTwitsProvider BuildSut(string responseBody, bool enabled = true)
     {
-        var handler = new StubHttpMessageHandler { ResponseBody = responseBody };
-        var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.stocktwits.com/") };
+        var (http, handler) = HttpSut.Json(responseBody, baseAddress: "https://api.stocktwits.com/");
         var opts = Options.Create(new StockTwitsOptions { Enabled = enabled });
         return new StockTwitsProvider(http, opts);
     }
