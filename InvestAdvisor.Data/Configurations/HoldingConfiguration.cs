@@ -20,6 +20,6 @@ public sealed class HoldingConfiguration : IEntityTypeConfiguration<Holding>
         b.Property(x => x.TargetAllocationPct).HasPrecision(8, 4);
         b.Property(x => x.Notes).HasMaxLength(2000);
 
-        b.HasIndex(x => new { x.Ticker, x.AccountType });
+        b.HasIndex(x => new { x.TenantId, x.Ticker, x.AccountType });
     }
 }

@@ -3,7 +3,7 @@ namespace InvestAdvisor.Core.Entities;
 /// <summary>
 /// One batch sentiment-scoring LLM call. Carries the model + token columns so
 /// <c>CostService</c> counts it toward the daily budget alongside the other run rows
-/// (AdviceLog, DailyRecommendation, StockAnalysis). No separate cost table — runs are the history.
+/// (AdviceLog, DailyRecommendation, SentimentRun). No separate cost table — runs are the history.
 /// </summary>
 public class SentimentRun
 {

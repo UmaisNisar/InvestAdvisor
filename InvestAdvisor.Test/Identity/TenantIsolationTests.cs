@@ -75,6 +75,18 @@ public class TenantIsolationTests
     }
 
     [Fact]
+    public async Task Two_tenants_can_watch_the_same_ticker()
+    {
+        // The watchlist's unique index must be per tenant, not global.
+        await using var db = new SqliteFixture();
+        await WatchlistFor(db, "a@example.com").CreateAsync(new WatchlistItem { Ticker = "SHOP.TO", AssetClass = AssetClass.Equity });
+        await WatchlistFor(db, "b@example.com").CreateAsync(new WatchlistItem { Ticker = "SHOP.TO", AssetClass = AssetClass.Equity });
+
+        (await WatchlistFor(db, "a@example.com").ListAsync()).Should().ContainSingle(w => w.Ticker == "SHOP.TO");
+        (await WatchlistFor(db, "b@example.com").ListAsync()).Should().ContainSingle(w => w.Ticker == "SHOP.TO");
+    }
+
+    [Fact]
     public async Task First_touch_provisions_a_tenant_and_default_profile()
     {
         await using var db = new SqliteFixture();

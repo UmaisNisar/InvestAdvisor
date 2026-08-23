@@ -12,14 +12,13 @@ public sealed class EmailNotificationChannel(
     IRuntimeSettingsStore settingsStore,
     IOptions<SmtpOptions> smtpOptions,
     ISmtpClient smtp,
-    ISystemClock clock,
     ILogger<EmailNotificationChannel>? logger = null) : INotificationChannel
 {
     public string ChannelName => "Email";
 
     public bool ShouldDispatch(AgentAnalysis analysis) => AlertPolicy.IsAlertWorthy(analysis);
 
-    public async Task<AlertDelivery> SendAsync(
+    public async Task<DeliveryOutcome> SendAsync(
         AdviceLog adviceLog,
         AgentAnalysis analysis,
         CancellationToken ct = default)
@@ -30,14 +29,8 @@ public sealed class EmailNotificationChannel(
             || string.IsNullOrWhiteSpace(settings.SmtpFrom)
             || string.IsNullOrWhiteSpace(settings.SmtpTo))
         {
-            return new AlertDelivery
-            {
-                AdviceLogId = adviceLog.Id,
-                Channel = ChannelName,
-                Status = DeliveryStatus.Skipped,
-                ErrorMessage = "Email channel disabled or missing host/from/to in RuntimeSettings.",
-                AttemptCount = 1,
-            };
+            return new DeliveryOutcome(ChannelName, DeliveryStatus.Skipped,
+                "Email channel disabled or missing host/from/to in RuntimeSettings.");
         }
 
         var (html, plain) = DigestRenderer.BuildBody(adviceLog, analysis);
@@ -58,26 +51,12 @@ public sealed class EmailNotificationChannel(
         try
         {
             await smtp.SendAsync(msg, ct);
-            return new AlertDelivery
-            {
-                AdviceLogId = adviceLog.Id,
-                Channel = ChannelName,
-                Status = DeliveryStatus.Sent,
-                DeliveredAtUtc = clock.UtcNow,
-                AttemptCount = 1,
-            };
+            return new DeliveryOutcome(ChannelName, DeliveryStatus.Sent);
         }
         catch (Exception ex)
         {
             logger?.LogWarning(ex, "SMTP send failed for AdviceLog {Id}.", adviceLog.Id);
-            return new AlertDelivery
-            {
-                AdviceLogId = adviceLog.Id,
-                Channel = ChannelName,
-                Status = DeliveryStatus.Failed,
-                ErrorMessage = ex.Message,
-                AttemptCount = 1,
-            };
+            return new DeliveryOutcome(ChannelName, DeliveryStatus.Failed, ex.Message);
         }
     }
 }

@@ -17,7 +17,7 @@ public sealed class InAppNotificationChannel(INotificationCenter center) : INoti
 
     public bool ShouldDispatch(AgentAnalysis analysis) => AlertPolicy.IsAlertWorthy(analysis);
 
-    public async Task<AlertDelivery> SendAsync(
+    public async Task<DeliveryOutcome> SendAsync(
         AdviceLog adviceLog,
         AgentAnalysis analysis,
         CancellationToken ct = default)
@@ -34,14 +34,7 @@ public sealed class InAppNotificationChannel(INotificationCenter center) : INoti
             LinkUrl: "/advice",
             AdviceLogId: adviceLog.Id), ct);
 
-        return new AlertDelivery
-        {
-            AdviceLogId = adviceLog.Id,
-            Channel = ChannelName,
-            Status = DeliveryStatus.Sent,
-            DeliveredAtUtc = DateTime.UtcNow,
-            AttemptCount = 1,
-        };
+        return new DeliveryOutcome(ChannelName, DeliveryStatus.Sent);
     }
 
     private static string BuildTitle(AdviceLog adviceLog, AgentAnalysis analysis)

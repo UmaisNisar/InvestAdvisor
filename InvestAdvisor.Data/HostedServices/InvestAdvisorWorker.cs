@@ -194,28 +194,20 @@ public sealed class InvestAdvisorWorker(IServiceProvider services, ILogger<Inves
         {
             if (!ch.ShouldDispatch(analysis)) continue;
 
-            AlertDelivery delivery;
             try
             {
-                delivery = await ch.SendAsync(row, analysis, ct);
+                var outcome = await ch.SendAsync(row, analysis, ct);
+                if (outcome.Status == Core.Enums.DeliveryStatus.Sent)
+                    Logger.LogInformation("Notification channel {Channel} delivered AdviceLog {Id}.", ch.ChannelName, adviceLogId);
+                else
+                    Logger.LogWarning("Notification channel {Channel} {Status} for AdviceLog {Id}: {Error}",
+                        ch.ChannelName, outcome.Status, adviceLogId, outcome.ErrorMessage);
             }
             catch (Exception ex)
             {
                 Logger.LogWarning(ex, "Notification channel {Channel} failed for AdviceLog {Id}.",
                     ch.ChannelName, adviceLogId);
-                delivery = new AlertDelivery
-                {
-                    AdviceLogId = adviceLogId,
-                    Channel = ch.ChannelName,
-                    Status = Core.Enums.DeliveryStatus.Failed,
-                    ErrorMessage = ex.Message,
-                    AttemptCount = 1,
-                };
             }
-
-            await using var db = await dbFactory.CreateDbContextAsync(ct);
-            db.AlertDeliveries.Add(delivery);
-            await db.SaveChangesAsync(ct);
         }
     }
 
