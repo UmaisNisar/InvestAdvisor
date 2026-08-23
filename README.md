@@ -161,8 +161,9 @@ Notes worth knowing:
 
 ## v1 limitations
 
-- **Single user, single shared dataset.** One portfolio / watchlist / settings per install; whoever logs
-  in (via Cloudflare Access on a deploy) sees and edits the *same* data. Per-user accounts are future work.
+- **Per-user data, shared app settings.** Each signed-in email (via Cloudflare Access on a deploy) gets
+  its own holdings, watchlist, advice and picks; the scheduler / AI-provider / screener-weight settings
+  are one shared set per install.
 - **Cash isn't modeled.** Allocation is computed over invested holdings only.
 - **International quotes via Yahoo are unofficial** — reliable but can rate-limit; affected prices simply
   show "—" rather than breaking anything. Finnhub's free tier is US-only and its crypto candles are premium,
