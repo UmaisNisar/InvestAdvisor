@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using InvestAdvisor.Core.Abstractions;
@@ -21,23 +20,12 @@ public sealed class FinnhubScreenerProvider(
     IOptions<FinnhubOptions> options,
     ILogger<FinnhubScreenerProvider>? logger = null) : IScreenerDataProvider
 {
-    private readonly FinnhubOptions _opts = options.Value;
-
-    private string Key()
-    {
-        if (string.IsNullOrWhiteSpace(_opts.ApiKey))
-            throw new InvalidOperationException(
-                "Finnhub API key not configured. Set Finnhub:ApiKey via user-secrets or the FINNHUB_API_KEY env var.");
-        return Uri.EscapeDataString(_opts.ApiKey);
-    }
+    private readonly FinnhubApi _api = new(http, rateLimiter, options.Value, logger);
 
     public async Task<FundamentalsResult?> GetFundamentalsAsync(string ticker, CancellationToken ct = default)
     {
-        await rateLimiter.WaitAsync(ct);
-        var url = $"/api/v1/stock/metric?symbol={Uri.EscapeDataString(ticker)}&metric=all&token={Key()}";
-        string json;
-        try { json = await http.GetStringAsync(url, ct); }
-        catch (Exception ex) { logger?.LogWarning(ex, "Finnhub /stock/metric failed for {Ticker}.", ticker); return null; }
+        var json = await _api.GetStringAsync($"stock/metric?symbol={Uri.EscapeDataString(ticker)}&metric=all", ticker, ct);
+        if (json is null) return null;
 
         try
         {
@@ -61,11 +49,8 @@ public sealed class FinnhubScreenerProvider(
 
     public async Task<AnalystRatingResult?> GetLatestAnalystRatingAsync(string ticker, CancellationToken ct = default)
     {
-        await rateLimiter.WaitAsync(ct);
-        var url = $"/api/v1/stock/recommendation?symbol={Uri.EscapeDataString(ticker)}&token={Key()}";
-        FinnhubRecommendation[]? rows;
-        try { rows = await http.GetFromJsonAsync<FinnhubRecommendation[]>(url, ct); }
-        catch (Exception ex) { logger?.LogWarning(ex, "Finnhub /stock/recommendation failed for {Ticker}.", ticker); return null; }
+        var rows = await _api.GetAsync<FinnhubRecommendation[]>(
+            $"stock/recommendation?symbol={Uri.EscapeDataString(ticker)}", ticker, ct);
 
         var latest = rows?.Where(r => !string.IsNullOrWhiteSpace(r.Period))
                           .OrderByDescending(r => r.Period, StringComparer.Ordinal)
@@ -77,11 +62,8 @@ public sealed class FinnhubScreenerProvider(
 
     public async Task<IReadOnlyList<InsiderTradeResult>> GetInsiderTradesAsync(string ticker, CancellationToken ct = default)
     {
-        await rateLimiter.WaitAsync(ct);
-        var url = $"/api/v1/stock/insider-transactions?symbol={Uri.EscapeDataString(ticker)}&token={Key()}";
-        FinnhubInsiderResponse? resp;
-        try { resp = await http.GetFromJsonAsync<FinnhubInsiderResponse>(url, ct); }
-        catch (Exception ex) { logger?.LogWarning(ex, "Finnhub /stock/insider-transactions failed for {Ticker}.", ticker); return Array.Empty<InsiderTradeResult>(); }
+        var resp = await _api.GetAsync<FinnhubInsiderResponse>(
+            $"stock/insider-transactions?symbol={Uri.EscapeDataString(ticker)}", ticker, ct);
 
         if (resp?.Data is null) return Array.Empty<InsiderTradeResult>();
         var list = new List<InsiderTradeResult>(resp.Data.Length);

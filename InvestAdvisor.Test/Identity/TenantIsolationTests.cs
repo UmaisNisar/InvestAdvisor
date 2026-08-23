@@ -22,10 +22,10 @@ public class TenantIsolationTests
 
     // Each "request" gets its own TenantContext (it caches the resolved tenant for the scope).
     private static HoldingsService HoldingsFor(SqliteFixture db, string email)
-        => new(db.Factory, new TenantContext(new FakeUser(email), db.Factory));
+        => new(db.Factory, new TenantContext(new FakeUser(email), db.Factory), new FakeSystemClock(DateTime.UtcNow));
 
     private static WatchlistService WatchlistFor(SqliteFixture db, string email)
-        => new(db.Factory, new TenantContext(new FakeUser(email), db.Factory));
+        => new(db.Factory, new TenantContext(new FakeUser(email), db.Factory), new FakeSystemClock(DateTime.UtcNow));
 
     private static Holding NewHolding(string ticker) => new()
     {

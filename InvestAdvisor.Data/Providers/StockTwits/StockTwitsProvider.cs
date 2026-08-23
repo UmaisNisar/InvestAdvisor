@@ -11,39 +11,26 @@ namespace InvestAdvisor.Data.Providers.StockTwits;
 /// <summary>
 /// Reads the public StockTwits symbol stream (<c>/api/2/streams/symbol/{symbol}.json</c>). Each
 /// message carries a body and often the author's own Bullish/Bearish tag, which we keep as a prior.
-/// No key required for the public stream; an optional access token raises the rate limit. Degrades
-/// to empty on any failure.
+/// No key required for the public stream; an optional access token raises the rate limit.
 /// </summary>
 public sealed class StockTwitsProvider(
     HttpClient http,
     IOptions<StockTwitsOptions> options,
-    ILogger<StockTwitsProvider>? logger = null) : ISocialFeedProvider
+    ILogger<StockTwitsProvider>? logger = null) : SocialFeedProviderBase(logger, "StockTwits")
 {
     private const int MaxItems = 30;
     private readonly StockTwitsOptions _opts = options.Value;
 
-    public NewsSource Channel => NewsSource.StockTwits;
+    public override NewsSource Channel => NewsSource.StockTwits;
+    protected override bool Enabled => _opts.Enabled;
 
-    public async Task<IReadOnlyList<SocialPost>> GetTickerPostsAsync(string ticker, CancellationToken ct = default)
+    protected override async Task<IReadOnlyList<SocialPost>> FetchAsync(string symbol, CancellationToken ct)
     {
-        if (!_opts.Enabled || string.IsNullOrWhiteSpace(ticker)) return Array.Empty<SocialPost>();
-
-        var symbol = ticker.Trim().ToUpperInvariant();
         var url = $"/api/2/streams/symbol/{Uri.EscapeDataString(symbol)}.json";
         if (!string.IsNullOrWhiteSpace(_opts.AccessToken))
             url += $"?access_token={Uri.EscapeDataString(_opts.AccessToken)}";
 
-        StreamResponse? payload;
-        try
-        {
-            payload = await http.GetFromJsonAsync<StreamResponse>(url, ct);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "StockTwits stream failed for {Ticker}.", ticker);
-            return Array.Empty<SocialPost>();
-        }
-
+        var payload = await http.GetFromJsonAsync<StreamResponse>(url, ct);
         if (payload?.Messages is null || payload.Messages.Length == 0) return Array.Empty<SocialPost>();
 
         return payload.Messages

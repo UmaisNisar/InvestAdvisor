@@ -1,54 +1,29 @@
-using InvestAdvisor.Core.Models;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
+using InvestAdvisor.Core.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace InvestAdvisor.Data.Services;
 
 public sealed class HoldingsService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    ITenantContext tenant) : IHoldingsService
+    ITenantContext tenant,
+    ISystemClock clock) : TenantScopedCrudService<Holding>(dbFactory, tenant, clock), IHoldingsService
 {
-    public async Task<IReadOnlyList<Holding>> ListAsync(CancellationToken ct = default)
-    {
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.Holdings.AsNoTracking().Where(h => h.TenantId == tid).OrderBy(h => h.Ticker).ToListAsync(ct);
-    }
+    public Task<IReadOnlyList<Holding>> ListAsync(CancellationToken ct = default) => ListAsync(h => h.Ticker, ct);
 
-    public async Task<Holding> CreateAsync(Holding input, CancellationToken ct = default)
+    protected override DbSet<Holding> Set(InvestAdvisorDbContext db) => db.Holdings;
+
+    protected override Holding NewEntity(Holding input, DateTime nowUtc)
     {
-        Validate(input);
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = new Holding
-        {
-            TenantId = tid,
-            Ticker = input.Ticker.Trim().ToUpperInvariant(),
-            Name = input.Name.Trim(),
-            AssetClass = input.AssetClass,
-            Quantity = input.Quantity,
-            AvgCost = input.AvgCost,
-            Currency = Currency.Normalize(input.Currency),
-            AccountType = input.AccountType,
-            TargetAllocationPct = input.TargetAllocationPct,
-            Notes = string.IsNullOrWhiteSpace(input.Notes) ? null : input.Notes.Trim(),
-            CreatedAtUtc = DateTime.UtcNow,
-            UpdatedAtUtc = DateTime.UtcNow,
-        };
-        db.Holdings.Add(entity);
-        await db.SaveChangesAsync(ct);
+        var entity = new Holding { CreatedAtUtc = nowUtc };
+        Apply(entity, input, nowUtc);
         return entity;
     }
 
-    public async Task<Holding> UpdateAsync(int id, Holding input, CancellationToken ct = default)
+    protected override void Apply(Holding entity, Holding input, DateTime nowUtc)
     {
-        Validate(input);
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.Holdings.SingleOrDefaultAsync(h => h.Id == id && h.TenantId == tid, ct)
-            ?? throw new InvalidOperationException($"Holding {id} not found.");
-        entity.Ticker = input.Ticker.Trim().ToUpperInvariant();
+        entity.Ticker = CleanTicker(input.Ticker);
         entity.Name = input.Name.Trim();
         entity.AssetClass = input.AssetClass;
         entity.Quantity = input.Quantity;
@@ -56,23 +31,11 @@ public sealed class HoldingsService(
         entity.Currency = Currency.Normalize(input.Currency);
         entity.AccountType = input.AccountType;
         entity.TargetAllocationPct = input.TargetAllocationPct;
-        entity.Notes = string.IsNullOrWhiteSpace(input.Notes) ? null : input.Notes.Trim();
-        entity.UpdatedAtUtc = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return entity;
+        entity.Notes = CleanOptional(input.Notes);
+        entity.UpdatedAtUtc = nowUtc;
     }
 
-    public async Task DeleteAsync(int id, CancellationToken ct = default)
-    {
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.Holdings.SingleOrDefaultAsync(h => h.Id == id && h.TenantId == tid, ct);
-        if (entity is null) return;
-        db.Holdings.Remove(entity);
-        await db.SaveChangesAsync(ct);
-    }
-
-    private static void Validate(Holding h)
+    protected override void Validate(Holding h)
     {
         if (string.IsNullOrWhiteSpace(h.Ticker))
             throw new ArgumentException("Ticker is required.");

@@ -2,7 +2,7 @@ using InvestAdvisor.Core.Enums;
 
 namespace InvestAdvisor.Core.Entities;
 
-public class WatchlistItem
+public class WatchlistItem : ITenantOwned
 {
     public int Id { get; set; }
     public int TenantId { get; set; }

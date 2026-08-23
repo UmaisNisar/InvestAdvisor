@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Entities;
 using InvestAdvisor.Core.Enums;
@@ -34,77 +35,48 @@ public sealed class StockUniverseSeeder(
         // swing flag (a name like AAPL belongs to both universes) and to add the TSX/mover names.
         if (added > 0) await db.SaveChangesAsync(ct);
 
-        added += await SeedSwingAsync(db, now, ct);
-        added += await SeedMomentumAsync(db, now, ct);
+        added += await SeedFlaggedUniverseAsync(db, now, "swing",
+            SwingNames.Select(x => (x.Ticker, x.Name, x.Sector, AssetClass.Equity)),
+            s => s.IsSwingUniverse, s => s.IsSwingUniverse = true, ct);
+        added += await SeedFlaggedUniverseAsync(db, now, "momentum",
+            MomentumNames, s => s.IsMomentumUniverse, s => s.IsMomentumUniverse = true, ct);
         return added;
     }
 
     /// <summary>
-    /// Marks/adds the high-volatility momentum universe: high-beta US names + leveraged ETFs and
-    /// volatile-but-liquid Canadian (.TO) names — the pool where a ~10% move in a few sessions is
-    /// plausible. Runs once (when no momentum member exists yet) so the user can curate it from the UI
-    /// afterwards. Existing rows are flipped in place; new names are added. Mirrors the swing pass.
+    /// Marks/adds a strategy universe (swing: liquid US movers + TSX large-caps; momentum:
+    /// high-beta names + leveraged ETFs) by flipping the flag on rows that already exist and
+    /// adding the rest. Runs once — when no member carries the flag yet — so the user can curate
+    /// it from the UI afterwards.
     /// </summary>
-    private async Task<int> SeedMomentumAsync(InvestAdvisorDbContext db, DateTime now, CancellationToken ct)
+    private async Task<int> SeedFlaggedUniverseAsync(
+        InvestAdvisorDbContext db, DateTime now, string label,
+        IEnumerable<(string Ticker, string Name, string Sector, AssetClass Class)> names,
+        Expression<Func<Stock, bool>> hasFlag, Action<Stock> setFlag, CancellationToken ct)
     {
-        if (await db.Stocks.AnyAsync(s => s.IsMomentumUniverse, ct)) return 0;
+        if (await db.Stocks.AnyAsync(hasFlag, ct)) return 0;
+        var flagged = hasFlag.Compile();
 
         var existing = await db.Stocks.ToListAsync(ct); // tracked, so flag flips persist
         var byTicker = existing.ToDictionary(s => s.Ticker, StringComparer.OrdinalIgnoreCase);
 
         var n = 0;
-        foreach (var (ticker, name, sector, cls) in MomentumNames)
+        foreach (var (ticker, name, sector, cls) in names)
         {
             if (byTicker.TryGetValue(ticker, out var st))
             {
-                if (!st.IsMomentumUniverse) { st.IsMomentumUniverse = true; n++; }
+                if (!flagged(st)) { setFlag(st); n++; }
             }
             else
             {
-                db.Stocks.Add(new Stock
-                {
-                    Ticker = ticker, Name = name, Sector = sector,
-                    AssetClass = cls, IsActive = true, IsMomentumUniverse = true, AddedAtUtc = now,
-                });
+                var row = new Stock { Ticker = ticker, Name = name, Sector = sector, AssetClass = cls, IsActive = true, AddedAtUtc = now };
+                setFlag(row);
+                db.Stocks.Add(row);
                 n++;
             }
         }
 
-        if (n > 0) { await db.SaveChangesAsync(ct); logger?.LogInformation("Seeded {Count} momentum-universe members.", n); }
-        return n;
-    }
-
-    /// <summary>
-    /// Marks/adds the short-horizon swing universe: liquid US movers and liquid TSX large-caps. Runs
-    /// once (when no swing member exists yet), so the user can curate it from the UI afterwards.
-    /// Existing universe members are flipped in place; new names (TSX, higher-beta movers) are added.
-    /// </summary>
-    private async Task<int> SeedSwingAsync(InvestAdvisorDbContext db, DateTime now, CancellationToken ct)
-    {
-        if (await db.Stocks.AnyAsync(s => s.IsSwingUniverse, ct)) return 0;
-
-        var existing = await db.Stocks.ToListAsync(ct); // tracked, so flag flips persist
-        var byTicker = existing.ToDictionary(s => s.Ticker, StringComparer.OrdinalIgnoreCase);
-
-        var n = 0;
-        foreach (var (ticker, name, sector) in SwingNames)
-        {
-            if (byTicker.TryGetValue(ticker, out var st))
-            {
-                if (!st.IsSwingUniverse) { st.IsSwingUniverse = true; n++; }
-            }
-            else
-            {
-                db.Stocks.Add(new Stock
-                {
-                    Ticker = ticker, Name = name, Sector = sector,
-                    AssetClass = AssetClass.Equity, IsActive = true, IsSwingUniverse = true, AddedAtUtc = now,
-                });
-                n++;
-            }
-        }
-
-        if (n > 0) { await db.SaveChangesAsync(ct); logger?.LogInformation("Seeded {Count} swing-universe members.", n); }
+        if (n > 0) { await db.SaveChangesAsync(ct); logger?.LogInformation("Seeded {Count} {Label}-universe members.", n, label); }
         return n;
     }
 

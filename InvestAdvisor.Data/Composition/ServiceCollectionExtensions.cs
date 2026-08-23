@@ -29,6 +29,47 @@ namespace InvestAdvisor.Data.Composition;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    private const string UserAgent = "InvestAdvisor/1.0";
+
+    /// <summary>Typed client against the Finnhub host (the option's BaseUrl minus its /api/v1 path — providers add that).</summary>
+    private static IHttpClientBuilder AddFinnhubClient<TClient>(this IServiceCollection services)
+        where TClient : class =>
+        services.AddHttpClient<TClient>(ConfigureFinnhub);
+
+    private static IHttpClientBuilder AddFinnhubClient<TService, TImpl>(this IServiceCollection services)
+        where TService : class where TImpl : class, TService =>
+        services.AddHttpClient<TService, TImpl>(ConfigureFinnhub);
+
+    private static void ConfigureFinnhub(IServiceProvider sp, HttpClient http)
+    {
+        var opts = sp.GetRequiredService<IOptions<FinnhubOptions>>().Value;
+        http.BaseAddress = new Uri(opts.BaseUrl.Replace("/api/v1", string.Empty));
+        http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+    }
+
+    /// <summary>
+    /// A social source: its own typed HttpClient configured from <typeparamref name="TOptions"/>,
+    /// plus an <see cref="ISocialFeedProvider"/> registration so the refresh service sees it in
+    /// the set. Providers self-disable when not configured, so registering all is harmless.
+    /// </summary>
+    private static void AddSocialFeedProvider<TProvider, TOptions>(
+        this IServiceCollection services,
+        Func<TOptions, int> timeoutSeconds,
+        Func<TOptions, string>? baseUrl = null,
+        string? userAgent = UserAgent)
+        where TProvider : class, ISocialFeedProvider
+        where TOptions : class
+    {
+        services.AddHttpClient<TProvider>((sp, http) =>
+        {
+            var opts = sp.GetRequiredService<IOptions<TOptions>>().Value;
+            if (baseUrl is not null) http.BaseAddress = new Uri(baseUrl(opts));
+            http.Timeout = TimeSpan.FromSeconds(timeoutSeconds(opts));
+            if (userAgent is not null) http.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+        });
+        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<TProvider>());
+    }
+
     public static IServiceCollection AddInvestAdvisor(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<AnthropicOptions>(configuration.GetSection(AnthropicOptions.SectionName));
@@ -80,12 +121,7 @@ public static class ServiceCollectionExtensions
 
         // US equities/ETFs (Finnhub) + non-US listings (Yahoo) + crypto (CoinGecko) behind one
         // IMarketDataProvider that routes to the right source.
-        services.AddHttpClient<FinnhubMarketDataProvider>((sp, http) =>
-        {
-            var opts = sp.GetRequiredService<IOptions<FinnhubOptions>>().Value;
-            http.BaseAddress = new Uri(opts.BaseUrl.Replace("/api/v1", string.Empty));
-            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-        });
+        services.AddFinnhubClient<FinnhubMarketDataProvider>();
         services.AddHttpClient<Providers.Yahoo.YahooQuoteProvider>(http =>
         {
             http.BaseAddress = new Uri("https://query1.finance.yahoo.com");
@@ -101,12 +137,7 @@ public static class ServiceCollectionExtensions
         // INewsProvider so NewsRefreshService resolves them as an ordered set: Finnhub first,
         // Yahoo second — the first provider with coverage wins per ticker, so Yahoo only answers
         // for the (non-US) tickers Finnhub's free tier returns nothing for.
-        services.AddHttpClient<FinnhubNewsProvider>((sp, http) =>
-        {
-            var opts = sp.GetRequiredService<IOptions<FinnhubOptions>>().Value;
-            http.BaseAddress = new Uri(opts.BaseUrl.Replace("/api/v1", string.Empty));
-            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-        });
+        services.AddFinnhubClient<FinnhubNewsProvider>();
         services.AddHttpClient<Providers.Yahoo.YahooNewsProvider>(http =>
         {
             http.BaseAddress = new Uri("https://feeds.finance.yahoo.com");
@@ -116,12 +147,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INewsProvider>(sp => sp.GetRequiredService<FinnhubNewsProvider>());
         services.AddScoped<INewsProvider>(sp => sp.GetRequiredService<Providers.Yahoo.YahooNewsProvider>());
 
-        services.AddHttpClient<IScreenerDataProvider, FinnhubScreenerProvider>((sp, http) =>
-        {
-            var opts = sp.GetRequiredService<IOptions<FinnhubOptions>>().Value;
-            http.BaseAddress = new Uri(opts.BaseUrl.Replace("/api/v1", string.Empty));
-            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-        });
+        services.AddFinnhubClient<IScreenerDataProvider, FinnhubScreenerProvider>();
 
         services.AddHttpClient<ICryptoMarketProvider, CoinGeckoProvider>(http =>
         {
@@ -133,35 +159,14 @@ public static class ServiceCollectionExtensions
         // Social sentiment sources. Each concrete provider gets its own typed HttpClient; both are
         // exposed as ISocialFeedProvider so SocialRefreshService resolves them as a set. Providers
         // self-disable (return empty) when not enabled/configured, so registering both is harmless.
-        services.AddHttpClient<Providers.StockTwits.StockTwitsProvider>((sp, http) =>
-        {
-            var opts = sp.GetRequiredService<IOptions<StockTwitsOptions>>().Value;
-            http.BaseAddress = new Uri(opts.BaseUrl);
-            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("InvestAdvisor/1.0");
-        });
-        services.AddHttpClient<Providers.Reddit.RedditProvider>((sp, http) =>
-        {
-            var opts = sp.GetRequiredService<IOptions<RedditOptions>>().Value;
-            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-        });
-        services.AddHttpClient<Providers.Bluesky.BlueskyProvider>((sp, http) =>
-        {
-            var opts = sp.GetRequiredService<IOptions<BlueskyOptions>>().Value;
-            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("InvestAdvisor/1.0");
-        });
-        services.AddHttpClient<Providers.HackerNews.HackerNewsProvider>((sp, http) =>
-        {
-            var opts = sp.GetRequiredService<IOptions<HackerNewsOptions>>().Value;
-            http.BaseAddress = new Uri(opts.BaseUrl);
-            http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("InvestAdvisor/1.0");
-        });
-        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.StockTwits.StockTwitsProvider>());
-        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.Reddit.RedditProvider>());
-        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.Bluesky.BlueskyProvider>());
-        services.AddScoped<ISocialFeedProvider>(sp => sp.GetRequiredService<Providers.HackerNews.HackerNewsProvider>());
+        services.AddSocialFeedProvider<Providers.StockTwits.StockTwitsProvider, StockTwitsOptions>(
+            o => o.TimeoutSeconds, o => o.BaseUrl);
+        services.AddSocialFeedProvider<Providers.Reddit.RedditProvider, RedditOptions>(
+            o => o.TimeoutSeconds, userAgent: null);
+        services.AddSocialFeedProvider<Providers.Bluesky.BlueskyProvider, BlueskyOptions>(
+            o => o.TimeoutSeconds);
+        services.AddSocialFeedProvider<Providers.HackerNews.HackerNewsProvider, HackerNewsOptions>(
+            o => o.TimeoutSeconds, o => o.BaseUrl);
         services.AddScoped<ISocialRefreshService, SocialRefreshService>();
 
         services.AddScoped<IContextAssembler, ContextAssembler>();

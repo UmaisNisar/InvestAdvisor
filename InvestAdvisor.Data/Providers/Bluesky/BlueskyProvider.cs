@@ -12,52 +12,44 @@ namespace InvestAdvisor.Data.Providers.Bluesky;
 /// <summary>
 /// Searches Bluesky (AT Protocol) for cashtag mentions via the public AppView. Works unauthenticated;
 /// if an app password is supplied it first creates a session and sends the bearer token to raise rate
-/// limits. Read-only. Degrades to empty on any failure.
+/// limits. Read-only.
 /// </summary>
-public sealed class BlueskyProvider(
-    HttpClient http,
-    IOptions<BlueskyOptions> options,
-    ISystemClock clock,
-    ILogger<BlueskyProvider>? logger = null) : ISocialFeedProvider
+public sealed class BlueskyProvider : SocialFeedProviderBase
 {
     private const int Limit = 25;
     private static readonly TimeSpan TokenTtl = TimeSpan.FromMinutes(100); // bsky JWTs last ~2h
-    private readonly BlueskyOptions _opts = options.Value;
-    private readonly SemaphoreSlim _tokenLock = new(1, 1);
-    private string? _token;
-    private DateTime _tokenExpiresUtc = DateTime.MinValue;
+    private readonly HttpClient _http;
+    private readonly BlueskyOptions _opts;
+    private readonly ILogger<BlueskyProvider>? _logger;
+    private readonly CachedBearerToken _token;
 
-    public NewsSource Channel => NewsSource.Bluesky;
-
-    public async Task<IReadOnlyList<SocialPost>> GetTickerPostsAsync(string ticker, CancellationToken ct = default)
+    public BlueskyProvider(
+        HttpClient http,
+        IOptions<BlueskyOptions> options,
+        ISystemClock clock,
+        ILogger<BlueskyProvider>? logger = null) : base(logger, "Bluesky")
     {
-        if (!_opts.Enabled || string.IsNullOrWhiteSpace(ticker)) return Array.Empty<SocialPost>();
+        _http = http;
+        _opts = options.Value;
+        _logger = logger;
+        _token = new CachedBearerToken(clock, CreateSessionAsync, logger, "Bluesky");
+    }
 
-        var symbol = ticker.Trim().ToUpperInvariant();
-        var token = _opts.HasCredentials ? await GetTokenAsync(ct) : null;
+    public override NewsSource Channel => NewsSource.Bluesky;
+    protected override bool Enabled => _opts.Enabled;
+
+    protected override async Task<IReadOnlyList<SocialPost>> FetchAsync(string symbol, CancellationToken ct)
+    {
+        var token = _opts.HasCredentials ? await _token.GetAsync(ct) : null;
 
         var url = $"{_opts.AppViewUrl.TrimEnd('/')}/xrpc/app.bsky.feed.searchPosts?" +
                   $"q={Uri.EscapeDataString("$" + symbol)}&limit={Limit}&sort=latest";
 
-        SearchResponse? payload;
-        try
-        {
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            if (token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            using var resp = await http.SendAsync(req, ct);
-            if (!resp.IsSuccessStatusCode)
-            {
-                logger?.LogWarning("Bluesky search for {Ticker} returned {Status}.", symbol, resp.StatusCode);
-                return Array.Empty<SocialPost>();
-            }
-            payload = await resp.Content.ReadFromJsonAsync<SearchResponse>(ct);
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Bluesky search failed for {Ticker}.", symbol);
-            return Array.Empty<SocialPost>();
-        }
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        if (token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return EmptyForStatus(symbol, resp.StatusCode);
+        var payload = await resp.Content.ReadFromJsonAsync<SearchResponse>(ct);
 
         if (payload?.Posts is null || payload.Posts.Length == 0) return Array.Empty<SocialPost>();
 
@@ -83,37 +75,19 @@ public sealed class BlueskyProvider(
             : $"https://bsky.app/profile/{handle}/post/{rkey}";
     }
 
-    private async Task<string?> GetTokenAsync(CancellationToken ct)
+    private async Task<(string Token, TimeSpan Ttl)?> CreateSessionAsync(CancellationToken ct)
     {
-        if (_token is not null && clock.UtcNow < _tokenExpiresUtc) return _token;
-
-        await _tokenLock.WaitAsync(ct);
-        try
+        var url = $"{_opts.AuthUrl.TrimEnd('/')}/xrpc/com.atproto.server.createSession";
+        using var resp = await _http.PostAsJsonAsync(url,
+            new { identifier = _opts.Identifier, password = _opts.AppPassword }, ct);
+        if (!resp.IsSuccessStatusCode)
         {
-            if (_token is not null && clock.UtcNow < _tokenExpiresUtc) return _token;
-
-            var url = $"{_opts.AuthUrl.TrimEnd('/')}/xrpc/com.atproto.server.createSession";
-            using var resp = await http.PostAsJsonAsync(url,
-                new { identifier = _opts.Identifier, password = _opts.AppPassword }, ct);
-            if (!resp.IsSuccessStatusCode)
-            {
-                logger?.LogWarning("Bluesky createSession failed: {Status}.", resp.StatusCode);
-                return null;
-            }
-            var session = await resp.Content.ReadFromJsonAsync<SessionResponse>(ct);
-            if (session is null || string.IsNullOrWhiteSpace(session.AccessJwt)) return null;
-
-            _token = session.AccessJwt;
-            _tokenExpiresUtc = clock.UtcNow.Add(TokenTtl);
-            return _token;
-        }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Bluesky createSession failed.");
+            _logger?.LogWarning("Bluesky createSession failed: {Status}.", resp.StatusCode);
             return null;
         }
-        finally { _tokenLock.Release(); }
+        var session = await resp.Content.ReadFromJsonAsync<SessionResponse>(ct);
+        if (session is null || string.IsNullOrWhiteSpace(session.AccessJwt)) return null;
+        return (session.AccessJwt, TokenTtl);
     }
 
     private sealed record SessionResponse([property: JsonPropertyName("accessJwt")] string? AccessJwt);

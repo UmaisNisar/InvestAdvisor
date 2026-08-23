@@ -6,62 +6,30 @@ namespace InvestAdvisor.Data.Services;
 
 public sealed class WatchlistService(
     IDbContextFactory<InvestAdvisorDbContext> dbFactory,
-    ITenantContext tenant) : IWatchlistService
+    ITenantContext tenant,
+    ISystemClock clock) : TenantScopedCrudService<WatchlistItem>(dbFactory, tenant, clock), IWatchlistService
 {
-    public async Task<IReadOnlyList<WatchlistItem>> ListAsync(CancellationToken ct = default)
-    {
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.WatchlistItems.AsNoTracking().Where(w => w.TenantId == tid).OrderBy(w => w.Ticker).ToListAsync(ct);
-    }
+    public Task<IReadOnlyList<WatchlistItem>> ListAsync(CancellationToken ct = default) => ListAsync(w => w.Ticker, ct);
 
-    public async Task<WatchlistItem> CreateAsync(WatchlistItem input, CancellationToken ct = default)
+    protected override DbSet<WatchlistItem> Set(InvestAdvisorDbContext db) => db.WatchlistItems;
+
+    protected override WatchlistItem NewEntity(WatchlistItem input, DateTime nowUtc)
     {
-        Validate(input);
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = new WatchlistItem
-        {
-            TenantId = tid,
-            Ticker = input.Ticker.Trim().ToUpperInvariant(),
-            AssetClass = input.AssetClass,
-            Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim(),
-            PriceTargetLow = input.PriceTargetLow,
-            PriceTargetHigh = input.PriceTargetHigh,
-            CreatedAtUtc = DateTime.UtcNow,
-        };
-        db.WatchlistItems.Add(entity);
-        await db.SaveChangesAsync(ct);
+        var entity = new WatchlistItem { CreatedAtUtc = nowUtc };
+        Apply(entity, input, nowUtc);
         return entity;
     }
 
-    public async Task<WatchlistItem> UpdateAsync(int id, WatchlistItem input, CancellationToken ct = default)
+    protected override void Apply(WatchlistItem entity, WatchlistItem input, DateTime nowUtc)
     {
-        Validate(input);
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.WatchlistItems.SingleOrDefaultAsync(w => w.Id == id && w.TenantId == tid, ct)
-            ?? throw new InvalidOperationException($"WatchlistItem {id} not found.");
-        entity.Ticker = input.Ticker.Trim().ToUpperInvariant();
+        entity.Ticker = CleanTicker(input.Ticker);
         entity.AssetClass = input.AssetClass;
-        entity.Note = string.IsNullOrWhiteSpace(input.Note) ? null : input.Note.Trim();
+        entity.Note = CleanOptional(input.Note);
         entity.PriceTargetLow = input.PriceTargetLow;
         entity.PriceTargetHigh = input.PriceTargetHigh;
-        await db.SaveChangesAsync(ct);
-        return entity;
     }
 
-    public async Task DeleteAsync(int id, CancellationToken ct = default)
-    {
-        var tid = await tenant.GetTenantIdAsync(ct);
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.WatchlistItems.SingleOrDefaultAsync(w => w.Id == id && w.TenantId == tid, ct);
-        if (entity is null) return;
-        db.WatchlistItems.Remove(entity);
-        await db.SaveChangesAsync(ct);
-    }
-
-    private static void Validate(WatchlistItem w)
+    protected override void Validate(WatchlistItem w)
     {
         if (string.IsNullOrWhiteSpace(w.Ticker))
             throw new ArgumentException("Ticker is required.");

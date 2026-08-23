@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using InvestAdvisor.Core.Abstractions;
 using InvestAdvisor.Core.Models;
 using InvestAdvisor.Core.Options;
@@ -22,57 +21,28 @@ public sealed class FinnhubNewsProvider(
     private const int LookbackHours = 48;
     private const int MaxItems = 50;
 
-    private readonly FinnhubOptions _opts = options.Value;
+    private readonly FinnhubApi _api = new(http, rateLimiter, options.Value, logger);
 
     public async Task<IReadOnlyList<NewsHeadline>> GetTickerNewsAsync(string ticker, CancellationToken ct = default)
     {
-        EnsureKey();
-        await rateLimiter.WaitAsync(ct);
-
         var to = clock.UtcNow;
         var from = to.AddHours(-LookbackHours);
-        var url = $"/api/v1/company-news?symbol={Uri.EscapeDataString(ticker)}" +
-                  $"&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&token={Uri.EscapeDataString(_opts.ApiKey)}";
-
-        FinnhubNewsItem[]? items;
-        try
-        {
-            items = await http.GetFromJsonAsync<FinnhubNewsItem[]>(url, ct);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Finnhub /company-news failed for {Ticker}.", ticker);
-            return Array.Empty<NewsHeadline>();
-        }
-
+        var items = await _api.GetAsync<FinnhubNewsItem[]>(
+            $"company-news?symbol={Uri.EscapeDataString(ticker)}&from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}",
+            ticker, ct);
         return Map(items, fallbackTicker: ticker);
     }
 
     public async Task<IReadOnlyList<NewsHeadline>> GetMarketNewsAsync(CancellationToken ct = default)
     {
-        EnsureKey();
-        await rateLimiter.WaitAsync(ct);
-
-        var url = $"/api/v1/news?category=general&token={Uri.EscapeDataString(_opts.ApiKey)}";
-
-        FinnhubNewsItem[]? items;
-        try
-        {
-            items = await http.GetFromJsonAsync<FinnhubNewsItem[]>(url, ct);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Finnhub /news failed.");
-            return Array.Empty<NewsHeadline>();
-        }
-
+        var items = await _api.GetAsync<FinnhubNewsItem[]>("news?category=general", "market", ct);
         return Map(items, fallbackTicker: null);
     }
 
-    private static IReadOnlyList<NewsHeadline> Map(FinnhubNewsItem[]? items, string? fallbackTicker)
+    private IReadOnlyList<NewsHeadline> Map(FinnhubNewsItem[]? items, string? fallbackTicker)
     {
         if (items is null || items.Length == 0) return Array.Empty<NewsHeadline>();
-        var cutoff = DateTime.UtcNow.AddHours(-LookbackHours);
+        var cutoff = clock.UtcNow.AddHours(-LookbackHours);
 
         return items
             .Where(i => !string.IsNullOrEmpty(i.Headline) && !string.IsNullOrEmpty(i.Url))
@@ -88,12 +58,5 @@ public sealed class FinnhubNewsProvider(
             .OrderByDescending(h => h.PublishedAtUtc)
             .Take(MaxItems)
             .ToArray();
-    }
-
-    private void EnsureKey()
-    {
-        if (string.IsNullOrWhiteSpace(_opts.ApiKey))
-            throw new InvalidOperationException(
-                "Finnhub API key not configured. Set Finnhub:ApiKey via user-secrets or the FINNHUB_API_KEY env var.");
     }
 }
