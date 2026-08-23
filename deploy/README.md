@@ -35,9 +35,10 @@ other step below is identical.
   allowlist** with your address + your 2–3 friends' emails. Without it, anyone with the URL can open
   the app, **burn your AI quota** (free-tier daily limits on Gemini; real money if you've switched to
   Claude) and your Finnhub credits, and see your data.
-- **The app is single-user.** There is **one** shared portfolio / holdings / settings — everyone who
-  logs in sees and edits the *same* data. Fine for testing the UX and the "where to invest" flow, but
-  your friends can't each track their own portfolio yet (that's a multi-user feature for the real launch).
+- **Each allowlisted email gets its own data.** Holdings, watchlist, advice and daily picks are per
+  user (identity = the email Cloudflare Access passes through); the app-level settings (scheduler, AI
+  provider, screener weights, SMTP) are one shared set per install. Onboarding someone = adding their
+  email to the Access policy.
 
 ## What you need
 
@@ -174,11 +175,10 @@ the dashboard loads.
 
 ## What this setup is NOT
 
-- **Not multi-user with separate data**. The Blazor Server instance has one SQLite DB
-  shared across whoever logs in via Access. If you and your brother want fully isolated
-  portfolios you'd run two separate VPSes (or add a `UserId` column everywhere — not v1).
-- **Not HA**. One VPS, one process. If Hetzner has an outage your app is down.
-- **Not autoscaling**. Single user; fine.
+- **Not isolated per user at the settings level**. Portfolios are per user, but the scheduler,
+  AI-provider and email settings are one shared set — whoever changes them changes them for everyone.
+- **Not HA**. One VPS, one process. If the host has an outage your app is down.
+- **Not autoscaling**. A handful of users; fine.
 - **Not signed.** Email alerts go out from your SMTP server with whatever From: you set.
 
 ## Troubleshooting
